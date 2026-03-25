@@ -1,0 +1,178 @@
+/* ============================================================
+   SSH Vault — Sistema de Temas
+   Cada tema define variáveis CSS usadas pelo Tailwind e componentes
+   ============================================================ */
+
+/* ---------- Dark (padrão) ---------- */
+[data-theme="dark"] {
+  --bg-primary: #0f1117;
+  --bg-secondary: #161b22;
+  --bg-tertiary: #1c2128;
+  --bg-hover: #21262d;
+
+  --text-primary: #e6edf3;
+  --text-secondary: #8b949e;
+  --text-muted: #484f58;
+
+  --border: #30363d;
+  --border-focus: #388bfd;
+
+  --accent: #388bfd;
+  --accent-hover: #58a6ff;
+  --accent-subtle: #1f3a5c;
+
+  --danger: #f85149;
+  --danger-hover: #ff7b72;
+  --success: #3fb950;
+  --warning: #d29922;
+
+  --terminal-bg: #0d1117;
+  --terminal-fg: #c9d1d9;
+  --terminal-cursor: #58a6ff;
+  --terminal-selection: #264f78;
+}
+
+/* ---------- Light ---------- */
+[data-theme="light"] {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f6f8fa;
+  --bg-tertiary: #eaeef2;
+  --bg-hover: #dde1e6;
+
+  --text-primary: #1f2328;
+  --text-secondary: #656d76;
+  --text-muted: #afb8c1;
+
+  --border: #d0d7de;
+  --border-focus: #0969da;
+
+  --accent: #0969da;
+  --accent-hover: #0550ae;
+  --accent-subtle: #ddf4ff;
+
+  --danger: #cf222e;
+  --danger-hover: #a40e26;
+  --success: #1a7f37;
+  --warning: #9a6700;
+
+  --terminal-bg: #f6f8fa;
+  --terminal-fg: #1f2328;
+  --terminal-cursor: #0969da;
+  --terminal-selection: #c5daf5;
+}
+
+/* ---------- Dracula ---------- */
+[data-theme="dracula"] {
+  --bg-primary: #282a36;
+  --bg-secondary: #21222c;
+  --bg-tertiary: #1e1f29;
+  --bg-hover: #44475a;
+
+  --text-primary: #f8f8f2;
+  --text-secondary: #6272a4;
+  --text-muted: #44475a;
+
+  --border: #44475a;
+  --border-focus: #bd93f9;
+
+  --accent: #bd93f9;
+  --accent-hover: #caa8ff;
+  --accent-subtle: #3d2f6b;
+
+  --danger: #ff5555;
+  --danger-hover: #ff7777;
+  --success: #50fa7b;
+  --warning: #ffb86c;
+
+  --terminal-bg: #1e1f29;
+  --terminal-fg: #f8f8f2;
+  --terminal-cursor: #bd93f9;
+  --terminal-selection: #44475a;
+}
+
+/* ---------- Nord ---------- */
+[data-theme="nord"] {
+  --bg-primary: #2e3440;
+  --bg-secondary: #3b4252;
+  --bg-tertiary: #434c5e;
+  --bg-hover: #4c566a;
+
+  --text-primary: #eceff4;
+  --text-secondary: #d8dee9;
+  --text-muted: #4c566a;
+
+  --border: #4c566a;
+  --border-focus: #88c0d0;
+
+  --accent: #88c0d0;
+  --accent-hover: #81a1c1;
+  --accent-subtle: #2e4057;
+
+  --danger: #bf616a;
+  --danger-hover: #d08770;
+  --success: #a3be8c;
+  --warning: #ebcb8b;
+
+  --terminal-bg: #2e3440;
+  --terminal-fg: #eceff4;
+  --terminal-cursor: #88c0d0;
+  --terminal-selection: #4c566a;
+}
+
+/* ---------- Catppuccin Mocha ---------- */
+[data-theme="catppuccin"] {
+  --bg-primary: #1e1e2e;
+  --bg-secondary: #181825;
+  --bg-tertiary: #11111b;
+  --bg-hover: #313244;
+
+  --text-primary: #cdd6f4;
+  --text-secondary: #bac2de;
+  --text-muted: #585b70;
+
+  --border: #313244;
+  --border-focus: #cba6f7;
+
+  --accent: #cba6f7;
+  --accent-hover: #b4befe;
+  --accent-subtle: #3d2f6b;
+
+  --danger: #f38ba8;
+  --danger-hover: #eba0ac;
+  --success: #a6e3a1;
+  --warning: #fab387;
+
+  --terminal-bg: #11111b;
+  --terminal-fg: #cdd6f4;
+  --terminal-cursor: #cba6f7;
+  --terminal-selection: #313244;
+}
+
+/* ---------- Solarized Dark ---------- */
+[data-theme="solarized"] {
+  --bg-primary: #002b36;
+  --bg-secondary: #073642;
+  --bg-tertiary: #083f4d;
+  --bg-hover: #094959;
+
+  --text-primary: #fdf6e3;
+  --text-secondary: #93a1a1;
+  --text-muted: #586e75;
+
+  --border: #073642;
+  --border-focus: #268bd2;
+
+  --accent: #268bd2;
+  --accent-hover: #2aa198;
+  --accent-subtle: #003847;
+
+  --danger: #dc322f;
+  --danger-hover: #cb4b16;
+  --success: #859900;
+  --warning: #b58900;
+
+  --terminal-bg: #002b36;
+  --terminal-fg: #fdf6e3;
+  --terminal-cursor: #268bd2;
+  --terminal-selection: #073642;
+}

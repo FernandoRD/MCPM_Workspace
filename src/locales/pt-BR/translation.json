@@ -1,0 +1,285 @@
+{
+  "app": {
+    "name": "SSH Vault",
+    "tagline": "Seu gerenciador de conexões SSH"
+  },
+  "nav": {
+    "dashboard": "Hosts",
+    "settings": "Configurações",
+    "sync": "Sincronização",
+    "newConnection": "Nova Conexão",
+    "backup": "Backup"
+  },
+  "dashboard": {
+    "title": "Hosts",
+    "searchPlaceholder": "Buscar hosts...",
+    "noHosts": "Nenhum host cadastrado",
+    "noHostsDescription": "Adicione seu primeiro servidor SSH para começar",
+    "addFirst": "Adicionar Host",
+    "groups": {
+      "ungrouped": "Sem grupo"
+    },
+    "host": {
+      "connect": "Conectar",
+      "edit": "Editar",
+      "delete": "Excluir",
+      "duplicate": "Duplicar",
+      "lastConnected": "Última conexão: {{date}}",
+      "neverConnected": "Nunca conectado",
+      "mfaBadge": "MFA"
+    }
+  },
+  "hostEditor": {
+    "titleNew": "Novo Host",
+    "titleEdit": "Editar Host",
+    "sections": {
+      "connection": "Conexão",
+      "authentication": "Autenticação",
+      "advanced": "Avançado"
+    },
+    "fields": {
+      "label": "Nome / Etiqueta",
+      "labelPlaceholder": "Ex: Servidor de Produção",
+      "host": "Host / IP",
+      "hostPlaceholder": "Ex: 192.168.1.10 ou meuservidor.com",
+      "port": "Porta",
+      "username": "Usuário",
+      "usernamePlaceholder": "Ex: root ou ubuntu",
+      "authMethod": "Método de Autenticação",
+      "password": "Senha",
+      "privateKey": "Chave Privada",
+      "privateKeyPath": "Caminho da Chave",
+      "privateKeyPathPlaceholder": "Ex: ~/.ssh/id_rsa",
+      "passphrase": "Frase-senha da Chave",
+      "group": "Grupo",
+      "groupPlaceholder": "Ex: Produção",
+      "tags": "Tags",
+      "tagsPlaceholder": "Ex: web, banco, monitoramento",
+      "notes": "Notas",
+      "notesPlaceholder": "Observações sobre este servidor...",
+      "jumpHost": "Jump Host (Proxy)",
+      "jumpHostPlaceholder": "Selecionar host de salto...",
+      "keepAliveInterval": "Keep-alive (segundos)",
+      "connectionTimeout": "Timeout de Conexão (segundos)"
+    },
+    "authMethods": {
+      "password": "Senha",
+      "privateKey": "Chave Privada",
+      "agent": "Agente SSH"
+    },
+    "actions": {
+      "save": "Salvar",
+      "cancel": "Cancelar",
+      "testConnection": "Testar Conexão",
+      "browseKey": "Selecionar arquivo..."
+    },
+    "mfa": {
+      "section": "Autenticação de Dois Fatores (MFA)",
+      "enable": "Habilitar MFA para este host",
+      "enableDescription": "Gera um código TOTP ao conectar (compatível com Google Authenticator, Authy, etc.)",
+      "secret": "Segredo TOTP (Base32)",
+      "secretPlaceholder": "Ex: JBSWY3DPEHPK3PXP",
+      "generateSecret": "Gerar novo segredo",
+      "scanQr": "Escaneie o QR code com seu aplicativo autenticador",
+      "liveCode": "Código atual",
+      "copyCode": "Copiar código",
+      "codeCopied": "Código copiado!",
+      "expiresIn": "Expira em {{seconds}}s",
+      "invalidSecret": "Segredo TOTP inválido"
+    },
+    "validation": {
+      "labelRequired": "Nome é obrigatório",
+      "hostRequired": "Host é obrigatório",
+      "portInvalid": "Porta deve ser entre 1 e 65535",
+      "usernameRequired": "Usuário é obrigatório"
+    }
+  },
+  "terminal": {
+    "connecting": "Conectando a {{host}}...",
+    "connected": "Conectado",
+    "disconnected": "Desconectado",
+    "reconnect": "Reconectar",
+    "close": "Fechar aba",
+    "copy": "Copiar",
+    "paste": "Colar",
+    "clear": "Limpar terminal",
+    "newTab": "Nova aba",
+    "splitHorizontal": "Dividir horizontalmente",
+    "splitVertical": "Dividir verticalmente"
+  },
+  "settings": {
+    "title": "Configurações",
+    "sections": {
+      "appearance": "Aparência",
+      "language": "Idioma",
+      "terminal": "Terminal",
+      "security": "Segurança",
+      "sync": "Sincronização"
+    },
+    "appearance": {
+      "theme": "Tema",
+      "themeDescription": "Escolha o tema visual da aplicação"
+    },
+    "language": {
+      "label": "Idioma",
+      "description": "Idioma da interface"
+    },
+    "terminal": {
+      "fontSize": "Tamanho da Fonte",
+      "fontFamily": "Família da Fonte",
+      "cursorStyle": "Estilo do Cursor",
+      "cursorBlink": "Cursor piscante",
+      "scrollback": "Linhas de histórico",
+      "cursorStyles": {
+        "block": "Bloco",
+        "underline": "Sublinhado",
+        "bar": "Barra"
+      }
+    },
+    "security": {
+      "masterPassword": "Senha Mestra",
+      "masterPasswordDescription": "Usada para cifrar credenciais antes de sincronizar. Nunca é enviada ao servidor.",
+      "masterPasswordPlaceholder": "Mínimo 8 caracteres",
+      "masterPasswordConfirm": "Confirmar Senha Mestra",
+      "masterPasswordConfirmPlaceholder": "Repita a senha mestra",
+      "masterPasswordSet": "Senha mestra definida",
+      "masterPasswordNotSet": "Sem senha mestra configurada",
+      "masterPasswordChange": "Alterar senha mestra",
+      "masterPasswordDefine": "Definir senha mestra",
+      "masterPasswordRemove": "Remover senha mestra",
+      "masterPasswordCurrent": "Senha Mestra Atual",
+      "masterPasswordNew": "Nova Senha Mestra",
+      "masterPasswordMismatch": "As senhas não coincidem",
+      "masterPasswordTooShort": "Mínimo de 8 caracteres",
+      "masterPasswordRequired": "Defina uma senha mestra antes de sincronizar credenciais",
+      "masterPasswordWrong": "Senha mestra incorreta",
+      "masterPasswordSaved": "Senha mestra salva com sucesso",
+      "syncCredentials": "Sincronizar credenciais",
+      "syncCredentialsDescription": "Inclui senhas e chaves no sync, cifradas com a senha mestra",
+      "warning": "As credenciais são cifradas com AES-256-GCM. Sem a senha mestra, é impossível recuperá-las.",
+      "autoLock": "Bloqueio Automático",
+      "autoLockDescription": "Bloquear após {{minutes}} minutos de inatividade",
+      "clearClipboard": "Limpar área de transferência",
+      "clearClipboardDescription": "Limpar automaticamente após copiar senhas"
+    },
+    "actions": {
+      "save": "Salvar",
+      "saved": "Salvo!",
+      "reset": "Restaurar padrões"
+    }
+  },
+  "sync": {
+    "title": "Sincronização",
+    "description": "Mantenha suas configurações sincronizadas entre múltiplos computadores",
+    "status": {
+      "synced": "Sincronizado",
+      "syncing": "Sincronizando...",
+      "error": "Erro na sincronização",
+      "notConfigured": "Não configurado",
+      "lastSync": "Última sincronização: {{date}}"
+    },
+    "providers": {
+      "title": "Provedor de Sincronização",
+      "githubGist": "GitHub Gist",
+      "githubGistDescription": "Sincronize usando um Gist privado do GitHub",
+      "s3": "S3 / MinIO",
+      "s3Description": "Use um bucket S3 ou MinIO próprio",
+      "webdav": "WebDAV / Nextcloud",
+      "webdavDescription": "Servidor WebDAV ou Nextcloud",
+      "custom": "Endpoint Customizado",
+      "customDescription": "API REST própria"
+    },
+    "githubGist": {
+      "token": "Token de Acesso (PAT)",
+      "tokenPlaceholder": "ghp_...",
+      "tokenHelp": "Crie um token em GitHub > Settings > Developer Settings > Personal Access Tokens",
+      "gistId": "ID do Gist (opcional)",
+      "gistIdDescription": "Deixe em branco para criar um novo Gist automaticamente"
+    },
+    "s3": {
+      "endpoint": "Endpoint",
+      "bucket": "Bucket",
+      "region": "Região",
+      "accessKey": "Access Key",
+      "secretKey": "Secret Key"
+    },
+    "webdav": {
+      "url": "URL do Servidor",
+      "username": "Usuário",
+      "password": "Senha",
+      "path": "Caminho remoto"
+    },
+    "actions": {
+      "syncNow": "Sincronizar Agora",
+      "configure": "Configurar",
+      "disconnect": "Desconectar",
+      "importFromRemote": "Importar do Remoto",
+      "exportToRemote": "Exportar para Remoto"
+    },
+    "conflicts": {
+      "title": "Conflito de Sincronização",
+      "description": "Há diferenças entre a configuração local e remota. Qual versão deseja manter?",
+      "keepLocal": "Manter Local",
+      "keepRemote": "Usar Remoto",
+      "merge": "Mesclar"
+    }
+  },
+  "backup": {
+    "title": "Backup",
+    "description": "Exporte e importe suas configurações e credenciais",
+    "export": {
+      "title": "Exportar Backup",
+      "description": "Salva todos os hosts e configurações em um arquivo .sshvault",
+      "button": "Exportar Backup",
+      "withCredentials": "Incluir credenciais cifradas",
+      "withCredentialsHint": "Requer senha mestra. As senhas e chaves serão cifradas com AES-256-GCM.",
+      "noMasterPassword": "Defina uma senha mestra em Configurações → Segurança para exportar credenciais cifradas.",
+      "success": "Backup exportado com sucesso!",
+      "cancelled": "Exportação cancelada.",
+      "hostsCount": "{{count}} host(s)"
+    },
+    "import": {
+      "title": "Importar Backup",
+      "description": "Restaura hosts e configurações a partir de um arquivo .sshvault",
+      "button": "Selecionar arquivo...",
+      "preview": "Prévia do backup",
+      "exportedAt": "Exportado em: {{date}}",
+      "hostsFound": "{{count}} host(s) encontrado(s)",
+      "hasCredentials": "Contém credenciais cifradas",
+      "noCredentials": "Sem credenciais cifradas",
+      "enterPassword": "Informe a senha mestra usada na exportação para decifrar as credenciais.",
+      "mergeTitle": "Como importar?",
+      "mergeAdd": "Adicionar aos existentes",
+      "mergeAddDesc": "Mantém os hosts atuais e adiciona os do backup (duplicatas são ignoradas por ID)",
+      "mergeReplace": "Substituir tudo",
+      "mergeReplaceDesc": "Remove todos os hosts atuais e substitui pelos do backup",
+      "confirmReplace": "Isso removerá TODOS os hosts existentes. Tem certeza?",
+      "confirm": "Importar",
+      "success": "Backup importado com sucesso!",
+      "successWithCreds": "Backup importado com credenciais decifradas!",
+      "credentialsSkipped": "Credenciais não importadas (senha não fornecida)",
+      "cancelled": "Importação cancelada.",
+      "invalidFile": "Arquivo inválido ou corrompido",
+      "wrongPassword": "Senha mestra incorreta. As credenciais não foram importadas."
+    },
+    "masterPasswordPrompt": "Senha Mestra para Backup",
+    "includeSettings": "Restaurar configurações (tema, idioma, terminal)",
+    "includeSettingsHint": "Desmarque para importar apenas os hosts"
+  },
+  "common": {
+    "loading": "Carregando...",
+    "error": "Erro",
+    "success": "Sucesso",
+    "confirm": "Confirmar",
+    "cancel": "Cancelar",
+    "delete": "Excluir",
+    "edit": "Editar",
+    "save": "Salvar",
+    "close": "Fechar",
+    "back": "Voltar",
+    "yes": "Sim",
+    "no": "Não",
+    "confirmDelete": "Tem certeza que deseja excluir \"{{name}}\"?",
+    "noResults": "Nenhum resultado encontrado"
+  }
+}

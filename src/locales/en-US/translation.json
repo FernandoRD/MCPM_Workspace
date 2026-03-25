@@ -1,0 +1,285 @@
+{
+  "app": {
+    "name": "SSH Vault",
+    "tagline": "Your SSH connection manager"
+  },
+  "nav": {
+    "dashboard": "Hosts",
+    "settings": "Settings",
+    "sync": "Sync",
+    "newConnection": "New Connection",
+    "backup": "Backup"
+  },
+  "dashboard": {
+    "title": "Hosts",
+    "searchPlaceholder": "Search hosts...",
+    "noHosts": "No hosts added yet",
+    "noHostsDescription": "Add your first SSH server to get started",
+    "addFirst": "Add Host",
+    "groups": {
+      "ungrouped": "Ungrouped"
+    },
+    "host": {
+      "connect": "Connect",
+      "edit": "Edit",
+      "delete": "Delete",
+      "duplicate": "Duplicate",
+      "lastConnected": "Last connected: {{date}}",
+      "neverConnected": "Never connected",
+      "mfaBadge": "MFA"
+    }
+  },
+  "hostEditor": {
+    "titleNew": "New Host",
+    "titleEdit": "Edit Host",
+    "sections": {
+      "connection": "Connection",
+      "authentication": "Authentication",
+      "advanced": "Advanced"
+    },
+    "fields": {
+      "label": "Name / Label",
+      "labelPlaceholder": "E.g.: Production Server",
+      "host": "Host / IP",
+      "hostPlaceholder": "E.g.: 192.168.1.10 or myserver.com",
+      "port": "Port",
+      "username": "Username",
+      "usernamePlaceholder": "E.g.: root or ubuntu",
+      "authMethod": "Authentication Method",
+      "password": "Password",
+      "privateKey": "Private Key",
+      "privateKeyPath": "Key Path",
+      "privateKeyPathPlaceholder": "E.g.: ~/.ssh/id_rsa",
+      "passphrase": "Key Passphrase",
+      "group": "Group",
+      "groupPlaceholder": "E.g.: Production",
+      "tags": "Tags",
+      "tagsPlaceholder": "E.g.: web, database, monitoring",
+      "notes": "Notes",
+      "notesPlaceholder": "Notes about this server...",
+      "jumpHost": "Jump Host (Proxy)",
+      "jumpHostPlaceholder": "Select jump host...",
+      "keepAliveInterval": "Keep-alive (seconds)",
+      "connectionTimeout": "Connection Timeout (seconds)"
+    },
+    "authMethods": {
+      "password": "Password",
+      "privateKey": "Private Key",
+      "agent": "SSH Agent"
+    },
+    "actions": {
+      "save": "Save",
+      "cancel": "Cancel",
+      "testConnection": "Test Connection",
+      "browseKey": "Browse..."
+    },
+    "mfa": {
+      "section": "Two-Factor Authentication (MFA)",
+      "enable": "Enable MFA for this host",
+      "enableDescription": "Generates a TOTP code when connecting (compatible with Google Authenticator, Authy, etc.)",
+      "secret": "TOTP Secret (Base32)",
+      "secretPlaceholder": "E.g.: JBSWY3DPEHPK3PXP",
+      "generateSecret": "Generate new secret",
+      "scanQr": "Scan the QR code with your authenticator app",
+      "liveCode": "Current code",
+      "copyCode": "Copy code",
+      "codeCopied": "Code copied!",
+      "expiresIn": "Expires in {{seconds}}s",
+      "invalidSecret": "Invalid TOTP secret"
+    },
+    "validation": {
+      "labelRequired": "Name is required",
+      "hostRequired": "Host is required",
+      "portInvalid": "Port must be between 1 and 65535",
+      "usernameRequired": "Username is required"
+    }
+  },
+  "terminal": {
+    "connecting": "Connecting to {{host}}...",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "reconnect": "Reconnect",
+    "close": "Close tab",
+    "copy": "Copy",
+    "paste": "Paste",
+    "clear": "Clear terminal",
+    "newTab": "New tab",
+    "splitHorizontal": "Split horizontally",
+    "splitVertical": "Split vertically"
+  },
+  "settings": {
+    "title": "Settings",
+    "sections": {
+      "appearance": "Appearance",
+      "language": "Language",
+      "terminal": "Terminal",
+      "security": "Security",
+      "sync": "Sync"
+    },
+    "appearance": {
+      "theme": "Theme",
+      "themeDescription": "Choose the application visual theme"
+    },
+    "language": {
+      "label": "Language",
+      "description": "Interface language"
+    },
+    "terminal": {
+      "fontSize": "Font Size",
+      "fontFamily": "Font Family",
+      "cursorStyle": "Cursor Style",
+      "cursorBlink": "Blinking cursor",
+      "scrollback": "Scrollback lines",
+      "cursorStyles": {
+        "block": "Block",
+        "underline": "Underline",
+        "bar": "Bar"
+      }
+    },
+    "security": {
+      "masterPassword": "Master Password",
+      "masterPasswordDescription": "Used to encrypt credentials before syncing. Never sent to the server.",
+      "masterPasswordPlaceholder": "Minimum 8 characters",
+      "masterPasswordConfirm": "Confirm Master Password",
+      "masterPasswordConfirmPlaceholder": "Repeat the master password",
+      "masterPasswordSet": "Master password defined",
+      "masterPasswordNotSet": "No master password configured",
+      "masterPasswordChange": "Change master password",
+      "masterPasswordDefine": "Set master password",
+      "masterPasswordRemove": "Remove master password",
+      "masterPasswordCurrent": "Current Master Password",
+      "masterPasswordNew": "New Master Password",
+      "masterPasswordMismatch": "Passwords do not match",
+      "masterPasswordTooShort": "Minimum 8 characters",
+      "masterPasswordRequired": "Set a master password before syncing credentials",
+      "masterPasswordWrong": "Incorrect master password",
+      "masterPasswordSaved": "Master password saved successfully",
+      "syncCredentials": "Sync credentials",
+      "syncCredentialsDescription": "Include passwords and keys in sync, encrypted with the master password",
+      "warning": "Credentials are encrypted with AES-256-GCM. Without the master password, recovery is impossible.",
+      "autoLock": "Auto Lock",
+      "autoLockDescription": "Lock after {{minutes}} minutes of inactivity",
+      "clearClipboard": "Clear clipboard",
+      "clearClipboardDescription": "Automatically clear after copying passwords"
+    },
+    "actions": {
+      "save": "Save",
+      "saved": "Saved!",
+      "reset": "Reset to defaults"
+    }
+  },
+  "sync": {
+    "title": "Sync",
+    "description": "Keep your settings synchronized across multiple computers",
+    "status": {
+      "synced": "Synced",
+      "syncing": "Syncing...",
+      "error": "Sync error",
+      "notConfigured": "Not configured",
+      "lastSync": "Last sync: {{date}}"
+    },
+    "providers": {
+      "title": "Sync Provider",
+      "githubGist": "GitHub Gist",
+      "githubGistDescription": "Sync using a private GitHub Gist",
+      "s3": "S3 / MinIO",
+      "s3Description": "Use your own S3 or MinIO bucket",
+      "webdav": "WebDAV / Nextcloud",
+      "webdavDescription": "WebDAV or Nextcloud server",
+      "custom": "Custom Endpoint",
+      "customDescription": "Your own REST API"
+    },
+    "githubGist": {
+      "token": "Access Token (PAT)",
+      "tokenPlaceholder": "ghp_...",
+      "tokenHelp": "Create a token at GitHub > Settings > Developer Settings > Personal Access Tokens",
+      "gistId": "Gist ID (optional)",
+      "gistIdDescription": "Leave blank to automatically create a new Gist"
+    },
+    "s3": {
+      "endpoint": "Endpoint",
+      "bucket": "Bucket",
+      "region": "Region",
+      "accessKey": "Access Key",
+      "secretKey": "Secret Key"
+    },
+    "webdav": {
+      "url": "Server URL",
+      "username": "Username",
+      "password": "Password",
+      "path": "Remote path"
+    },
+    "actions": {
+      "syncNow": "Sync Now",
+      "configure": "Configure",
+      "disconnect": "Disconnect",
+      "importFromRemote": "Import from Remote",
+      "exportToRemote": "Export to Remote"
+    },
+    "conflicts": {
+      "title": "Sync Conflict",
+      "description": "There are differences between local and remote config. Which version do you want to keep?",
+      "keepLocal": "Keep Local",
+      "keepRemote": "Use Remote",
+      "merge": "Merge"
+    }
+  },
+  "backup": {
+    "title": "Backup",
+    "description": "Export and import your settings and credentials",
+    "export": {
+      "title": "Export Backup",
+      "description": "Saves all hosts and settings to a .sshvault file",
+      "button": "Export Backup",
+      "withCredentials": "Include encrypted credentials",
+      "withCredentialsHint": "Requires master password. Passwords and keys will be encrypted with AES-256-GCM.",
+      "noMasterPassword": "Set a master password in Settings → Security to export encrypted credentials.",
+      "success": "Backup exported successfully!",
+      "cancelled": "Export cancelled.",
+      "hostsCount": "{{count}} host(s)"
+    },
+    "import": {
+      "title": "Import Backup",
+      "description": "Restores hosts and settings from a .sshvault file",
+      "button": "Select file...",
+      "preview": "Backup preview",
+      "exportedAt": "Exported at: {{date}}",
+      "hostsFound": "{{count}} host(s) found",
+      "hasCredentials": "Contains encrypted credentials",
+      "noCredentials": "No encrypted credentials",
+      "enterPassword": "Enter the master password used during export to decrypt credentials.",
+      "mergeTitle": "How to import?",
+      "mergeAdd": "Add to existing",
+      "mergeAddDesc": "Keeps current hosts and adds backup ones (duplicates ignored by ID)",
+      "mergeReplace": "Replace all",
+      "mergeReplaceDesc": "Removes all current hosts and replaces with backup",
+      "confirmReplace": "This will remove ALL existing hosts. Are you sure?",
+      "confirm": "Import",
+      "success": "Backup imported successfully!",
+      "successWithCreds": "Backup imported with decrypted credentials!",
+      "credentialsSkipped": "Credentials not imported (no password provided)",
+      "cancelled": "Import cancelled.",
+      "invalidFile": "Invalid or corrupted file",
+      "wrongPassword": "Incorrect master password. Credentials were not imported."
+    },
+    "masterPasswordPrompt": "Master Password for Backup",
+    "includeSettings": "Restore settings (theme, language, terminal)",
+    "includeSettingsHint": "Uncheck to import hosts only"
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "save": "Save",
+    "close": "Close",
+    "back": "Back",
+    "yes": "Yes",
+    "no": "No",
+    "confirmDelete": "Are you sure you want to delete \"{{name}}\"?",
+    "noResults": "No results found"
+  }
+}

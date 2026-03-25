@@ -1,0 +1,293 @@
+import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
+import {
+  Plus,
+  Search,
+  Server,
+  ChevronDown,
+  ChevronRight,
+  Edit2,
+  Trash2,
+  Copy,
+  Terminal,
+  MoreVertical,
+  ShieldCheck,
+} from "lucide-react";
+import { useHostsStore } from "@/store/hosts";
+import { useSessionsStore } from "@/store/sessions";
+import { SshHost } from "@/types";
+import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
+import { formatDate } from "@/lib/utils";
+import { useSettingsStore } from "@/store/settings";
+
+export function Dashboard() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const hosts = useHostsStore((s) => s.hosts);
+  const { deleteHost, duplicateHost } = useHostsStore();
+  const openSession = useSessionsStore((s) => s.openSession);
+  const locale = useSettingsStore((s) => s.settings.locale);
+  const [search, setSearch] = useState("");
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [menuHostId, setMenuHostId] = useState<string | null>(null);
+
+  const filtered = hosts.filter(
+    (h) =>
+      h.label.toLowerCase().includes(search.toLowerCase()) ||
+      h.host.toLowerCase().includes(search.toLowerCase()) ||
+      h.tags.some((t) => t.toLowerCase().includes(search.toLowerCase()))
+  );
+
+  const grouped = filtered.reduce<Record<string, SshHost[]>>((acc, host) => {
+    const key = host.group ?? "__ungrouped__";
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(host);
+    return acc;
+  }, {});
+
+  const toggleGroup = (g: string) =>
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      next.has(g) ? next.delete(g) : next.add(g);
+      return next;
+    });
+
+  const handleConnect = (host: SshHost) => {
+    const tabId = openSession(host.id, host.label, `${host.username}@${host.host}`);
+    navigate(`/terminal/${tabId}`);
+  };
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b border-[var(--border)] px-6 py-4">
+        <h1 className="text-lg font-semibold text-[var(--text-primary)]">
+          {t("dashboard.title")}
+        </h1>
+        <Button onClick={() => navigate("/hosts/new")} size="sm">
+          <Plus size={14} />
+          {t("nav.newConnection")}
+        </Button>
+      </div>
+
+      {/* Search bar */}
+      <div className="px-6 py-3 border-b border-[var(--border)]">
+        <div className="relative max-w-md">
+          <Search
+            size={15}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
+          />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t("dashboard.searchPlaceholder")}
+            className="w-full h-9 rounded-md border border-[var(--border)] bg-[var(--bg-secondary)] pl-9 pr-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-focus)]"
+          />
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-auto px-6 py-4">
+        {hosts.length === 0 ? (
+          <EmptyState onAdd={() => navigate("/hosts/new")} />
+        ) : filtered.length === 0 ? (
+          <p className="text-center py-12 text-[var(--text-muted)]">{t("common.noResults")}</p>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {Object.entries(grouped).map(([groupKey, groupHosts]) => {
+              const isCollapsed = collapsedGroups.has(groupKey);
+              const label =
+                groupKey === "__ungrouped__"
+                  ? t("dashboard.groups.ungrouped")
+                  : groupKey;
+
+              return (
+                <div key={groupKey}>
+                  <button
+                    onClick={() => toggleGroup(groupKey)}
+                    className="flex items-center gap-1.5 mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
+                  >
+                    {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                    {label}
+                    <span className="font-normal opacity-70 normal-case tracking-normal">
+                      ({groupHosts.length})
+                    </span>
+                  </button>
+
+                  {!isCollapsed && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                      {groupHosts.map((host) => (
+                        <HostCard
+                          key={host.id}
+                          host={host}
+                          locale={locale}
+                          menuOpen={menuHostId === host.id}
+                          onMenuToggle={(id) =>
+                            setMenuHostId((prev) => (prev === id ? null : id))
+                          }
+                          onConnect={handleConnect}
+                          onEdit={(h) => navigate(`/hosts/${h.id}`)}
+                          onDelete={(id) => deleteHost(id)}
+                          onDuplicate={(id) => duplicateHost(id)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function HostCard({
+  host,
+  locale,
+  menuOpen,
+  onMenuToggle,
+  onConnect,
+  onEdit,
+  onDelete,
+  onDuplicate,
+}: {
+  host: SshHost;
+  locale: string;
+  menuOpen: boolean;
+  onMenuToggle: (id: string) => void;
+  onConnect: (h: SshHost) => void;
+  onEdit: (h: SshHost) => void;
+  onDelete: (id: string) => void;
+  onDuplicate: (id: string) => void;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <div className="relative group flex flex-col gap-3 rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] p-4 hover:border-[var(--border-focus)] transition-colors">
+      {/* Top row */}
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-2.5">
+          <div
+            className="h-9 w-9 rounded-lg flex items-center justify-center text-white font-bold text-sm"
+            style={{ backgroundColor: host.color ?? "var(--accent)" }}
+          >
+            {host.label.charAt(0).toUpperCase()}
+          </div>
+          <div className="min-w-0">
+            <p className="font-medium text-[var(--text-primary)] leading-tight truncate max-w-[130px]">
+              {host.label}
+            </p>
+            <p className="text-xs text-[var(--text-muted)] truncate max-w-[130px]">
+              {host.host}:{host.port}
+            </p>
+          </div>
+        </div>
+        {/* Context menu */}
+        <div className="relative">
+          <button
+            onClick={() => onMenuToggle(host.id)}
+            className="h-7 w-7 flex items-center justify-center rounded text-[var(--text-muted)] hover:bg-[var(--bg-hover)] transition-colors opacity-0 group-hover:opacity-100"
+          >
+            <MoreVertical size={14} />
+          </button>
+          {menuOpen && (
+            <div className="absolute right-0 top-8 z-20 w-40 rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] shadow-xl py-1">
+              <ContextItem icon={Terminal} label={t("dashboard.host.connect")} onClick={() => onConnect(host)} />
+              <ContextItem icon={Edit2} label={t("dashboard.host.edit")} onClick={() => onEdit(host)} />
+              <ContextItem icon={Copy} label={t("dashboard.host.duplicate")} onClick={() => onDuplicate(host.id)} />
+              <div className="my-1 border-t border-[var(--border)]" />
+              <ContextItem icon={Trash2} label={t("dashboard.host.delete")} onClick={() => onDelete(host.id)} danger />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* User */}
+      <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
+        <Server size={11} />
+        <span className="font-mono truncate">{host.username}@{host.host}</span>
+      </div>
+
+      {/* Tags + MFA badge */}
+      {(host.tags.length > 0 || host.mfaEnabled) && (
+        <div className="flex flex-wrap gap-1">
+          {host.mfaEnabled && (
+            <Badge variant="accent" className="flex items-center gap-1">
+              <ShieldCheck size={10} />
+              {t("dashboard.host.mfaBadge")}
+            </Badge>
+          )}
+          {host.tags.slice(0, 3).map((tag) => (
+            <Badge key={tag}>{tag}</Badge>
+          ))}
+          {host.tags.length > 3 && (
+            <Badge>+{host.tags.length - 3}</Badge>
+          )}
+        </div>
+      )}
+
+      {/* Footer */}
+      <div className="flex items-center justify-between mt-auto pt-2 border-t border-[var(--border)]">
+        <p className="text-xs text-[var(--text-muted)]">
+          {host.lastConnectedAt
+            ? formatDate(host.lastConnectedAt, locale)
+            : t("dashboard.host.neverConnected")}
+        </p>
+        <Button size="sm" onClick={() => onConnect(host)}>
+          <Terminal size={12} />
+          {t("dashboard.host.connect")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ContextItem({
+  icon: Icon,
+  label,
+  onClick,
+  danger,
+}: {
+  icon: React.ElementType;
+  label: string;
+  onClick: () => void;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-xs transition-colors ${
+        danger
+          ? "text-[var(--danger)] hover:bg-[var(--danger)]/10"
+          : "text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+      }`}
+    >
+      <Icon size={13} />
+      {label}
+    </button>
+  );
+}
+
+function EmptyState({ onAdd }: { onAdd: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-col items-center justify-center py-20 gap-4">
+      <div className="h-16 w-16 rounded-2xl bg-[var(--bg-secondary)] border border-[var(--border)] flex items-center justify-center">
+        <Server size={28} className="text-[var(--text-muted)]" />
+      </div>
+      <div className="text-center">
+        <p className="font-medium text-[var(--text-primary)]">{t("dashboard.noHosts")}</p>
+        <p className="text-sm text-[var(--text-muted)] mt-1">{t("dashboard.noHostsDescription")}</p>
+      </div>
+      <Button onClick={onAdd}>
+        <Plus size={14} />
+        {t("dashboard.addFirst")}
+      </Button>
+    </div>
+  );
+}

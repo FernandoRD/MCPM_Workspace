@@ -1,0 +1,434 @@
+import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { useNavigate, useParams } from "react-router-dom";
+import { ChevronDown, ChevronRight, ArrowLeft, RefreshCw } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
+import QRCode from "react-qr-code";
+import { useHostsStore } from "@/store/hosts";
+import { SshHost, AuthMethod } from "@/types";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { Textarea } from "@/components/ui/Textarea";
+import { Button } from "@/components/ui/Button";
+import { TotpDisplay } from "@/components/TotpDisplay/TotpDisplay";
+
+type FormData = Omit<SshHost, "id" | "createdAt" | "updatedAt">;
+
+const DEFAULT_FORM: FormData = {
+  label: "",
+  host: "",
+  port: 22,
+  username: "",
+  authMethod: "password",
+  tags: [],
+  connectionTimeout: 30,
+  keepAliveInterval: 60,
+};
+
+interface ValidationErrors {
+  label?: string;
+  host?: string;
+  port?: string;
+  username?: string;
+}
+
+interface TotpSetup {
+  secret: string;
+  otpauth_url: string;
+}
+
+export function HostEditor() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const isNew = id === "new" || !id;
+  const { addHost, updateHost, getHost, hosts } = useHostsStore();
+
+  const [form, setForm] = useState<FormData>(DEFAULT_FORM);
+  const [errors, setErrors] = useState<ValidationErrors>({});
+  const [openSections, setOpenSections] = useState<Set<string>>(
+    new Set(["connection", "authentication"])
+  );
+  const [tagsInput, setTagsInput] = useState("");
+  const [totpOtpauthUrl, setTotpOtpauthUrl] = useState<string | null>(null);
+  const [generatingTotp, setGeneratingTotp] = useState(false);
+
+  useEffect(() => {
+    if (!isNew && id) {
+      const host = getHost(id);
+      if (host) {
+        const { id: _id, createdAt: _c, updatedAt: _u, ...data } = host;
+        setForm(data);
+        setTagsInput(host.tags.join(", "));
+      }
+    }
+  }, [id, isNew, getHost]);
+
+  const generateTotpSecret = async () => {
+    setGeneratingTotp(true);
+    try {
+      const setup = await invoke<TotpSetup>("generate_totp_secret", {
+        issuer: "SSH Vault",
+        accountName: form.label || form.host || "host",
+      });
+      set("totpSecret", setup.secret);
+      setTotpOtpauthUrl(setup.otpauth_url);
+    } finally {
+      setGeneratingTotp(false);
+    }
+  };
+
+  const toggleSection = (s: string) =>
+    setOpenSections((prev) => {
+      const next = new Set(prev);
+      next.has(s) ? next.delete(s) : next.add(s);
+      return next;
+    });
+
+  const set = <K extends keyof FormData>(key: K, value: FormData[K]) =>
+    setForm((prev) => ({ ...prev, [key]: value }));
+
+  const validate = (): boolean => {
+    const errs: ValidationErrors = {};
+    if (!form.label.trim()) errs.label = t("hostEditor.validation.labelRequired");
+    if (!form.host.trim()) errs.host = t("hostEditor.validation.hostRequired");
+    if (!form.username.trim()) errs.username = t("hostEditor.validation.usernameRequired");
+    if (form.port < 1 || form.port > 65535) errs.port = t("hostEditor.validation.portInvalid");
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleSave = () => {
+    if (!validate()) return;
+    const tags = tagsInput
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+    const data = { ...form, tags };
+    if (isNew) {
+      addHost(data);
+    } else if (id) {
+      updateHost(id, data);
+    }
+    navigate("/");
+  };
+
+  const otherHosts = hosts.filter((h) => h.id !== id);
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-center gap-3 border-b border-[var(--border)] px-6 py-4">
+        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => navigate(-1)}>
+          <ArrowLeft size={16} />
+        </Button>
+        <h1 className="text-lg font-semibold text-[var(--text-primary)]">
+          {isNew ? t("hostEditor.titleNew") : t("hostEditor.titleEdit")}
+        </h1>
+      </div>
+
+      <div className="flex-1 overflow-auto">
+        <div className="max-w-2xl mx-auto px-6 py-6 flex flex-col gap-4">
+          {/* Connection Section */}
+          <Section
+            id="connection"
+            title={t("hostEditor.sections.connection")}
+            open={openSections.has("connection")}
+            onToggle={toggleSection}
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="sm:col-span-2">
+                <Input
+                  id="label"
+                  label={t("hostEditor.fields.label")}
+                  placeholder={t("hostEditor.fields.labelPlaceholder")}
+                  value={form.label}
+                  onChange={(e) => set("label", e.target.value)}
+                  error={errors.label}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <Input
+                  id="host"
+                  label={t("hostEditor.fields.host")}
+                  placeholder={t("hostEditor.fields.hostPlaceholder")}
+                  value={form.host}
+                  onChange={(e) => set("host", e.target.value)}
+                  error={errors.host}
+                />
+              </div>
+              <Input
+                id="port"
+                label={t("hostEditor.fields.port")}
+                type="number"
+                min={1}
+                max={65535}
+                value={form.port}
+                onChange={(e) => set("port", parseInt(e.target.value) || 22)}
+                error={errors.port}
+              />
+              <Input
+                id="username"
+                label={t("hostEditor.fields.username")}
+                placeholder={t("hostEditor.fields.usernamePlaceholder")}
+                value={form.username}
+                onChange={(e) => set("username", e.target.value)}
+                error={errors.username}
+              />
+            </div>
+          </Section>
+
+          {/* Authentication Section */}
+          <Section
+            id="authentication"
+            title={t("hostEditor.sections.authentication")}
+            open={openSections.has("authentication")}
+            onToggle={toggleSection}
+          >
+            <div className="flex flex-col gap-4">
+              <Select
+                id="authMethod"
+                label={t("hostEditor.fields.authMethod")}
+                value={form.authMethod}
+                onChange={(e) => set("authMethod", e.target.value as AuthMethod)}
+              >
+                <option value="password">{t("hostEditor.authMethods.password")}</option>
+                <option value="privateKey">{t("hostEditor.authMethods.privateKey")}</option>
+                <option value="agent">{t("hostEditor.authMethods.agent")}</option>
+              </Select>
+
+              {form.authMethod === "password" && (
+                <Input
+                  id="password"
+                  label={t("hostEditor.fields.password")}
+                  type="password"
+                  placeholder="••••••••"
+                  value={form.passwordRef ?? ""}
+                  onChange={(e) => set("passwordRef", e.target.value)}
+                />
+              )}
+
+              {form.authMethod === "privateKey" && (
+                <>
+                  <Input
+                    id="privateKeyPath"
+                    label={t("hostEditor.fields.privateKeyPath")}
+                    placeholder={t("hostEditor.fields.privateKeyPathPlaceholder")}
+                    value={form.privateKeyPath ?? ""}
+                    onChange={(e) => set("privateKeyPath", e.target.value)}
+                  />
+                  <Input
+                    id="passphrase"
+                    label={t("hostEditor.fields.passphrase")}
+                    type="password"
+                    placeholder="••••••••"
+                    value={form.passphrase ?? ""}
+                    onChange={(e) => set("passphrase", e.target.value)}
+                  />
+                </>
+              )}
+            </div>
+          </Section>
+
+          {/* Advanced Section */}
+          <Section
+            id="advanced"
+            title={t("hostEditor.sections.advanced")}
+            open={openSections.has("advanced")}
+            onToggle={toggleSection}
+          >
+            <div className="flex flex-col gap-4">
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  id="group"
+                  label={t("hostEditor.fields.group")}
+                  placeholder={t("hostEditor.fields.groupPlaceholder")}
+                  value={form.group ?? ""}
+                  onChange={(e) => set("group", e.target.value || undefined)}
+                />
+                <Input
+                  id="color"
+                  label="Cor"
+                  type="color"
+                  value={form.color ?? "#388bfd"}
+                  onChange={(e) => set("color", e.target.value)}
+                  className="h-9 cursor-pointer"
+                />
+              </div>
+              <Input
+                id="tags"
+                label={t("hostEditor.fields.tags")}
+                placeholder={t("hostEditor.fields.tagsPlaceholder")}
+                value={tagsInput}
+                onChange={(e) => setTagsInput(e.target.value)}
+                hint="Separe as tags por vírgula"
+              />
+              {otherHosts.length > 0 && (
+                <Select
+                  id="jumpHost"
+                  label={t("hostEditor.fields.jumpHost")}
+                  value={form.jumpHostId ?? ""}
+                  onChange={(e) => set("jumpHostId", e.target.value || undefined)}
+                >
+                  <option value="">{t("hostEditor.fields.jumpHostPlaceholder")}</option>
+                  {otherHosts.map((h) => (
+                    <option key={h.id} value={h.id}>
+                      {h.label} ({h.host}:{h.port})
+                    </option>
+                  ))}
+                </Select>
+              )}
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  id="keepAlive"
+                  label={t("hostEditor.fields.keepAliveInterval")}
+                  type="number"
+                  min={0}
+                  value={form.keepAliveInterval ?? 60}
+                  onChange={(e) => set("keepAliveInterval", parseInt(e.target.value) || 0)}
+                />
+                <Input
+                  id="timeout"
+                  label={t("hostEditor.fields.connectionTimeout")}
+                  type="number"
+                  min={1}
+                  value={form.connectionTimeout ?? 30}
+                  onChange={(e) => set("connectionTimeout", parseInt(e.target.value) || 30)}
+                />
+              </div>
+              <Textarea
+                id="notes"
+                label={t("hostEditor.fields.notes")}
+                placeholder={t("hostEditor.fields.notesPlaceholder")}
+                rows={3}
+                value={form.notes ?? ""}
+                onChange={(e) => set("notes", e.target.value || undefined)}
+              />
+            </div>
+          </Section>
+
+          {/* MFA Section */}
+          <Section
+            id="mfa"
+            title={t("hostEditor.mfa.section")}
+            open={openSections.has("mfa")}
+            onToggle={toggleSection}
+          >
+            <div className="flex flex-col gap-4">
+              {/* Enable toggle */}
+              <label className="flex items-start gap-3 cursor-pointer">
+                <div className="relative mt-0.5">
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={form.mfaEnabled ?? false}
+                    onChange={(e) => {
+                      set("mfaEnabled", e.target.checked);
+                      if (!e.target.checked) {
+                        set("totpSecret", undefined);
+                        setTotpOtpauthUrl(null);
+                      }
+                    }}
+                  />
+                  <div className="h-5 w-9 rounded-full bg-[var(--border)] peer-checked:bg-[var(--accent)] transition-colors" />
+                  <div className="absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform peer-checked:translate-x-4" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-[var(--text-primary)]">
+                    {t("hostEditor.mfa.enable")}
+                  </p>
+                  <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                    {t("hostEditor.mfa.enableDescription")}
+                  </p>
+                </div>
+              </label>
+
+              {form.mfaEnabled && (
+                <>
+                  {/* Secret input + generate button */}
+                  <div className="flex gap-2 items-end">
+                    <div className="flex-1">
+                      <Input
+                        id="totpSecret"
+                        label={t("hostEditor.mfa.secret")}
+                        placeholder={t("hostEditor.mfa.secretPlaceholder")}
+                        value={form.totpSecret ?? ""}
+                        onChange={(e) => {
+                          set("totpSecret", e.target.value.toUpperCase() || undefined);
+                          setTotpOtpauthUrl(null);
+                        }}
+                        className="font-mono"
+                      />
+                    </div>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="mb-0.5 flex-shrink-0"
+                      onClick={generateTotpSecret}
+                      disabled={generatingTotp}
+                    >
+                      <RefreshCw size={13} className={generatingTotp ? "animate-spin" : ""} />
+                      {t("hostEditor.mfa.generateSecret")}
+                    </Button>
+                  </div>
+
+                  {/* QR Code */}
+                  {totpOtpauthUrl && (
+                    <div className="flex flex-col items-center gap-3 rounded-lg border border-[var(--border)] bg-white p-4">
+                      <QRCode value={totpOtpauthUrl} size={160} />
+                      <p className="text-xs text-center text-[var(--text-muted)] leading-relaxed" style={{color: "#555"}}>
+                        {t("hostEditor.mfa.scanQr")}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Live TOTP preview */}
+                  {form.totpSecret && form.totpSecret.length >= 8 && (
+                    <TotpDisplay secretBase32={form.totpSecret} />
+                  )}
+                </>
+              )}
+            </div>
+          </Section>
+
+          {/* Actions */}
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <Button variant="secondary" onClick={() => navigate(-1)}>
+              {t("hostEditor.actions.cancel")}
+            </Button>
+            <Button onClick={handleSave}>
+              {t("hostEditor.actions.save")}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Section({
+  id,
+  title,
+  open,
+  onToggle,
+  children,
+}: {
+  id: string;
+  title: string;
+  open: boolean;
+  onToggle: (id: string) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] overflow-hidden">
+      <button
+        onClick={() => onToggle(id)}
+        className="flex w-full items-center justify-between px-5 py-3.5 text-sm font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
+      >
+        {title}
+        {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+      </button>
+      {open && <div className="px-5 pb-5 pt-1 border-t border-[var(--border)]">{children}</div>}
+    </div>
+  );
+}
