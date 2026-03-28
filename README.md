@@ -21,27 +21,255 @@ Gerenciador de conexões SSH com sincronização remota e backup de configuraç�
 
 ---
 
-## Requisitos
+## Preparando o ambiente para build
 
-### Sistema
+> Siga as instruções da sua plataforma na ordem apresentada. Todos os passos são necessários para que `npm run tauri dev` e `npm run tauri build` funcionem corretamente.
 
-- Linux, macOS ou Windows
-- [Node.js](https://nodejs.org/) 18+
-- [Rust](https://rustup.rs/) (stable)
+---
 
-### Linux — dependências do sistema
+### Linux
+
+#### 1. Node.js 18+
+
+A forma recomendada é usar o **nvm** (Node Version Manager), que evita conflitos com versões do sistema:
+
+```bash
+# Instalar o nvm
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+
+# Recarregar o shell e instalar a versão LTS
+nvm install --lts
+nvm use --lts
+
+# Verificar
+node -v   # deve exibir v20.x.x ou superior
+npm -v
+```
+
+Alternativamente, pelo gerenciador de pacotes da distro:
+
+```bash
+# Arch / CachyOS / Manjaro
+sudo pacman -S nodejs npm
+
+# Ubuntu / Debian (versão do repositório oficial da NodeSource)
+curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+sudo apt install -y nodejs
+
+# Fedora
+sudo dnf install nodejs npm
+
+# openSUSE
+sudo zypper install nodejs npm
+```
+
+#### 2. Rust (toolchain stable)
+
+```bash
+# Instalar o rustup (gerenciador oficial do Rust)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Escolha a opção 1 (instalação padrão) quando solicitado
+# Ao final, ative o Rust no shell atual:
+
+source ~/.cargo/env          # bash / zsh
+source ~/.cargo/env.fish     # fish shell
+
+# Verificar
+rustc --version   # deve exibir rustc 1.7x.x ou superior
+cargo --version
+```
+
+> Em sessões futuras do terminal o Rust já estará disponível automaticamente via `~/.profile` / `~/.bashrc`. No fish shell, adicione `source ~/.cargo/env.fish` ao seu `~/.config/fish/config.fish` se não for adicionado automaticamente.
+
+#### 3. Dependências do sistema (WebKit, GTK, AppIndicator)
+
+Estas bibliotecas são exigidas pelo Tauri para renderizar a interface e integrar com o ambiente desktop:
 
 ```bash
 # Arch / CachyOS / Manjaro
 sudo pacman -S webkit2gtk-4.1 gtk3 libayatana-appindicator base-devel
 
-# Ubuntu / Debian
-sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
+# Ubuntu 22.04+ / Debian 12+
+sudo apt update
+sudo apt install -y \
+  libwebkit2gtk-4.1-dev \
+  libgtk-3-dev \
+  libayatana-appindicator3-dev \
+  librsvg2-dev \
+  patchelf
+
+# Ubuntu 20.04 / Debian 11 (webkit2gtk ainda na versão 4.0)
+sudo apt update
+sudo apt install -y \
+  libwebkit2gtk-4.0-dev \
+  libgtk-3-dev \
+  libappindicator3-dev \
+  librsvg2-dev
+
+# Fedora
+sudo dnf install -y \
+  webkit2gtk4.1-devel \
+  gtk3-devel \
+  libappindicator-gtk3-devel \
+  librsvg2-devel
+
+# openSUSE Tumbleweed
+sudo zypper install -y \
+  webkit2gtk3-devel \
+  gtk3-devel \
+  libappindicator3-devel
+```
+
+#### 4. Tauri CLI
+
+```bash
+cargo install tauri-cli --version "^2.0"
+
+# Verificar
+cargo tauri --version
 ```
 
 ---
 
+### Windows
+
+#### 1. Visual C++ Build Tools
+
+O Rust no Windows exige o compilador MSVC. A forma mais simples é instalar as **Build Tools for Visual Studio**:
+
+1. Acesse [visualstudio.microsoft.com/visual-cpp-build-tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
+2. Baixe e execute o instalador
+3. Na tela de cargas de trabalho, marque **"Desenvolvimento para desktop com C++"**
+4. Clique em **Instalar** (download ~3–6 GB)
+
+> Se você já tiver o **Visual Studio 2019/2022** completo instalado, os Build Tools já estão incluídos — não precisa instalar novamente.
+
+#### 2. Node.js 18+
+
+1. Acesse [nodejs.org](https://nodejs.org/) e baixe o instalador LTS (`.msi`)
+2. Execute o instalador e siga os passos (marque "Add to PATH" se solicitado)
+3. Verifique no PowerShell:
+
+```powershell
+node -v
+npm -v
+```
+
+#### 3. Rust (toolchain stable)
+
+1. Acesse [rustup.rs](https://rustup.rs/) e baixe o `rustup-init.exe`
+2. Execute e escolha a opção **1 (instalação padrão)**
+3. O instalador detectará automaticamente o MSVC e configurará a toolchain correta
+4. Após concluir, **feche e reabra o PowerShell**, depois verifique:
+
+```powershell
+rustc --version
+cargo --version
+```
+
+#### 4. WebView2
+
+- **Windows 11**: já vem instalado por padrão — nenhuma ação necessária
+- **Windows 10**: baixe o instalador Evergreen em [developer.microsoft.com/microsoft-edge/webview2](https://developer.microsoft.com/microsoft-edge/webview2/) e execute-o
+
+#### 5. Tauri CLI — Windows
+
+```powershell
+cargo install tauri-cli --version "^2.0"
+```
+
+---
+
+### macOS
+
+#### 1. Xcode Command Line Tools
+
+Necessário para compilar código Rust e dependências nativas:
+
+```bash
+xcode-select --install
+```
+
+Uma janela de diálogo abrirá pedindo confirmação — clique em **Instalar**. O processo leva alguns minutos.
+
+Verifique a instalação:
+
+```bash
+xcode-select -p   # deve retornar /Library/Developer/CommandLineTools
+```
+
+#### 2. Homebrew (recomendado)
+
+O Homebrew simplifica a instalação das demais ferramentas:
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+Siga as instruções ao final do instalador para adicionar o Homebrew ao PATH (especialmente em Macs com Apple Silicon).
+
+#### 3. Node.js 18+
+
+```bash
+brew install node
+
+# Verificar
+node -v
+npm -v
+```
+
+Ou via nvm (recomendado para gerenciar múltiplas versões):
+
+```bash
+brew install nvm
+nvm install --lts
+nvm use --lts
+```
+
+#### 4. Rust (toolchain stable)
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+# Escolha a opção 1 (instalação padrão)
+
+# Ativar no shell atual
+source ~/.cargo/env
+
+# Verificar
+rustc --version
+cargo --version
+```
+
+Em Macs com **Apple Silicon (M1/M2/M3)**, adicione o target para ARM se necessário:
+
+```bash
+rustup target add aarch64-apple-darwin
+```
+
+#### 5. Tauri CLI — macOS
+
+```bash
+cargo install tauri-cli --version "^2.0"
+```
+
+---
+
+## Requisitos resumidos
+
+| Requisito | Linux | Windows | macOS |
+| --- | --- | --- | --- |
+| Node.js 18+ | nvm ou gerenciador de pacotes | nodejs.org (instalador MSI) | Homebrew ou nvm |
+| Rust stable | rustup.rs | rustup-init.exe | rustup.rs |
+| Compilador C/C++ | `base-devel` / `build-essential` | Visual C++ Build Tools | Xcode Command Line Tools |
+| WebKit / WebView | `webkit2gtk-4.1-dev` + GTK3 | WebView2 (incluso no Win 11) | Nativo no macOS |
+| Tauri CLI | `cargo install tauri-cli` | `cargo install tauri-cli` | `cargo install tauri-cli` |
+
+---
+
 ## Instalação e execução
+
+### Linux / macOS — Execução
 
 ```bash
 # 1. Clonar o repositório
@@ -52,9 +280,24 @@ cd ssh_client_dev
 npm install
 
 # 3. Configurar Rust (se necessário)
-source ~/.cargo/env   # ou reinicie o terminal após instalar via rustup
+source ~/.cargo/env        # bash/zsh
+source ~/.cargo/env.fish   # fish shell
 
 # 4. Rodar em modo desenvolvimento
+npm run tauri dev
+```
+
+### Windows — Execução
+
+```powershell
+# 1. Clonar o repositório
+git clone <repo-url>
+cd ssh_client_dev
+
+# 2. Instalar dependências Node
+npm install
+
+# 3. Rodar em modo desenvolvimento
 npm run tauri dev
 ```
 
@@ -287,8 +530,111 @@ ssh_client_dev/
 
 ## Build para produção
 
+> **Importante:** o Tauri não suporta cross-compile — cada plataforma precisa ser buildada em uma máquina com o mesmo sistema operacional (ou via CI).
+
+### Build no Linux
+
 ```bash
 npm run tauri build
 ```
 
-O instalador será gerado em `src-tauri/target/release/bundle/`.
+Pacotes gerados em `src-tauri/target/release/bundle/`:
+
+| Formato | Caminho |
+| --- | --- |
+| `.deb` | `deb/SSH Vault_0.1.0_amd64.deb` |
+| `.rpm` | `rpm/SSH Vault-0.1.0-1.x86_64.rpm` |
+| `.AppImage` | `appimage/SSH Vault_0.1.0_amd64.AppImage` |
+
+> **Nota (Arch / CachyOS):** as bibliotecas do sistema usam o formato de relocação `.relr.dyn`, incompatível com o `strip` antigo empacotado no linuxdeploy. O script npm já inclui `NO_STRIP=1` para contornar isso — nenhuma ação adicional é necessária.
+
+### Build no Windows
+
+```powershell
+npm run tauri build
+```
+
+Pacotes gerados em `src-tauri\target\release\bundle\`:
+
+| Formato | Caminho |
+| --- | --- |
+| `.exe` (NSIS) | `nsis\SSH Vault_0.1.0_x64-setup.exe` |
+| `.msi` | `msi\SSH Vault_0.1.0_x64_en-US.msi` |
+
+### Build no macOS
+
+```bash
+npm run tauri build
+```
+
+Pacotes gerados em `src-tauri/target/release/bundle/`:
+
+| Formato | Caminho |
+| --- | --- |
+| `.dmg` | `dmg/SSH Vault_0.1.0_x64.dmg` |
+| `.app` | `macos/SSH Vault.app` |
+
+---
+
+## Instalando os pacotes gerados
+
+### Linux — `.deb` (Ubuntu, Debian, Linux Mint)
+
+```bash
+sudo dpkg -i "SSH Vault_0.1.0_amd64.deb"
+```
+
+> Se houver dependências faltando após o `dpkg`, corrija com `sudo apt-get install -f`.
+
+### Linux — `.rpm` (Fedora, RHEL, openSUSE)
+
+```bash
+# Fedora / RHEL
+sudo rpm -i "SSH Vault-0.1.0-1.x86_64.rpm"
+
+# Ou com DNF (resolve dependências automaticamente)
+sudo dnf install "SSH Vault-0.1.0-1.x86_64.rpm"
+```
+
+### Linux — `.AppImage` (qualquer distro)
+
+```bash
+# Tornar executável e rodar diretamente — não requer instalação
+chmod +x "SSH Vault_0.1.0_amd64.AppImage"
+./"SSH Vault_0.1.0_amd64.AppImage"
+```
+
+> O AppImage é portátil: funciona em qualquer distro Linux x86_64 sem instalar nada.
+
+### Windows — `.exe` (instalador NSIS)
+
+1. Dê dois cliques em `SSH Vault_0.1.0_x64-setup.exe`
+2. Se o Windows Defender SmartScreen avisar, clique em **"Mais informações" → "Executar assim mesmo"**
+3. Siga o assistente de instalação — o app aparecerá no Menu Iniciar
+
+### Windows — `.msi`
+
+1. Dê dois cliques em `SSH Vault_0.1.0_x64_en-US.msi`
+2. Siga o assistente do Windows Installer
+3. Para instalar silenciosamente via linha de comando:
+
+```powershell
+msiexec /i "SSH Vault_0.1.0_x64_en-US.msi" /quiet
+```
+
+---
+
+## CI/CD com GitHub Actions
+
+O repositório inclui um workflow em [`.github/workflows/build.yml`](.github/workflows/build.yml) que builda automaticamente para **Linux, Windows e macOS** em paralelo.
+
+**Disparar o build:**
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Os instaladores ficam disponíveis na aba **Actions → seu workflow → Artifacts** do repositório no GitHub.
+
+Você também pode disparar manualmente pela interface do GitHub em **Actions → Build → Run workflow**.
