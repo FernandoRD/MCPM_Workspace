@@ -93,6 +93,8 @@ sudo pacman -S webkit2gtk-4.1 gtk3 libayatana-appindicator base-devel
 # Ubuntu 22.04+ / Debian 12+
 sudo apt update
 sudo apt install -y \
+  build-essential \
+  pkg-config \
   libwebkit2gtk-4.1-dev \
   libgtk-3-dev \
   libayatana-appindicator3-dev \
@@ -102,6 +104,8 @@ sudo apt install -y \
 # Ubuntu 20.04 / Debian 11 (webkit2gtk ainda na versão 4.0)
 sudo apt update
 sudo apt install -y \
+  build-essential \
+  pkg-config \
   libwebkit2gtk-4.0-dev \
   libgtk-3-dev \
   libappindicator3-dev \
@@ -123,12 +127,9 @@ sudo zypper install -y \
 
 #### 4. Tauri CLI
 
-```bash
-cargo install tauri-cli --version "^2.0"
+O Tauri CLI já está listado como devDependency em `package.json` — o `npm install` na próxima seção o instala automaticamente. **Não é necessário instalar via `cargo install`.**
 
-# Verificar
-cargo tauri --version
-```
+> **Importante:** sempre use `npm run tauri dev` e `npm run tauri build` (nunca `cargo tauri` diretamente), pois o script npm embute as variáveis de ambiente necessárias (`NO_STRIP=1`, `APPIMAGE_EXTRACT_AND_RUN=1`) para builds corretos no Linux.
 
 ---
 
@@ -175,9 +176,7 @@ cargo --version
 
 #### 5. Tauri CLI — Windows
 
-```powershell
-cargo install tauri-cli --version "^2.0"
-```
+O Tauri CLI é instalado automaticamente via `npm install` (devDependency). Nenhuma instalação manual necessária.
 
 ---
 
@@ -249,9 +248,7 @@ rustup target add aarch64-apple-darwin
 
 #### 5. Tauri CLI — macOS
 
-```bash
-cargo install tauri-cli --version "^2.0"
-```
+O Tauri CLI é instalado automaticamente via `npm install` (devDependency). Nenhuma instalação manual necessária.
 
 ---
 
@@ -263,7 +260,7 @@ cargo install tauri-cli --version "^2.0"
 | Rust stable | rustup.rs | rustup-init.exe | rustup.rs |
 | Compilador C/C++ | `base-devel` / `build-essential` | Visual C++ Build Tools | Xcode Command Line Tools |
 | WebKit / WebView | `webkit2gtk-4.1-dev` + GTK3 | WebView2 (incluso no Win 11) | Nativo no macOS |
-| Tauri CLI | `cargo install tauri-cli` | `cargo install tauri-cli` | `cargo install tauri-cli` |
+| Tauri CLI | devDependency (via `npm install`) | devDependency (via `npm install`) | devDependency (via `npm install`) |
 
 ---
 
@@ -276,16 +273,14 @@ cargo install tauri-cli --version "^2.0"
 git clone <repo-url>
 cd ssh_client_dev
 
-# 2. Instalar dependências Node
+# 2. Instalar dependências Node (inclui o Tauri CLI e o cross-env)
 npm install
 
-# 3. Configurar Rust (se necessário)
-source ~/.cargo/env        # bash/zsh
-source ~/.cargo/env.fish   # fish shell
-
-# 4. Rodar em modo desenvolvimento
+# 3. Rodar em modo desenvolvimento
 npm run tauri dev
 ```
+
+> Se o comando `cargo` não for encontrado (instalação recém-feita do Rust), execute `source ~/.cargo/env` (bash/zsh) ou `source ~/.cargo/env.fish` (fish) e tente novamente.
 
 ### Windows — Execução
 
@@ -294,7 +289,7 @@ npm run tauri dev
 git clone <repo-url>
 cd ssh_client_dev
 
-# 2. Instalar dependências Node
+# 2. Instalar dependências Node (inclui o Tauri CLI e o cross-env)
 npm install
 
 # 3. Rodar em modo desenvolvimento
@@ -546,7 +541,7 @@ Pacotes gerados em `src-tauri/target/release/bundle/`:
 | `.rpm` | `rpm/SSH Vault-0.1.0-1.x86_64.rpm` |
 | `.AppImage` | `appimage/SSH Vault_0.1.0_amd64.AppImage` |
 
-> **Nota (Arch / CachyOS):** as bibliotecas do sistema usam o formato de relocação `.relr.dyn`, incompatível com o `strip` antigo empacotado no linuxdeploy. O script npm já inclui `NO_STRIP=1` para contornar isso — nenhuma ação adicional é necessária.
+> **Nota (Arch / CachyOS e outros Linux):** as bibliotecas do sistema usam o formato de relocação `.relr.dyn`, incompatível com o `strip` antigo empacotado no linuxdeploy. O script npm já inclui `NO_STRIP=1` e `APPIMAGE_EXTRACT_AND_RUN=1` para contornar isso — nenhuma ação adicional é necessária.
 
 ### Build no Windows
 
