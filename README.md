@@ -170,12 +170,27 @@ rustc --version
 cargo --version
 ```
 
-#### 4. WebView2
+#### 4. Perl (exigido pelo OpenSSL)
+
+A crate `rusqlite` com SQLCipher compila o OpenSSL como dependência, e o script de build do OpenSSL requer Perl. A opção mais simples é o **Strawberry Perl**:
+
+1. Acesse [strawberryperl.com](https://strawberryperl.com/) e baixe o instalador (`.msi`)
+2. Execute e siga o assistente (instalação padrão)
+3. **Feche e reabra o PowerShell** para que o PATH seja atualizado
+4. Verifique:
+
+```powershell
+perl -v
+```
+
+> Sem o Perl, o `cargo build` falhará com um erro semelhante a `Could not find Perl`.
+
+#### 5. WebView2
 
 - **Windows 11**: já vem instalado por padrão — nenhuma ação necessária
 - **Windows 10**: baixe o instalador Evergreen em [developer.microsoft.com/microsoft-edge/webview2](https://developer.microsoft.com/microsoft-edge/webview2/) e execute-o
 
-#### 5. Tauri CLI — Windows
+#### 6. Tauri CLI — Windows
 
 O Tauri CLI é instalado automaticamente via `npm install` (devDependency). Nenhuma instalação manual necessária.
 
@@ -260,6 +275,7 @@ O Tauri CLI é instalado automaticamente via `npm install` (devDependency). Nenh
 | Node.js 18+ | nvm ou gerenciador de pacotes | nodejs.org (instalador MSI) | Homebrew ou nvm |
 | Rust stable | rustup.rs | rustup-init.exe | rustup.rs |
 | Compilador C/C++ | `base-devel` / `build-essential` | Visual C++ Build Tools | Xcode Command Line Tools |
+| Perl | não necessário | Strawberry Perl (para OpenSSL) | não necessário |
 | WebKit / WebView | `webkit2gtk-4.1-dev` + GTK3 | WebView2 (incluso no Win 11) | Nativo no macOS |
 | Tauri CLI | devDependency (via `npm install`) | devDependency (via `npm install`) | devDependency (via `npm install`) |
 
@@ -574,6 +590,19 @@ ssh_client_dev/
 | 5    | 📋 Planejado | SFTP integrado, split de terminal                                                           |
 | 6    | 📋 Planejado | Compatibilidade SSH: presets legado/muito-legado, KEX, ciphers, MACs e host-key por host    |
 | 7    | 📋 Planejado | Gerenciador de chaves SSH: gerar Ed25519/ECDSA/RSA, fingerprint, deploy via ssh-copy-id     |
+
+---
+
+## Versão da aplicação
+
+A versão é definida em dois arquivos que devem ser mantidos sincronizados:
+
+| Arquivo | Campo |
+| --- | --- |
+| `src-tauri/tauri.conf.json` | `"version": "0.1.0"` |
+| `src-tauri/Cargo.toml` | `version = "0.1.0"` |
+
+Altere os dois ao mesmo tempo ao fazer um release. A versão do `tauri.conf.json` é a que aparece no instalador e na tela "Sobre" da aplicação.
 
 ---
 
