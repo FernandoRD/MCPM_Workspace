@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/Button";
 import { TotpDisplay } from "@/components/TotpDisplay/TotpDisplay";
 import { cn } from "@/lib/utils";
 
-type FormData = Omit<SshHost, "id" | "createdAt" | "updatedAt" | "authMethod" | "passwordRef" | "privateKeyPath" | "passphrase" | "username">;
+type FormData = Omit<SshHost, "id" | "createdAt" | "updatedAt" | "authMethod" | "passwordRef" | "privateKeyContent" | "passphrase" | "username">;
 
 const DEFAULT_FORM: FormData = {
   label: "",
@@ -59,7 +59,7 @@ export function HostEditor() {
     if (!isNew && id) {
       const host = getHost(id);
       if (host) {
-        const { id: _id, createdAt: _c, updatedAt: _u, authMethod: _a, passwordRef: _p, privateKeyPath: _pk, passphrase: _pp, username: _un, ...data } = host;
+        const { id: _id, createdAt: _c, updatedAt: _u, authMethod: _a, passwordRef: _p, privateKeyContent: _pk, passphrase: _pp, username: _un, ...data } = host;
         setForm(data);
         setTagsInput(host.tags.join(", "));
       }

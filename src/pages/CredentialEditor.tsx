@@ -1,10 +1,13 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, ChevronDown, ChevronRight, Info } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight, Info, FolderOpen } from "lucide-react";
+import { open } from "@tauri-apps/plugin-dialog";
+import { readTextFile } from "@tauri-apps/plugin-fs";
 import { useCredentialsStore } from "@/store/credentials";
 import { Credential } from "@/types";
 import { Input } from "@/components/ui/Input";
+import { Textarea } from "@/components/ui/Textarea";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
 
@@ -20,7 +23,7 @@ interface ValidationErrors {
   label?: string;
   username?: string;
   password?: string;
-  privateKeyPath?: string;
+  privateKeyContent?: string;
 }
 
 function Section({
@@ -84,6 +87,13 @@ export function CredentialEditor() {
   const set = <K extends keyof FormData>(key: K, value: FormData[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
+  const handleImportKey = async () => {
+    const path = await open({ multiple: false, directory: false });
+    if (!path) return;
+    const content = await readTextFile(path as string);
+    set("privateKeyContent", content.trim() || undefined);
+  };
+
   const validate = (): boolean => {
     const errs: ValidationErrors = {};
     if (!form.label.trim()) errs.label = t("credentials.validation.labelRequired");
@@ -91,8 +101,8 @@ export function CredentialEditor() {
     if (form.authMethod === "password" && !form.password?.trim()) {
       errs.password = t("credentials.validation.passwordRequired");
     }
-    if (form.authMethod === "privateKey" && !form.privateKeyPath?.trim()) {
-      errs.privateKeyPath = t("credentials.validation.privateKeyPathRequired");
+    if (form.authMethod === "privateKey" && !form.privateKeyContent?.trim()) {
+      errs.privateKeyContent = t("credentials.validation.privateKeyRequired");
     }
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -184,14 +194,26 @@ export function CredentialEditor() {
 
               {form.authMethod === "privateKey" && (
                 <>
-                  <Input
-                    id="privateKeyPath"
-                    label={t("credentials.fields.privateKeyPath")}
-                    placeholder={t("credentials.fields.privateKeyPathPlaceholder")}
-                    value={form.privateKeyPath ?? ""}
-                    onChange={(e) => set("privateKeyPath", e.target.value || undefined)}
-                    error={errors.privateKeyPath}
-                  />
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center justify-between">
+                      <label htmlFor="privateKeyContent" className="text-sm font-medium text-[var(--text-primary)]">
+                        {t("credentials.fields.privateKeyContent")}
+                      </label>
+                      <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs" onClick={handleImportKey}>
+                        <FolderOpen size={13} />
+                        {t("credentials.fields.importFromFile")}
+                      </Button>
+                    </div>
+                    <Textarea
+                      id="privateKeyContent"
+                      placeholder={t("credentials.fields.privateKeyContentPlaceholder")}
+                      value={form.privateKeyContent ?? ""}
+                      onChange={(e) => set("privateKeyContent", e.target.value || undefined)}
+                      error={errors.privateKeyContent}
+                      rows={8}
+                      className="font-mono text-xs"
+                    />
+                  </div>
                   <Input
                     id="passphrase"
                     label={t("credentials.fields.passphrase")}

@@ -47,8 +47,6 @@
       "authMethod": "Authentication Method",
       "password": "Password",
       "privateKey": "Private Key",
-      "privateKeyPath": "Key Path",
-      "privateKeyPathPlaceholder": "E.g.: ~/.ssh/id_rsa",
       "passphrase": "Key Passphrase",
       "group": "Group",
       "groupPlaceholder": "E.g.: Production",
@@ -294,8 +292,9 @@
       "usernamePlaceholder": "E.g.: root or ubuntu",
       "authMethod": "Authentication Type",
       "password": "Password",
-      "privateKeyPath": "Key Path",
-      "privateKeyPathPlaceholder": "E.g.: ~/.ssh/id_rsa",
+      "privateKeyContent": "Private Key",
+      "privateKeyContentPlaceholder": "Paste the content of your private key here (e.g. -----BEGIN OPENSSH PRIVATE KEY-----...)",
+      "importFromFile": "Import from file",
       "passphrase": "Key Passphrase",
       "agentInfo": "Uses the system SSH agent (ssh-agent / OpenSSH Agent)"
     },
@@ -320,7 +319,7 @@
       "labelRequired": "Name is required",
       "usernameRequired": "Username is required",
       "passwordRequired": "Password is required",
-      "privateKeyPathRequired": "Key path is required"
+      "privateKeyRequired": "Private key content is required"
     }
   },
   "groups": {

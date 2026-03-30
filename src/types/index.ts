@@ -6,7 +6,7 @@ export interface Credential {
   username: string;
   authMethod: "password" | "privateKey" | "agent";
   password?: string;
-  privateKeyPath?: string;
+  privateKeyContent?: string;
   passphrase?: string;
   createdAt: string;
   updatedAt: string;
@@ -22,7 +22,7 @@ export interface SshHost {
   authMethod: AuthMethod;
   // Armazenadas de forma segura — só referência aqui
   passwordRef?: string;
-  privateKeyPath?: string;
+  privateKeyContent?: string;
   passphrase?: string;
   // MFA / TOTP
   mfaEnabled?: boolean;

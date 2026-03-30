@@ -125,7 +125,7 @@ pub async fn ssh_connect(
     username: String,
     auth_method: String,
     password: Option<String>,
-    private_key_path: Option<String>,
+    private_key_content: Option<String>,
     private_key_passphrase: Option<String>,
     cols: u16,
     rows: u16,
@@ -155,9 +155,7 @@ pub async fn ssh_connect(
         }
 
         "privateKey" => {
-            let path = private_key_path.ok_or("Caminho da chave não informado")?;
-            let content = std::fs::read_to_string(&path)
-                .map_err(|e| format!("Não foi possível ler a chave em '{path}': {e}"))?;
+            let content = private_key_content.ok_or("Conteúdo da chave privada não informado")?;
             let key =
                 russh_keys::decode_secret_key(&content, private_key_passphrase.as_deref())
                     .map_err(|e| format!("Falha ao decodificar a chave privada: {e}"))?;

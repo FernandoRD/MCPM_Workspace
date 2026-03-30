@@ -144,7 +144,7 @@ export function TerminalPage() {
       const authMethod = credential?.authMethod ?? host.authMethod ?? "password";
       const username = credential?.username ?? host.username ?? "";
       const password = credential?.password ?? host.passwordRef ?? null;
-      const privateKeyPath = credential?.privateKeyPath ?? host.privateKeyPath ?? null;
+      const privateKeyContent = credential?.privateKeyContent ?? host.privateKeyContent ?? null;
       const passphrase = credential?.passphrase ?? host.passphrase ?? null;
       invoke("ssh_connect", {
         tabId: tab.id,
@@ -153,7 +153,7 @@ export function TerminalPage() {
         username,
         authMethod,
         password,
-        privateKeyPath,
+        privateKeyContent,
         privateKeyPassphrase: passphrase,
         cols: dims.cols ?? 80,
         rows: dims.rows ?? 24,

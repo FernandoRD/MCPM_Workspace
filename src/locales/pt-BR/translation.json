@@ -47,8 +47,6 @@
       "authMethod": "Método de Autenticação",
       "password": "Senha",
       "privateKey": "Chave Privada",
-      "privateKeyPath": "Caminho da Chave",
-      "privateKeyPathPlaceholder": "Ex: ~/.ssh/id_rsa",
       "passphrase": "Frase-senha da Chave",
       "group": "Grupo",
       "groupPlaceholder": "Ex: Produção",
@@ -294,8 +292,9 @@
       "usernamePlaceholder": "Ex: root ou ubuntu",
       "authMethod": "Tipo de Autenticação",
       "password": "Senha",
-      "privateKeyPath": "Caminho da Chave",
-      "privateKeyPathPlaceholder": "Ex: ~/.ssh/id_rsa",
+      "privateKeyContent": "Chave Privada",
+      "privateKeyContentPlaceholder": "Cole aqui o conteúdo da sua chave privada (ex: -----BEGIN OPENSSH PRIVATE KEY-----...)",
+      "importFromFile": "Importar arquivo",
       "passphrase": "Frase-senha da Chave",
       "agentInfo": "Usa o agente SSH do sistema (ssh-agent / OpenSSH Agent)"
     },
@@ -320,7 +319,7 @@
       "labelRequired": "Nome é obrigatório",
       "usernameRequired": "Usuário é obrigatório",
       "passwordRequired": "Senha é obrigatória",
-      "privateKeyPathRequired": "Caminho da chave é obrigatório"
+      "privateKeyRequired": "Conteúdo da chave privada é obrigatório"
     }
   },
   "groups": {
