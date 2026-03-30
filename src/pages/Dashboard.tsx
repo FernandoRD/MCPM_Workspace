@@ -5,23 +5,23 @@ import {
   Plus,
   Search,
   Server,
-  ChevronDown,
-  ChevronRight,
   Edit2,
   Trash2,
   Copy,
   Terminal,
   MoreVertical,
   ShieldCheck,
+  Layers,
 } from "lucide-react";
 import { useHostsStore } from "@/store/hosts";
 import { useSessionsStore } from "@/store/sessions";
 import { useCredentialsStore } from "@/store/credentials";
+import { useSettingsStore } from "@/store/settings";
 import { SshHost } from "@/types";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { formatDate } from "@/lib/utils";
-import { useSettingsStore } from "@/store/settings";
+import { cn } from "@/lib/utils";
 
 export function Dashboard() {
   const { t } = useTranslation();
@@ -31,30 +31,35 @@ export function Dashboard() {
   const openSession = useSessionsStore((s) => s.openSession);
   const getCredential = useCredentialsStore((s) => s.getCredential);
   const locale = useSettingsStore((s) => s.settings.locale);
+  const savedGroups = useSettingsStore((s) => s.settings.groups);
+
   const [search, setSearch] = useState("");
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
   const [menuHostId, setMenuHostId] = useState<string | null>(null);
 
-  const filtered = hosts.filter(
-    (h) =>
-      h.label.toLowerCase().includes(search.toLowerCase()) ||
-      h.host.toLowerCase().includes(search.toLowerCase()) ||
-      h.tags.some((t) => t.toLowerCase().includes(search.toLowerCase()))
-  );
+  // Todos os grupos (derivados dos hosts + salvos manualmente)
+  const allGroups = [
+    ...new Set([
+      ...hosts.map((h) => h.group).filter((g): g is string => !!g),
+      ...savedGroups,
+    ]),
+  ].sort((a, b) => a.localeCompare(b));
 
-  const grouped = filtered.reduce<Record<string, SshHost[]>>((acc, host) => {
-    const key = host.group ?? "__ungrouped__";
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(host);
+  // Contagem de hosts por grupo
+  const groupCount = hosts.reduce<Record<string, number>>((acc, h) => {
+    if (h.group) acc[h.group] = (acc[h.group] ?? 0) + 1;
     return acc;
   }, {});
 
-  const toggleGroup = (g: string) =>
-    setCollapsedGroups((prev) => {
-      const next = new Set(prev);
-      next.has(g) ? next.delete(g) : next.add(g);
-      return next;
-    });
+  // Filtra por busca e grupo selecionado
+  const filtered = hosts.filter((h) => {
+    const matchSearch =
+      h.label.toLowerCase().includes(search.toLowerCase()) ||
+      h.host.toLowerCase().includes(search.toLowerCase()) ||
+      h.tags.some((tag) => tag.toLowerCase().includes(search.toLowerCase()));
+    const matchGroup = selectedGroup === null || h.group === selectedGroup;
+    return matchSearch && matchGroup;
+  });
 
   const handleConnect = (host: SshHost) => {
     const cred = host.credentialId ? getCredential(host.credentialId) : undefined;
@@ -93,57 +98,74 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-auto px-6 py-4">
+      <div className="flex-1 overflow-auto px-6 py-4 flex flex-col gap-4">
         {hosts.length === 0 ? (
           <EmptyState onAdd={() => navigate("/hosts/new")} />
-        ) : filtered.length === 0 ? (
-          <p className="text-center py-12 text-[var(--text-muted)]">{t("common.noResults")}</p>
         ) : (
-          <div className="flex flex-col gap-4">
-            {Object.entries(grouped).map(([groupKey, groupHosts]) => {
-              const isCollapsed = collapsedGroups.has(groupKey);
-              const label =
-                groupKey === "__ungrouped__"
-                  ? t("dashboard.groups.ungrouped")
-                  : groupKey;
-
-              return (
-                <div key={groupKey}>
-                  <button
-                    onClick={() => toggleGroup(groupKey)}
-                    className="flex items-center gap-1.5 mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
-                  >
-                    {isCollapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
-                    {label}
-                    <span className="font-normal opacity-70 normal-case tracking-normal">
-                      ({groupHosts.length})
-                    </span>
-                  </button>
-
-                  {!isCollapsed && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                      {groupHosts.map((host) => (
-                        <HostCard
-                          key={host.id}
-                          host={host}
-                          locale={locale}
-                          menuOpen={menuHostId === host.id}
-                          onMenuToggle={(id) =>
-                            setMenuHostId((prev) => (prev === id ? null : id))
-                          }
-                          onConnect={handleConnect}
-                          onEdit={(h) => navigate(`/hosts/${h.id}`)}
-                          onDelete={(id) => deleteHost(id)}
-                          onDuplicate={(id) => duplicateHost(id)}
-                        />
-                      ))}
-                    </div>
+          <>
+            {/* Filtros de grupo */}
+            {allGroups.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {/* Botão Todos */}
+                <button
+                  onClick={() => setSelectedGroup(null)}
+                  className={cn(
+                    "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors",
+                    selectedGroup === null
+                      ? "border-[var(--accent)] bg-[var(--accent-subtle)] text-[var(--accent)] font-medium"
+                      : "border-[var(--border)] bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:border-[var(--text-muted)]"
                   )}
-                </div>
-              );
-            })}
-          </div>
+                >
+                  <Server size={13} />
+                  {t("dashboard.allHosts")}
+                  <span className="text-xs opacity-70">({hosts.length})</span>
+                </button>
+
+                {/* Cards de grupo */}
+                {allGroups.map((group) => (
+                  <button
+                    key={group}
+                    onClick={() => setSelectedGroup(selectedGroup === group ? null : group)}
+                    className={cn(
+                      "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors",
+                      selectedGroup === group
+                        ? "border-[var(--accent)] bg-[var(--accent-subtle)] text-[var(--accent)] font-medium"
+                        : "border-[var(--border)] bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:border-[var(--text-muted)]"
+                    )}
+                  >
+                    <Layers size={13} />
+                    {group}
+                    <span className="text-xs opacity-70">({groupCount[group] ?? 0})</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Grid de hosts */}
+            {filtered.length === 0 ? (
+              <p className="text-center py-12 text-[var(--text-muted)]">
+                {t("common.noResults")}
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                {filtered.map((host) => (
+                  <HostCard
+                    key={host.id}
+                    host={host}
+                    locale={locale}
+                    menuOpen={menuHostId === host.id}
+                    onMenuToggle={(id) =>
+                      setMenuHostId((prev) => (prev === id ? null : id))
+                    }
+                    onConnect={handleConnect}
+                    onEdit={(h) => navigate(`/hosts/${h.id}`)}
+                    onDelete={(id) => deleteHost(id)}
+                    onDuplicate={(id) => duplicateHost(id)}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

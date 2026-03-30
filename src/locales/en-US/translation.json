@@ -6,6 +6,7 @@
   "nav": {
     "dashboard": "Hosts",
     "credentials": "Credentials",
+    "groups": "Groups",
     "settings": "Settings",
     "sync": "Sync",
     "newConnection": "New Connection",
@@ -14,11 +15,9 @@
   "dashboard": {
     "title": "Hosts",
     "searchPlaceholder": "Search hosts...",
+    "allHosts": "All",
     "noHosts": "No hosts added yet",
     "noHostsDescription": "Add your first SSH server to get started",
-    "groups": {
-      "ungrouped": "Ungrouped"
-    },
     "host": {
       "connect": "Connect",
       "edit": "Edit",
@@ -323,6 +322,20 @@
       "passwordRequired": "Password is required",
       "privateKeyPathRequired": "Key path is required"
     }
+  },
+  "groups": {
+    "title": "Groups",
+    "description": "Manage your SSH host groups",
+    "newGroup": "New Group",
+    "namePlaceholder": "Group name...",
+    "nameRequired": "Name is required",
+    "nameExists": "A group with this name already exists",
+    "noGroups": "No groups created",
+    "noGroupsDescription": "Create groups to organize your SSH hosts",
+    "hostCount": "{{count}} host(s)",
+    "deleteTitle": "Delete Group",
+    "deleteConfirm": "Are you sure you want to delete the group \"{{name}}\"?",
+    "deleteWarning": "The {{count}} host(s) in this group will become ungrouped, but will not be deleted."
   },
   "common": {
     "loading": "Loading...",

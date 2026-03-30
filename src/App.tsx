@@ -9,6 +9,7 @@ import { Backup } from "@/pages/Backup";
 import { TerminalPage } from "@/pages/TerminalPage";
 import { Credentials } from "@/pages/Credentials";
 import { CredentialEditor } from "@/pages/CredentialEditor";
+import { Groups } from "@/pages/Groups";
 import { useHostsStore } from "@/store/hosts";
 import { useSettingsStore } from "@/store/settings";
 import { useCredentialsStore } from "@/store/credentials";
@@ -57,6 +58,7 @@ export default function App() {
           <Route path="credentials" element={<Credentials />} />
           <Route path="credentials/new" element={<CredentialEditor />} />
           <Route path="credentials/:id" element={<CredentialEditor />} />
+          <Route path="groups" element={<Groups />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

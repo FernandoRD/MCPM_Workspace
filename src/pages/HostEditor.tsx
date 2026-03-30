@@ -6,6 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import QRCode from "react-qr-code";
 import { useHostsStore } from "@/store/hosts";
 import { useCredentialsStore } from "@/store/credentials";
+import { useSettingsStore } from "@/store/settings";
 import { SshHost, Credential } from "@/types";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
@@ -42,6 +43,7 @@ export function HostEditor() {
   const { id } = useParams<{ id: string }>();
   const isNew = id === "new" || !id;
   const { addHost, updateHost, getHost, hosts } = useHostsStore();
+  const savedGroups = useSettingsStore((s) => s.settings.groups);
   const credentials = useCredentialsStore((s) => s.credentials);
 
   const [form, setForm] = useState<FormData>(DEFAULT_FORM);
@@ -239,12 +241,15 @@ export function HostEditor() {
           >
             <div className="flex flex-col gap-4">
               <div className="grid grid-cols-2 gap-4">
-                <Input
-                  id="group"
-                  label={t("hostEditor.fields.group")}
-                  placeholder={t("hostEditor.fields.groupPlaceholder")}
+                <GroupCombobox
                   value={form.group ?? ""}
-                  onChange={(e) => set("group", e.target.value || undefined)}
+                  onChange={(v) => set("group", v || undefined)}
+                  existingGroups={[
+                    ...new Set([
+                      ...hosts.map((h) => h.group).filter((g): g is string => !!g),
+                      ...savedGroups,
+                    ]),
+                  ].sort()}
                 />
                 <Input
                   id="color"
@@ -451,6 +456,39 @@ function CredentialCard({
         </p>
       </div>
     </button>
+  );
+}
+
+function GroupCombobox({
+  value,
+  onChange,
+  existingGroups,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  existingGroups: string[];
+}) {
+  const { t } = useTranslation();
+  const listId = "group-datalist";
+  return (
+    <div className="flex flex-col gap-1">
+      <label htmlFor="group" className="text-sm font-medium text-[var(--text-primary)]">
+        {t("hostEditor.fields.group")}
+      </label>
+      <input
+        id="group"
+        list={listId}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={t("hostEditor.fields.groupPlaceholder")}
+        className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-focus)]"
+      />
+      <datalist id={listId}>
+        {existingGroups.map((g) => (
+          <option key={g} value={g} />
+        ))}
+      </datalist>
+    </div>
   );
 }
 

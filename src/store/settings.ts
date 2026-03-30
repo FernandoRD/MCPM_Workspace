@@ -13,6 +13,7 @@ interface SettingsStore {
   updateTerminal: (terminal: Partial<AppSettings["terminal"]>) => void;
   updateSecurity: (security: Partial<AppSettings["security"]>) => void;
   updateSync: (sync: Partial<AppSettings["sync"]>) => void;
+  updateGroups: (groups: string[]) => void;
   resetSettings: () => void;
 }
 
@@ -34,6 +35,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     provider: null,
     autoSync: false,
   },
+  groups: [],
 };
 
 function persistSettings(settings: AppSettings) {
@@ -127,6 +129,13 @@ export const useSettingsStore = create<SettingsStore>()((set, _get) => ({
         ...s.settings,
         sync: { ...s.settings.sync, ...sync },
       };
+      persistSettings(settings);
+      return { settings };
+    }),
+
+  updateGroups: (groups) =>
+    set((s) => {
+      const settings = { ...s.settings, groups };
       persistSettings(settings);
       return { settings };
     }),

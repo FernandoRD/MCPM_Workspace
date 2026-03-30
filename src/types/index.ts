@@ -103,6 +103,8 @@ export interface AppSettings {
     webdav?: WebDavSyncConfig;
     custom?: CustomSyncConfig;
   };
+  /** Lista de grupos criados manualmente (persiste grupos sem hosts associados) */
+  groups: string[];
 }
 
 /** Payload cifrado que viaja no sync */

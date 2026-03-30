@@ -6,11 +6,11 @@ import { cn } from "@/lib/utils";
 const TERMINAL_FONTS: { id: string; label: string }[] = [
   { id: "JetBrains Mono",  label: "JetBrains Mono"  },
   { id: "Fira Code",       label: "Fira Code"        },
-  { id: "Cascadia Code",   label: "Cascadia Code"    },
   { id: "Source Code Pro", label: "Source Code Pro"  },
   { id: "Ubuntu Mono",     label: "Ubuntu Mono"      },
-  { id: "Hack",            label: "Hack"             },
   { id: "Inconsolata",     label: "Inconsolata"      },
+  { id: "Cascadia Code",   label: "Cascadia Code"    },
+  { id: "Hack",            label: "Hack"             },
   { id: "Courier New",     label: "Courier New"      },
   { id: "monospace",       label: "System Default"   },
 ];
@@ -144,7 +144,7 @@ export function Settings() {
                           <Check size={10} className="absolute top-1.5 right-1.5 text-[var(--accent)]" />
                         )}
                         <span
-                          className="text-base leading-none text-[var(--text-primary)]"
+                          className="text-xl leading-none text-[var(--text-primary)]"
                           style={{ fontFamily: `"${font.id}", monospace` }}
                         >
                           Aa

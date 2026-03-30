@@ -6,6 +6,7 @@
   "nav": {
     "dashboard": "Hosts",
     "credentials": "Credenciais",
+    "groups": "Grupos",
     "settings": "Configurações",
     "sync": "Sincronização",
     "newConnection": "Nova Conexão",
@@ -14,11 +15,9 @@
   "dashboard": {
     "title": "Hosts",
     "searchPlaceholder": "Buscar hosts...",
+    "allHosts": "Todos",
     "noHosts": "Nenhum host cadastrado",
     "noHostsDescription": "Adicione seu primeiro servidor SSH para começar",
-    "groups": {
-      "ungrouped": "Sem grupo"
-    },
     "host": {
       "connect": "Conectar",
       "edit": "Editar",
@@ -323,6 +322,20 @@
       "passwordRequired": "Senha é obrigatória",
       "privateKeyPathRequired": "Caminho da chave é obrigatório"
     }
+  },
+  "groups": {
+    "title": "Grupos",
+    "description": "Gerencie os grupos dos seus hosts SSH",
+    "newGroup": "Novo Grupo",
+    "namePlaceholder": "Nome do grupo...",
+    "nameRequired": "Nome é obrigatório",
+    "nameExists": "Já existe um grupo com este nome",
+    "noGroups": "Nenhum grupo criado",
+    "noGroupsDescription": "Crie grupos para organizar seus hosts SSH",
+    "hostCount": "{{count}} host(s)",
+    "deleteTitle": "Excluir Grupo",
+    "deleteConfirm": "Tem certeza que deseja excluir o grupo \"{{name}}\"?",
+    "deleteWarning": "Os {{count}} host(s) deste grupo ficarão sem grupo, mas não serão excluídos."
   },
   "common": {
     "loading": "Carregando...",
