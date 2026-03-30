@@ -1,22 +1,27 @@
 mod credentials;
 mod crypto;
+mod database;
 mod ssh;
 mod storage;
+mod sync;
 mod totp;
 
+use database::Database;
 use ssh::SshManager;
 use storage::Storage;
-use std::sync::Mutex;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 pub struct AppState {
     pub storage: Mutex<Storage>,
+    pub database: Database,
     pub ssh: Arc<tokio::sync::Mutex<SshManager>>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let storage = Storage::new().expect("Falha ao inicializar storage");
+    let database =
+        Database::open(&storage.data_dir).expect("Falha ao inicializar banco de dados");
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -24,6 +29,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .manage(AppState {
             storage: Mutex::new(storage),
+            database,
             ssh: Arc::new(tokio::sync::Mutex::new(SshManager::new())),
         })
         .invoke_handler(tauri::generate_handler![
@@ -41,6 +47,24 @@ pub fn run() {
             ssh::ssh_send_input,
             ssh::ssh_resize,
             ssh::ssh_disconnect,
+            database::db_get_hosts,
+            database::db_save_host,
+            database::db_delete_host,
+            database::db_clear_hosts,
+            database::db_get_settings,
+            database::db_save_settings,
+            database::db_get_credentials,
+            database::db_save_credential,
+            database::db_delete_credential,
+            database::db_clear_credentials,
+            sync::sync_gist_push,
+            sync::sync_gist_pull,
+            sync::sync_webdav_push,
+            sync::sync_webdav_pull,
+            sync::sync_s3_push,
+            sync::sync_s3_pull,
+            sync::sync_custom_push,
+            sync::sync_custom_pull,
         ])
         .run(tauri::generate_context!())
         .expect("Erro ao inicializar SSH Vault");

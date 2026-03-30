@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AppLayout } from "@/components/Layout/AppLayout";
 import { Dashboard } from "@/pages/Dashboard";
@@ -8,8 +9,40 @@ import { Backup } from "@/pages/Backup";
 import { TerminalPage } from "@/pages/TerminalPage";
 import { Credentials } from "@/pages/Credentials";
 import { CredentialEditor } from "@/pages/CredentialEditor";
+import { useHostsStore } from "@/store/hosts";
+import { useSettingsStore } from "@/store/settings";
+import { useCredentialsStore } from "@/store/credentials";
 
 export default function App() {
+  const [ready, setReady] = useState(false);
+  const initHosts = useHostsStore((s) => s.init);
+  const initSettings = useSettingsStore((s) => s.init);
+  const initCredentials = useCredentialsStore((s) => s.init);
+
+  useEffect(() => {
+    Promise.all([initSettings(), initHosts(), initCredentials()]).finally(() =>
+      setReady(true)
+    );
+  }, []);
+
+  if (!ready) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          height: "100vh",
+          backgroundColor: "var(--bg-primary)",
+          color: "var(--text-muted)",
+          fontSize: "14px",
+        }}
+      >
+        Carregando...
+      </div>
+    );
+  }
+
   return (
     <BrowserRouter>
       <Routes>

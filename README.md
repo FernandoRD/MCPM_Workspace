@@ -14,7 +14,8 @@ Gerenciador de conexões SSH com sincronização remota e backup de configuraç�
 - **Terminal integrado** — emulador xterm.js com múltiplas abas
 - **Temas visuais** — Dark, Light, Dracula, Nord, Catppuccin, Solarized Dark
 - **Idiomas** — Português (BR) e English (US)
-- **Sincronização remota** — GitHub Gist, S3/MinIO, WebDAV/Nextcloud ou endpoint customizado
+- **Banco de dados cifrado** — hosts, credenciais e configurações armazenados em SQLite cifrado com SQLCipher; chave de criptografia gerada aleatoriamente e protegida no keychain do SO
+- **Sincronização remota** — GitHub Gist, S3/MinIO, WebDAV/Nextcloud ou endpoint customizado REST; sync bidirecional (enviar/importar)
 - **Credenciais cifradas** — criptografia AES-256-GCM com chave derivada via Argon2id; senhas nunca viajam em claro
 - **Backup e restauração** — exporta/importa um arquivo `.sshvault` com hosts, configurações e credenciais opcionalmente cifradas
 - **MFA / TOTP** — autenticação de dois fatores por host (RFC 6238), compatível com Google Authenticator, Authy e Bitwarden; segredo sincronizado e cifrado junto com as demais credenciais

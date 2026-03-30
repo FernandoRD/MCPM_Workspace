@@ -171,12 +171,21 @@
   "sync": {
     "title": "Sincronização",
     "description": "Mantenha suas configurações sincronizadas entre múltiplos computadores",
+    "credentialsEncryptedNotice": "Credenciais serão cifradas com AES-256-GCM antes de sincronizar.",
+    "credentialsEncrypted": "credenciais cifradas",
+    "noMasterPasswordNotice": "Defina uma senha mestra em Configurações → Segurança para habilitar o sync de credenciais.",
+    "credentialsSyncDisabledNotice": "Sync de credenciais desabilitado. Ative em Configurações → Segurança.",
+    "masterPasswordPushPrompt": "Informe a senha mestra para cifrar as credenciais antes de enviar.",
+    "masterPasswordPullPrompt": "Informe a senha mestra para decifrar as credenciais recebidas.",
     "status": {
       "synced": "Sincronizado",
       "syncing": "Sincronizando...",
+      "pushing": "Enviando para remoto...",
+      "pulling": "Importando do remoto...",
       "error": "Erro na sincronização",
       "notConfigured": "Não configurado",
-      "lastSync": "Última sincronização: {{date}}"
+      "lastSync": "Última sincronização: {{date}}",
+      "importResult": "Importado: {{hostsAdded}} hosts novos, {{hostsUpdated}} atualizados, {{credentialsAdded}} credenciais novas, {{credentialsUpdated}} atualizadas"
     },
     "providers": {
       "title": "Provedor de Sincronização",
@@ -194,10 +203,12 @@
       "tokenPlaceholder": "ghp_...",
       "tokenHelp": "Crie um token em GitHub > Settings > Developer Settings > Personal Access Tokens",
       "gistId": "ID do Gist (opcional)",
-      "gistIdDescription": "Deixe em branco para criar um novo Gist automaticamente"
+      "gistIdDescription": "Deixe em branco para criar um novo Gist automaticamente",
+      "currentGistId": "Gist ID atual"
     },
     "s3": {
-      "endpoint": "Endpoint",
+      "endpoint": "Endpoint (opcional)",
+      "endpointHint": "Deixe em branco para AWS S3. Para MinIO, informe a URL base (ex: https://minio.example.com)",
       "bucket": "Bucket",
       "region": "Região",
       "accessKey": "Access Key",
@@ -207,10 +218,15 @@
       "url": "URL do Servidor",
       "username": "Usuário",
       "password": "Senha",
-      "path": "Caminho remoto"
+      "path": "Caminho remoto",
+      "pathHint": "Caminho do arquivo no servidor (ex: ssh-vault/vault.json)"
+    },
+    "custom": {
+      "url": "URL do Endpoint",
+      "urlHint": "A URL deve aceitar PUT para upload e GET para download (retorna JSON)"
     },
     "actions": {
-      "syncNow": "Sincronizar Agora",
+      "syncNow": "Enviar para Remoto",
       "configure": "Configurar",
       "disconnect": "Desconectar",
       "importFromRemote": "Importar do Remoto",

@@ -1,0 +1,224 @@
+use keyring::Entry;
+use rand::Rng;
+use rusqlite::{params, Connection};
+use serde_json::Value;
+use std::path::PathBuf;
+use std::sync::Mutex;
+use tauri::State;
+
+use crate::AppState;
+
+const KEYCHAIN_SERVICE: &str = "ssh-vault";
+const KEYCHAIN_DB_KEY_ACCOUNT: &str = "db-encryption-key";
+
+pub struct Database {
+    conn: Mutex<Connection>,
+}
+
+impl Database {
+    pub fn open(data_dir: &PathBuf) -> Result<Self, String> {
+        let key = Self::get_or_create_key()?;
+        let db_path = data_dir.join("vault.db");
+
+        let conn = Connection::open(&db_path)
+            .map_err(|e| format!("Falha ao abrir banco de dados: {e}"))?;
+
+        // Define a chave de criptografia do SQLCipher
+        conn.execute_batch(&format!(
+            "PRAGMA key = '{}';",
+            key.replace('\'', "''")
+        ))
+        .map_err(|e| format!("Falha ao definir chave do banco: {e}"))?;
+
+        // WAL para melhor performance em leituras concorrentes
+        conn.execute_batch("PRAGMA journal_mode = WAL;")
+            .map_err(|e| format!("Falha ao configurar WAL: {e}"))?;
+
+        Self::migrate(&conn)?;
+
+        Ok(Self {
+            conn: Mutex::new(conn),
+        })
+    }
+
+    fn get_or_create_key() -> Result<String, String> {
+        let entry = Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_DB_KEY_ACCOUNT)
+            .map_err(|e| format!("Erro no keychain: {e}"))?;
+
+        match entry.get_password() {
+            Ok(key) if !key.is_empty() => Ok(key),
+            _ => {
+                // Gera uma chave aleatória de 64 caracteres alfanuméricos
+                let key: String = rand::thread_rng()
+                    .sample_iter(&rand::distributions::Alphanumeric)
+                    .take(64)
+                    .map(char::from)
+                    .collect();
+                entry
+                    .set_password(&key)
+                    .map_err(|e| format!("Falha ao salvar chave no keychain: {e}"))?;
+                Ok(key)
+            }
+        }
+    }
+
+    fn migrate(conn: &Connection) -> Result<(), String> {
+        conn.execute_batch(
+            "
+            CREATE TABLE IF NOT EXISTS hosts (
+                id         TEXT PRIMARY KEY,
+                data       TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS settings (
+                key   TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS credentials (
+                id         TEXT PRIMARY KEY,
+                data       TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            ",
+        )
+        .map_err(|e| format!("Falha na migração do banco: {e}"))
+    }
+}
+
+// ── Hosts ────────────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn db_get_hosts(state: State<AppState>) -> Result<Vec<Value>, String> {
+    let conn = state.database.conn.lock().map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare("SELECT data FROM hosts ORDER BY created_at ASC")
+        .map_err(|e| e.to_string())?;
+
+    let rows: Result<Vec<Value>, String> = stmt
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|e| e.to_string())?
+        .map(|r| {
+            r.map_err(|e| e.to_string())
+                .and_then(|s| serde_json::from_str(&s).map_err(|e| e.to_string()))
+        })
+        .collect();
+
+    rows
+}
+
+#[tauri::command]
+pub fn db_save_host(state: State<AppState>, host: Value) -> Result<(), String> {
+    let id = host["id"].as_str().ok_or("Host sem id")?;
+    let created_at = host["createdAt"].as_str().unwrap_or("");
+    let updated_at = host["updatedAt"].as_str().unwrap_or("");
+    let data = serde_json::to_string(&host).map_err(|e| e.to_string())?;
+
+    let conn = state.database.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT OR REPLACE INTO hosts (id, data, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
+        params![id, data, created_at, updated_at],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn db_delete_host(state: State<AppState>, id: String) -> Result<(), String> {
+    let conn = state.database.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM hosts WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// ── Settings ─────────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn db_get_settings(state: State<AppState>) -> Result<Option<Value>, String> {
+    let conn = state.database.conn.lock().map_err(|e| e.to_string())?;
+    let result: Result<String, _> = conn.query_row(
+        "SELECT value FROM settings WHERE key = 'app_settings'",
+        [],
+        |row| row.get(0),
+    );
+
+    match result {
+        Ok(data) => serde_json::from_str(&data).map(Some).map_err(|e| e.to_string()),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+pub fn db_save_settings(state: State<AppState>, settings: Value) -> Result<(), String> {
+    let data = serde_json::to_string(&settings).map_err(|e| e.to_string())?;
+    let conn = state.database.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('app_settings', ?1)",
+        params![data],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn db_clear_hosts(state: State<AppState>) -> Result<(), String> {
+    let conn = state.database.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM hosts", []).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// ── Credentials ───────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn db_get_credentials(state: State<AppState>) -> Result<Vec<Value>, String> {
+    let conn = state.database.conn.lock().map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare("SELECT data FROM credentials ORDER BY created_at ASC")
+        .map_err(|e| e.to_string())?;
+
+    let rows: Result<Vec<Value>, String> = stmt
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|e| e.to_string())?
+        .map(|r| {
+            r.map_err(|e| e.to_string())
+                .and_then(|s| serde_json::from_str(&s).map_err(|e| e.to_string()))
+        })
+        .collect();
+
+    rows
+}
+
+#[tauri::command]
+pub fn db_save_credential(state: State<AppState>, credential: Value) -> Result<(), String> {
+    let id = credential["id"].as_str().ok_or("Credential sem id")?;
+    let created_at = credential["createdAt"].as_str().unwrap_or("");
+    let updated_at = credential["updatedAt"].as_str().unwrap_or("");
+    let data = serde_json::to_string(&credential).map_err(|e| e.to_string())?;
+
+    let conn = state.database.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT OR REPLACE INTO credentials (id, data, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
+        params![id, data, created_at, updated_at],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn db_delete_credential(state: State<AppState>, id: String) -> Result<(), String> {
+    let conn = state.database.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM credentials WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn db_clear_credentials(state: State<AppState>) -> Result<(), String> {
+    let conn = state.database.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM credentials", []).map_err(|e| e.to_string())?;
+    Ok(())
+}

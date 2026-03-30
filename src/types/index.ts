@@ -70,6 +70,13 @@ export interface WebDavSyncConfig {
   path: string;
 }
 
+export interface CustomSyncConfig {
+  url: string;
+}
+
+/** Credencial sem campos sensíveis — trafega em claro no sync */
+export type CredentialMeta = Omit<Credential, "password" | "passphrase">;
+
 export interface AppSettings {
   themeId: string;
   locale: string;
@@ -94,6 +101,7 @@ export interface AppSettings {
     gist?: GistSyncConfig;
     s3?: S3SyncConfig;
     webdav?: WebDavSyncConfig;
+    custom?: CustomSyncConfig;
   };
 }
 

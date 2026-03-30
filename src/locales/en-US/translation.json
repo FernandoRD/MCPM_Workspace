@@ -171,12 +171,21 @@
   "sync": {
     "title": "Sync",
     "description": "Keep your settings synchronized across multiple computers",
+    "credentialsEncryptedNotice": "Credentials will be encrypted with AES-256-GCM before syncing.",
+    "credentialsEncrypted": "encrypted credentials",
+    "noMasterPasswordNotice": "Set a master password in Settings → Security to enable credential sync.",
+    "credentialsSyncDisabledNotice": "Credential sync is disabled. Enable it in Settings → Security.",
+    "masterPasswordPushPrompt": "Enter the master password to encrypt credentials before uploading.",
+    "masterPasswordPullPrompt": "Enter the master password to decrypt credentials received from remote.",
     "status": {
       "synced": "Synced",
       "syncing": "Syncing...",
+      "pushing": "Uploading to remote...",
+      "pulling": "Importing from remote...",
       "error": "Sync error",
       "notConfigured": "Not configured",
-      "lastSync": "Last sync: {{date}}"
+      "lastSync": "Last sync: {{date}}",
+      "importResult": "Imported: {{hostsAdded}} new hosts, {{hostsUpdated}} updated, {{credentialsAdded}} new credentials, {{credentialsUpdated}} updated"
     },
     "providers": {
       "title": "Sync Provider",
@@ -194,10 +203,12 @@
       "tokenPlaceholder": "ghp_...",
       "tokenHelp": "Create a token at GitHub > Settings > Developer Settings > Personal Access Tokens",
       "gistId": "Gist ID (optional)",
-      "gistIdDescription": "Leave blank to automatically create a new Gist"
+      "gistIdDescription": "Leave blank to automatically create a new Gist",
+      "currentGistId": "Current Gist ID"
     },
     "s3": {
-      "endpoint": "Endpoint",
+      "endpoint": "Endpoint (optional)",
+      "endpointHint": "Leave blank for AWS S3. For MinIO, provide the base URL (e.g. https://minio.example.com)",
       "bucket": "Bucket",
       "region": "Region",
       "accessKey": "Access Key",
@@ -207,10 +218,15 @@
       "url": "Server URL",
       "username": "Username",
       "password": "Password",
-      "path": "Remote path"
+      "path": "Remote path",
+      "pathHint": "File path on the server (e.g. ssh-vault/vault.json)"
+    },
+    "custom": {
+      "url": "Endpoint URL",
+      "urlHint": "The URL must accept PUT for upload and GET for download (returns JSON)"
     },
     "actions": {
-      "syncNow": "Sync Now",
+      "syncNow": "Push to Remote",
       "configure": "Configure",
       "disconnect": "Disconnect",
       "importFromRemote": "Import from Remote",
