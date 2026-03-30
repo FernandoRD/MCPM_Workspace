@@ -40,7 +40,7 @@ function persistSettings(settings: AppSettings) {
   invoke("db_save_settings", { settings }).catch(console.error);
 }
 
-export const useSettingsStore = create<SettingsStore>()((set, get) => ({
+export const useSettingsStore = create<SettingsStore>()((set, _get) => ({
   settings: DEFAULT_SETTINGS,
   initialized: false,
 
