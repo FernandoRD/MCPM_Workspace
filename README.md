@@ -474,22 +474,27 @@ ssh_client_dev/
 │   │   ├── Layout/           # AppLayout principal
 │   │   ├── Sidebar/          # Navegação e lista de hosts
 │   │   ├── TabBar/           # Abas de sessões abertas
+│   │   ├── TotpDisplay/      # Código TOTP ao vivo + countdown
 │   │   └── ui/               # Button, Input, Modal, Badge...
 │   ├── pages/                # Páginas da aplicação
 │   │   ├── Dashboard.tsx     # Grid de hosts
 │   │   ├── HostEditor.tsx    # Formulário de host
 │   │   ├── TerminalPage.tsx  # Terminal xterm.js
 │   │   ├── Settings.tsx      # Configurações + senha mestra
-│   │   ├── Sync.tsx          # Sincronização remota
-│   │   └── Backup.tsx        # Export / Import de backup
+│   │   ├── Sync.tsx          # Sincronização remota (todos os providers)
+│   │   ├── Backup.tsx        # Export / Import de backup
+│   │   ├── Credentials.tsx   # Lista de credenciais reutilizáveis
+│   │   └── CredentialEditor.tsx # Formulário de credencial
 │   ├── lib/
 │   │   ├── backup.ts         # Lógica de export/import de backup
+│   │   ├── sync.ts           # Montagem e aplicação de pacotes de sync
 │   │   ├── i18n.ts           # Configuração react-i18next
 │   │   └── utils.ts          # Utilitários gerais
-│   ├── store/                # Estado global (Zustand)
-│   │   ├── hosts.ts          # CRUD de hosts
-│   │   ├── sessions.ts       # Abas de terminal
-│   │   └── settings.ts       # Tema, idioma, segurança, sync
+│   ├── store/                # Estado global (Zustand → SQLite via Tauri)
+│   │   ├── hosts.ts          # CRUD de hosts + init() + replaceHosts()
+│   │   ├── sessions.ts       # Abas de terminal (volátil)
+│   │   ├── settings.ts       # Tema, idioma, segurança, sync
+│   │   └── credentials.ts    # CRUD de credenciais + init()
 │   ├── themes/               # CSS variables por tema
 │   └── locales/              # Traduções pt-BR e en-US
 │
@@ -497,9 +502,12 @@ ssh_client_dev/
     └── src/
         ├── lib.rs            # Entry point e registro de comandos
         ├── storage.rs        # Diretório de dados da aplicação
+        ├── database.rs       # SQLCipher: init, schema, CRUD (hosts/settings/credentials)
         ├── credentials.rs    # Keychain do sistema operacional
         ├── crypto.rs         # Argon2id + AES-256-GCM
-        └── totp.rs           # TOTP/MFA — RFC 6238 (totp-rs)
+        ├── totp.rs           # TOTP/MFA — RFC 6238 (totp-rs)
+        ├── ssh.rs            # Sessões SSH reais (russh)
+        └── sync.rs           # Provedores de sync: Gist, WebDAV, S3, Custom
 ```
 
 ---
@@ -555,15 +563,17 @@ ssh_client_dev/
 
 ## Fases de desenvolvimento
 
-| Fase | Status       | Conteúdo                                                                        |
-| ---- | ------------ | ------------------------------------------------------------------------------- |
-| 1    | ✅ Completo  | Estrutura, temas, i18n, CRUD de hosts, terminal demo                            |
-| 1.5  | ✅ Completo  | Senha mestra, AES-256-GCM, backup/restore `.sshvault`                           |
-| 1.6  | ✅ Completo  | MFA/TOTP por host (RFC 6238), QR code, código ao vivo, cifrado no sync/backup   |
-| 2    | ✅ Completo  | Sessões SSH reais via Rust (`russh`), múltiplas abas                            |
-| 3    | 📋 Planejado | Criptografia local do banco (SQLCipher)                                         |
-| 4    | 📋 Planejado | Sync remoto funcional (Gist, S3, WebDAV) com credenciais cifradas               |
-| 5    | 📋 Planejado | SFTP integrado, split de terminal                                               |
+| Fase | Status       | Conteúdo                                                                                    |
+| ---- | ------------ | ------------------------------------------------------------------------------------------- |
+| 1    | ✅ Completo  | Estrutura, temas, i18n, CRUD de hosts, terminal demo                                        |
+| 1.5  | ✅ Completo  | Senha mestra, AES-256-GCM, backup/restore `.sshvault`                                       |
+| 1.6  | ✅ Completo  | MFA/TOTP por host (RFC 6238), QR code, código ao vivo, cifrado no sync/backup               |
+| 2    | ✅ Completo  | Sessões SSH reais via Rust (`russh`), múltiplas abas                                        |
+| 3    | ✅ Completo  | Banco SQLCipher cifrado; migração automática do localStorage; chave no keychain do SO       |
+| 4    | ✅ Completo  | Sync remoto funcional: GitHub Gist, S3/MinIO (Sig V4), WebDAV, Custom REST; bidirecional    |
+| 5    | 📋 Planejado | SFTP integrado, split de terminal                                                           |
+| 6    | 📋 Planejado | Compatibilidade SSH: presets legado/muito-legado, KEX, ciphers, MACs e host-key por host    |
+| 7    | 📋 Planejado | Gerenciador de chaves SSH: gerar Ed25519/ECDSA/RSA, fingerprint, deploy via ssh-copy-id     |
 
 ---
 

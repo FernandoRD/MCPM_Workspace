@@ -20,7 +20,23 @@ impl Database {
         let key = Self::get_or_create_key()?;
         let db_path = data_dir.join("vault.db");
 
-        let conn = Connection::open(&db_path)
+        match Self::try_open(&db_path, &key) {
+            Ok(db) => Ok(db),
+            Err(e) if e.contains("file is not a database") || e.contains("not a database") => {
+                // Arquivo incompatível (plain SQLite ou chave diferente) — apaga e recria
+                eprintln!("[ssh-vault] vault.db incompatível, recriando: {e}");
+                let _ = std::fs::remove_file(&db_path);
+                // Remove também o WAL e SHM se existirem
+                let _ = std::fs::remove_file(db_path.with_extension("db-wal"));
+                let _ = std::fs::remove_file(db_path.with_extension("db-shm"));
+                Self::try_open(&db_path, &key)
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    fn try_open(db_path: &std::path::Path, key: &str) -> Result<Self, String> {
+        let conn = Connection::open(db_path)
             .map_err(|e| format!("Falha ao abrir banco de dados: {e}"))?;
 
         // Define a chave de criptografia do SQLCipher

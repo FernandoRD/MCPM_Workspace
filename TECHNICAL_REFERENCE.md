@@ -51,16 +51,17 @@
 │  │ Argon2id │  │  totp-rs │  │  keyring  │  │
 │  └──────────┘  └──────────┘  └───────────┘  │
 │                                             │
-│  ┌──────────────────────────────────────┐   │
-│  │              storage                 │   │
-│  │   dirs::data_local_dir / ssh-vault   │   │
-│  └──────────────────────────────────────┘   │
+│  ┌──────────┐  ┌──────────────────────────┐  │
+│  │ database │  │          sync            │  │
+│  │SQLCipher │  │  Gist · S3 · WebDAV · *  │  │
+│  │ keychain │  │   reqwest + Sig V4       │  │
+│  └──────────┘  └──────────────────────────┘  │
 └─────────────────────────────────────────────┘
 ```
 
 **Camada de comunicação:** `invoke()` do `@tauri-apps/api/core` — IPC síncrono entre frontend e Rust.
 
-**Persistência de estado:** Zustand com middleware `persist` → `localStorage` (fases 1–1.6). Credenciais sensíveis nunca vão para o localStorage — ficam no keychain do SO ou cifradas em arquivo.
+**Persistência de estado (fase 3+):** Zustand sem `persist` — os stores são inicializados via `init()` que lê do banco SQLCipher. Mutações fazem update otimista no estado local e persistem no DB de forma assíncrona (fire-and-forget). Dados sensíveis nunca são gravados em claro.
 
 ---
 
@@ -91,27 +92,31 @@ ssh_client_dev/
 │   ├── lib/
 │   │   ├── backup.ts               # Export/import de .sshvault
 │   │   ├── i18n.ts                 # Configuração react-i18next
+│   │   ├── sync.ts                 # SyncFile, buildSyncPayload, applySyncPayload
 │   │   └── utils.ts                # cn(), formatDate(), getHostColor()
 │   ├── locales/
 │   │   ├── en-US/translation.json
 │   │   └── pt-BR/translation.json
 │   ├── pages/
 │   │   ├── Backup.tsx
+│   │   ├── CredentialEditor.tsx    # Criar/editar credencial reutilizável
+│   │   ├── Credentials.tsx         # Lista de credenciais
 │   │   ├── Dashboard.tsx
 │   │   ├── HostEditor.tsx
 │   │   ├── Settings.tsx
 │   │   ├── Sync.tsx
 │   │   └── TerminalPage.tsx
 │   ├── store/
-│   │   ├── hosts.ts                # CRUD de hosts
-│   │   ├── sessions.ts             # Abas de terminal
-│   │   └── settings.ts             # Tema, idioma, segurança, sync
+│   │   ├── credentials.ts          # CRUD de credenciais (DB)
+│   │   ├── hosts.ts                # CRUD de hosts (DB)
+│   │   ├── sessions.ts             # Abas de terminal (volátil)
+│   │   └── settings.ts             # Tema, idioma, segurança, sync (DB)
 │   ├── themes/
 │   │   ├── index.ts                # THEMES, ThemeId, applyTheme()
 │   │   └── themes.css              # CSS variables por tema
 │   ├── types/
 │   │   └── index.ts                # Todos os tipos compartilhados
-│   ├── App.tsx                     # Rotas
+│   ├── App.tsx                     # Rotas + inicialização dos stores
 │   └── index.css                   # Tailwind + estilos globais
 └── src-tauri/                      # Backend Rust (Tauri)
     ├── src/
@@ -119,6 +124,9 @@ ssh_client_dev/
     │   ├── storage.rs              # get_app_data_dir
     │   ├── credentials.rs          # Keychain do SO (keyring)
     │   ├── crypto.rs               # Argon2id + AES-256-GCM
+    │   ├── database.rs             # SQLCipher: schema + comandos db_*
+    │   ├── ssh.rs                  # Sessões SSH reais (russh)
+    │   ├── sync.rs                 # Sync remoto: Gist, S3, WebDAV, Custom
     │   └── totp.rs                 # RFC 6238 (totp-rs)
     ├── Cargo.toml
     └── tauri.conf.json
@@ -220,6 +228,7 @@ interface AppSettings {
     gist?: GistSyncConfig;
     s3?: S3SyncConfig;
     webdav?: WebDavSyncConfig;
+    custom?: CustomSyncConfig;
   };
 }
 ```
@@ -238,7 +247,7 @@ interface GistSyncConfig {
 }
 
 interface S3SyncConfig {
-  endpoint: string;
+  endpoint: string; // Vazio = AWS S3; preenchido = MinIO ou compatível
   bucket: string;
   region: string;
   accessKey: string;
@@ -249,13 +258,38 @@ interface WebDavSyncConfig {
   url: string;
   username: string;
   password: string;
-  path: string;
+  path: string; // Caminho do arquivo no servidor
+}
+
+interface CustomSyncConfig {
+  url: string; // Aceita PUT (upload) e GET (download) retornando JSON
 }
 ```
 
 ---
 
-### Tipos de criptografia e backup
+### `Credential` e `CredentialMeta`
+
+```typescript
+interface Credential {
+  id: string;           // UUID v4
+  label: string;        // Nome exibido
+  username: string;
+  authMethod: AuthMethod;
+  password?: string;    // Presente em authMethod="password"
+  privateKeyPath?: string;
+  passphrase?: string;
+  createdAt: string;    // ISO 8601
+  updatedAt: string;    // ISO 8601
+}
+
+// Versão sem campos sensíveis — viaja em claro no SyncFile
+type CredentialMeta = Omit<Credential, "password" | "passphrase">;
+```
+
+---
+
+### Tipos de criptografia e backup/sync
 
 ```typescript
 interface EncryptedCredentials {
@@ -265,11 +299,15 @@ interface EncryptedCredentials {
   ciphertext: string; // Base64, AES-256-GCM
 }
 
-interface SyncPackage {
+// Payload do arquivo de sync remoto (vault.json)
+interface SyncFile {
+  app: "ssh-vault";
   version: 1;
-  exportedAt: string;
+  syncedAt: string;                        // ISO 8601
   hosts: SshHost[];
-  encryptedCredentials?: EncryptedCredentials;
+  credentials: CredentialMeta[];           // Metadados sem segredos
+  settings: Partial<AppSettings>;
+  encryptedSecrets?: EncryptedCredentials; // Segredos por credentialId, cifrados
 }
 ```
 
@@ -277,27 +315,38 @@ interface SyncPackage {
 
 ## 4. Stores Zustand
 
-Todos os stores usam `persist` do `zustand/middleware` com `localStorage`.
+A partir da fase 3, os stores **não usam `persist`**. A persistência é feita via banco SQLCipher através de comandos Tauri. O padrão é:
+
+1. `init()` carrega os dados do DB ao iniciar a app (com fallback de migração do `localStorage`)
+2. Mutações fazem update otimista no estado Zustand e disparam `invoke(...)` de forma assíncrona (fire-and-forget)
+
+`App.tsx` chama `Promise.all([initHosts(), initSettings(), initCredentials()])` antes de renderizar a UI (exibe tela de loading enquanto não resolve).
+
+---
 
 ### `useHostsStore`
 
-**Arquivo:** `src/store/hosts.ts` | **Chave localStorage:** `ssh-vault-hosts`
+**Arquivo:** `src/store/hosts.ts` | **Persistência:** SQLCipher (`hosts` table)
 
 ```typescript
 interface HostsStore {
   hosts: SshHost[];
-  addHost    (data: Omit<SshHost, "id" | "createdAt" | "updatedAt">): void;
-  updateHost (id: string, data: Partial<SshHost>): void;
-  deleteHost (id: string): void;
-  duplicateHost (id: string): void;
-  setLastConnected (id: string): void;
-  getHost    (id: string): SshHost | undefined;
-  getGroups  (): string[];
+  initialized: boolean;
+  init         (): Promise<void>;
+  addHost      (data: Omit<SshHost, "id" | "createdAt" | "updatedAt">): void;
+  updateHost   (id: string, data: Partial<SshHost>): void;
+  deleteHost   (id: string): void;
+  duplicateHost(id: string): void;
+  setLastConnected(id: string): void;
+  getHost      (id: string): SshHost | undefined;
+  getGroups    (): string[];
+  replaceHosts (hosts: SshHost[]): void; // Usado pelo sync remoto
 }
 ```
 
 `addHost` gera `id` (UUID v4) e timestamps automaticamente.
 `duplicateHost` cria cópia com novo `id` e sufixo `" (cópia)"` no label.
+`replaceHosts` chama `db_clear_hosts` e reinserção em sequência.
 
 ---
 
@@ -309,9 +358,9 @@ interface HostsStore {
 interface SessionsStore {
   tabs: SessionTab[];
   activeTabId: string | null;
-  openSession   (hostId: string, hostLabel: string, hostAddress: string): string; // retorna tabId
-  closeSession  (tabId: string): void;
-  setActiveTab  (tabId: string): void;
+  openSession     (hostId: string, hostLabel: string, hostAddress: string): string;
+  closeSession    (tabId: string): void;
+  setActiveTab    (tabId: string): void;
   updateTabStatus (tabId: string, status: SessionTab["status"]): void;
 }
 ```
@@ -320,19 +369,23 @@ interface SessionsStore {
 
 ### `useSettingsStore`
 
-**Arquivo:** `src/store/settings.ts` | **Chave localStorage:** `ssh-vault-settings`
+**Arquivo:** `src/store/settings.ts` | **Persistência:** SQLCipher (`settings` table)
 
 ```typescript
 interface SettingsStore {
   settings: AppSettings;
-  setTheme       (themeId: ThemeId): void;
-  setLocale      (locale: string): void;
-  updateTerminal (terminal: Partial<AppSettings["terminal"]>): void;
-  updateSecurity (security: Partial<AppSettings["security"]>): void;
-  updateSync     (sync: Partial<AppSettings["sync"]>): void;
-  resetSettings  (): void;
+  initialized: boolean;
+  init          (): Promise<void>;
+  setTheme      (themeId: ThemeId): void;
+  setLocale     (locale: string): void;
+  updateTerminal(terminal: Partial<AppSettings["terminal"]>): void;
+  updateSecurity(security: Partial<AppSettings["security"]>): void;
+  updateSync    (sync: Partial<AppSettings["sync"]>): void;
+  resetSettings (): void;
 }
 ```
+
+`init()` aplica o tema e idioma após carregar do DB (equivalente ao antigo `onRehydrateStorage`).
 
 **Valores padrão:**
 
@@ -358,7 +411,27 @@ const DEFAULT_SETTINGS: AppSettings = {
 };
 ```
 
-**Hook `onRehydrateStorage`:** ao restaurar do `localStorage`, aplica o tema (`applyTheme`) e o idioma (`i18n.changeLanguage`) automaticamente.
+---
+
+### `useCredentialsStore`
+
+**Arquivo:** `src/store/credentials.ts` | **Persistência:** SQLCipher (`credentials` table)
+
+```typescript
+interface CredentialsStore {
+  credentials: Credential[];
+  initialized: boolean;
+  init              (): Promise<void>;
+  addCredential     (data: Omit<Credential, "id" | "createdAt" | "updatedAt">): string;
+  updateCredential  (id: string, data: Partial<Omit<Credential, "id" | "createdAt" | "updatedAt">>): void;
+  deleteCredential  (id: string): void;
+  getCredential     (id: string): Credential | undefined;
+  replaceCredentials(credentials: Credential[]): void; // Usado pelo sync remoto
+}
+```
+
+`addCredential` retorna o `id` gerado para uso imediato.
+`replaceCredentials` chama `db_clear_credentials` e reinserção em sequência.
 
 ---
 
@@ -491,6 +564,100 @@ Retorna o diretório de dados da aplicação (criado se não existir):
 
 ---
 
+### `database.rs` — Banco SQLCipher
+
+Banco SQLite cifrado com SQLCipher. A chave de cifra (64 chars alfanuméricos aleatórios) é gerada na primeira inicialização e armazenada no keychain do SO via `keyring` (serviço: `"ssh-vault"`, entry: `"db-key"`).
+
+**Schema:** três tabelas com armazenamento em JSON blob:
+
+```sql
+CREATE TABLE IF NOT EXISTS hosts       (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS settings    (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS credentials (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+```
+
+**Comandos disponíveis:**
+
+```typescript
+invoke("db_get_hosts")                              // → Promise<SshHost[]>
+invoke("db_save_host",       { host })              // → Promise<void>
+invoke("db_delete_host",     { id: string })        // → Promise<void>
+invoke("db_clear_hosts")                            // → Promise<void>
+
+invoke("db_get_settings")                           // → Promise<AppSettings | null>
+invoke("db_save_settings",   { settings })          // → Promise<void>
+
+invoke("db_get_credentials")                        // → Promise<Credential[]>
+invoke("db_save_credential", { credential })        // → Promise<void>
+invoke("db_delete_credential",{ id: string })       // → Promise<void>
+invoke("db_clear_credentials")                      // → Promise<void>
+```
+
+---
+
+### `sync.rs` — Sincronização remota
+
+Todos os comandos de sync recebem e retornam JSON serializado (`string`). O frontend monta o payload com `buildSyncPayload` e o interpreta com `parseSyncFile`/`applySyncPayload`.
+
+#### GitHub Gist
+
+```typescript
+invoke("sync_gist_push", {
+  token: string,
+  gistId?: string,     // Null/vazio = cria novo Gist privado
+  payload: string,     // JSON do SyncFile
+}) // → Promise<string>  Retorna o gistId (novo ou existente)
+
+invoke("sync_gist_pull", {
+  token: string,
+  gistId: string,
+}) // → Promise<string>  JSON do SyncFile
+```
+
+#### S3 / MinIO
+
+```typescript
+invoke("sync_s3_push", {
+  endpoint: string,    // Vazio = AWS S3; URL base para MinIO
+  bucket: string,
+  region: string,
+  accessKey: string,
+  secretKey: string,
+  payload: string,
+}) // → Promise<void>
+
+invoke("sync_s3_pull", { endpoint, bucket, region, accessKey, secretKey })
+// → Promise<string>  JSON do SyncFile
+```
+
+Autenticação via **AWS Signature V4** implementada manualmente (`sha2` + `hmac` + `hex`). Para MinIO, usa path-style URL (`endpoint/bucket/vault.json`).
+
+#### WebDAV / Nextcloud
+
+```typescript
+invoke("sync_webdav_push", {
+  url: string,         // URL base do servidor
+  username: string,
+  password: string,
+  path: string,        // Caminho remoto, ex: "ssh-vault/vault.json"
+  payload: string,
+}) // → Promise<void>
+
+invoke("sync_webdav_pull", { url, username, password, path })
+// → Promise<string>
+```
+
+#### Custom REST
+
+```typescript
+invoke("sync_custom_push", { url: string, payload: string }) // → Promise<void>
+invoke("sync_custom_pull", { url: string })                  // → Promise<string>
+```
+
+A URL deve aceitar `PUT` para upload e `GET` para download (resposta JSON).
+
+---
+
 ## 6. Páginas React
 
 ### `Dashboard`
@@ -559,11 +726,57 @@ Provedores suportados (configuração na UI):
 | Provedor | Campos |
 | --- | --- |
 | GitHub Gist | token (PAT), gistId (opcional — cria automaticamente) |
-| S3 / MinIO | endpoint, bucket, region, accessKey, secretKey |
+| S3 / MinIO | endpoint (vazio = AWS S3), bucket, region, accessKey, secretKey |
 | WebDAV / Nextcloud | url, username, password, path |
-| Custom | (placeholder — fase 4) |
+| Custom REST | url (aceita PUT/GET) |
 
-Se `syncCredentials = true`, exibe modal de senha mestra antes de sincronizar.
+**Fluxo push (Enviar para Remoto):**
+
+1. Se `syncCredentials = true`, exibe modal de senha mestra
+2. Chama `buildSyncPayload(hosts, credentials, settings, masterPassword?)` → JSON
+3. Invoca o comando de push do provedor selecionado
+4. Para Gist: salva o `gistId` retornado em `settings.sync.gist.gistId`
+5. Atualiza `settings.sync.lastSyncAt`
+
+**Fluxo pull (Importar do Remoto):**
+
+1. Invoca o comando de pull do provedor → JSON
+2. Chama `parseSyncFile(json)` para validar
+3. Se `syncCredentials = true`, exibe modal de senha mestra
+4. Chama `applySyncPayload(file, masterPassword?, mode, ...)` que chama `replaceHosts`/`replaceCredentials`
+5. Exibe resumo: hosts adicionados/atualizados, credenciais adicionadas/atualizadas
+
+---
+
+### `Credentials`
+
+**Rota:** `/credentials`
+**Arquivo:** `src/pages/Credentials.tsx`
+
+Lista de credenciais reutilizáveis. Cada credencial pode ser associada a um ou mais hosts no `HostEditor`.
+
+| Ação | Detalhe |
+| --- | --- |
+| Listar | Cards com tipo (senha/chave/agente), username, contagem de hosts que usam |
+| Nova | Navega para `/credentials/new` |
+| Editar | Navega para `/credentials/:id` |
+| Excluir | Aviso se a credencial está em uso por hosts |
+
+---
+
+### `CredentialEditor`
+
+**Rotas:** `/credentials/new`, `/credentials/:id`
+**Arquivo:** `src/pages/CredentialEditor.tsx`
+
+Formulário para criar/editar uma credencial reutilizável.
+
+| Campo | Condição |
+| --- | --- |
+| label, username | Sempre |
+| password | authMethod = "password" |
+| privateKeyPath, passphrase | authMethod = "privateKey" |
+| (informativo) | authMethod = "agent" |
 
 ---
 
@@ -715,14 +928,17 @@ Shell principal: `<Sidebar>` + `<TabBar>` (quando há sessões abertas) + `<Outl
 **Arquivo:** `src/App.tsx`
 
 ```
-/                   → Dashboard
-/hosts/new          → HostEditor (modo criação)
-/hosts/:id          → HostEditor (modo edição)
-/terminal/:tabId    → TerminalPage
-/settings           → Settings
-/sync               → Sync
-/backup             → Backup
-/*                  → redireciona para /
+/                        → Dashboard
+/hosts/new               → HostEditor (modo criação)
+/hosts/:id               → HostEditor (modo edição)
+/terminal/:tabId         → TerminalPage
+/settings                → Settings
+/sync                    → Sync
+/backup                  → Backup
+/credentials             → Credentials
+/credentials/new         → CredentialEditor (modo criação)
+/credentials/:id         → CredentialEditor (modo edição)
+/*                       → redireciona para /
 ```
 
 Todas as rotas são filhas de `<AppLayout>` (Sidebar + TabBar sempre visíveis).
@@ -758,6 +974,7 @@ terminal.*         Labels do terminal
 settings.*         Configurações (appearance, language, terminal, security)
 sync.*             Sincronização (providers, status, conflicts)
 backup.*           Backup e restauração
+credentials.*      Lista e formulário de credenciais reutilizáveis
 common.*           Labels genéricos (save, cancel, delete, etc.)
 ```
 
@@ -970,7 +1187,7 @@ function applyTheme(themeId: ThemeId): void
 | `serde` + `serde_json` | 1 | Serialização JSON |
 | `uuid` | 1 (v4) | Geração de UUIDs |
 | `chrono` | 0.4 | Timestamps ISO 8601 |
-| `keyring` | 3 | Keychain do SO |
+| `keyring` | 3 | Keychain do SO (credenciais + chave do DB) |
 | `dirs` | 5 | Diretórios de dados do usuário |
 | `aes-gcm` | 0.10 | Cifra AES-256-GCM |
 | `argon2` | 0.5 | KDF Argon2id |
@@ -978,33 +1195,42 @@ function applyTheme(themeId: ThemeId): void
 | `base64` | 0.22 | Codificação Base64 |
 | `zeroize` | 1 | Zeroing de dados sensíveis na memória |
 | `totp-rs` | 5 (gen_secret, otpauth) | TOTP RFC 6238 |
+| `rusqlite` | 0.32 (bundled-sqlcipher-vendored-openssl) | Banco SQLCipher cifrado |
+| `reqwest` | 0.12 (rustls-tls, json) | HTTP client para sync remoto |
+| `sha2` | 0.10 | SHA-256 para AWS Signature V4 |
+| `hmac` | 0.12 | HMAC-SHA256 para AWS Signature V4 |
+| `hex` | 0.4 | Encoding hexadecimal para Sig V4 |
 
 ---
 
 ## 14. Segurança — fluxo de dados sensíveis
 
-### Armazenamento local
+### Armazenamento local (fase 3+)
 
 ```
-Senha do SSH / Frase-senha
+Hosts, credenciais (metadados) e settings
         │
-        ▼ keyring (OS keychain)
-  Nunca vai para localStorage
+        ▼ SQLCipher (AES-256-CBC)
+  vault.db em ~/.local/share/ssh-vault/ (Linux)
+        │
+        ▼ Chave de cifra do DB
+  Gerada aleatoriamente (64 chars) → keyring (OS keychain)
+  Serviço: "ssh-vault", entry: "db-key"
 ```
 
 ```
-Configurações e metadados dos hosts
+Credenciais sensíveis: password, passphrase
         │
-        ▼ Zustand persist → localStorage
-  Sem campos sensíveis (passwordRef é apenas uma chave de lookup)
+        ▼ Armazenadas no banco SQLCipher (campo "data" JSON)
+  O próprio SQLCipher cifra tudo — nenhum campo sensível em claro no disco
 ```
 
 ### Backup / Sync (quando syncCredentials = true)
 
 ```
-{ password, passphrase, privateKeyPath, totpSecret }
+{ password, passphrase, privateKeyPath, totpSecret } por credencial
         │
-        ▼ JSON serializado em memória
+        ▼ JSON serializado em memória (mapa credentialId → segredos)
         │
         ▼ Argon2id (m=64MB, t=3, p=1) derivação de chave da senha mestra
         │
@@ -1012,17 +1238,27 @@ Configurações e metadados dos hosts
         │
         ▼ EncryptedCredentials { version, salt, nonce, ciphertext }
         │
-        ├──► arquivo .sshvault
-        └──► provedor de sync remoto
+        ├──► campo encryptedSecrets no arquivo .sshvault
+        └──► campo encryptedSecrets no SyncFile (provedor remoto)
 ```
+
+### Separação de dados no SyncFile
+
+O payload de sync separa metadados de segredos:
+
+- **`credentials[]`** — `CredentialMeta` (sem `password`/`passphrase`) — viaja em claro
+- **`encryptedSecrets`** — `EncryptedCredentials` — bloco único cifrado com senha mestra
+
+Isso permite que o receptor importe metadados (label, username, tipo) sem a senha mestra, e opcionalmente decifre os segredos se tiver a senha.
 
 ### Garantias
 
 - A **senha mestra nunca sai do dispositivo**
+- A **chave do banco SQLCipher** nunca é gravada em disco em claro (fica no keychain)
 - Salt e nonce são gerados frescos a cada cifragem (segurança semântica)
 - A tag GCM autentica os dados — adulteração é detectada
 - Chave AES e senha zeroizadas da memória após uso (`zeroize`)
-- Sem a senha mestra correta, os dados são computacionalmente irrecuperáveis
+- Sem a senha mestra correta, os segredos remotos são computacionalmente irrecuperáveis
 
 ---
 
