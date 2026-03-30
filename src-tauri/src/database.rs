@@ -17,7 +17,7 @@ pub struct Database {
 
 impl Database {
     pub fn open(data_dir: &PathBuf) -> Result<Self, String> {
-        let key = Self::get_or_create_key()?;
+        let key = Self::get_or_create_key(data_dir)?;
         let db_path = data_dir.join("vault.db");
 
         match Self::try_open(&db_path, &key) {
@@ -57,25 +57,46 @@ impl Database {
         })
     }
 
-    fn get_or_create_key() -> Result<String, String> {
-        let entry = Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_DB_KEY_ACCOUNT)
-            .map_err(|e| format!("Erro no keychain: {e}"))?;
-
-        match entry.get_password() {
-            Ok(key) if !key.is_empty() => Ok(key),
-            _ => {
-                // Gera uma chave aleatória de 64 caracteres alfanuméricos
-                let key: String = rand::thread_rng()
-                    .sample_iter(&rand::distributions::Alphanumeric)
-                    .take(64)
-                    .map(char::from)
-                    .collect();
-                entry
-                    .set_password(&key)
-                    .map_err(|e| format!("Falha ao salvar chave no keychain: {e}"))?;
-                Ok(key)
+    fn get_or_create_key(data_dir: &PathBuf) -> Result<String, String> {
+        // Tenta ler do keychain do SO primeiro
+        if let Ok(entry) = Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_DB_KEY_ACCOUNT) {
+            if let Ok(key) = entry.get_password() {
+                if !key.is_empty() {
+                    return Ok(key);
+                }
             }
         }
+
+        // Fallback: arquivo de chave no diretório de dados
+        // Garante que a chave persista mesmo se o keychain falhar (comum em builds Windows)
+        let key_path = data_dir.join(".db_key");
+        if key_path.exists() {
+            let key = std::fs::read_to_string(&key_path)
+                .map_err(|e| format!("Falha ao ler arquivo de chave: {e}"))?;
+            if !key.trim().is_empty() {
+                // Tenta salvar no keychain para uso futuro
+                if let Ok(entry) = Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_DB_KEY_ACCOUNT) {
+                    let _ = entry.set_password(key.trim());
+                }
+                return Ok(key.trim().to_string());
+            }
+        }
+
+        // Gera uma nova chave e persiste em ambos os lugares
+        let key: String = rand::thread_rng()
+            .sample_iter(&rand::distributions::Alphanumeric)
+            .take(64)
+            .map(char::from)
+            .collect();
+
+        std::fs::write(&key_path, &key)
+            .map_err(|e| format!("Falha ao salvar arquivo de chave: {e}"))?;
+
+        if let Ok(entry) = Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_DB_KEY_ACCOUNT) {
+            let _ = entry.set_password(&key);
+        }
+
+        Ok(key)
     }
 
     fn migrate(conn: &Connection) -> Result<(), String> {
