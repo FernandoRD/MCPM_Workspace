@@ -97,7 +97,7 @@ pub async fn sync_gist_push(
     };
 
     let resp = req
-        .header("Authorization", format!("token {token}"))
+        .header("Authorization", format!("Bearer {token}"))
         .header("Accept", "application/vnd.github.v3+json")
         .header("User-Agent", "SSH-Vault/1.0")
         .json(&body)
@@ -129,7 +129,7 @@ pub async fn sync_gist_pull(token: String, gist_id: String) -> Result<String, St
 
     let resp = client
         .get(&url)
-        .header("Authorization", format!("token {token}"))
+        .header("Authorization", format!("Bearer {token}"))
         .header("Accept", "application/vnd.github.v3+json")
         .header("User-Agent", "SSH-Vault/1.0")
         .send()
@@ -147,10 +147,41 @@ pub async fn sync_gist_pull(token: String, gist_id: String) -> Result<String, St
         .await
         .map_err(|e| format!("Falha ao parsear resposta: {e}"))?;
 
-    data["files"]["vault.json"]["content"]
+    let file = &data["files"]["vault.json"];
+    if file.is_null() {
+        return Err("Arquivo vault.json não encontrado no Gist. Sincronize primeiro a partir do dispositivo de origem.".to_string());
+    }
+
+    // Se o conteúdo não estiver truncado, retorna diretamente
+    if let Some(content) = file["content"].as_str() {
+        if !file["truncated"].as_bool().unwrap_or(false) {
+            return Ok(content.to_string());
+        }
+    }
+
+    // Conteúdo truncado (arquivo > 1 MB): busca pelo raw_url
+    let raw_url = file["raw_url"]
         .as_str()
-        .map(|s| s.to_string())
-        .ok_or_else(|| "Arquivo vault.json não encontrado no Gist. Sincronize primeiro a partir do dispositivo de origem.".to_string())
+        .ok_or_else(|| "raw_url ausente na resposta do Gist".to_string())?;
+
+    let raw_resp = client
+        .get(raw_url)
+        .header("Authorization", format!("Bearer {token}"))
+        .header("User-Agent", "SSH-Vault/1.0")
+        .send()
+        .await
+        .map_err(|e| format!("Erro ao buscar conteúdo raw do Gist: {e}"))?;
+
+    let raw_status = raw_resp.status();
+    if !raw_status.is_success() {
+        let text = raw_resp.text().await.unwrap_or_default();
+        return Err(format!("GitHub raw {raw_status}: {text}"));
+    }
+
+    raw_resp
+        .text()
+        .await
+        .map_err(|e| format!("Falha ao ler conteúdo raw do Gist: {e}"))
 }
 
 // ── WebDAV ────────────────────────────────────────────────────────────────────
