@@ -23,7 +23,6 @@ import {
   SshHost,
   AppSettings,
   Credential,
-  CredentialMeta,
   EncryptedCredentials,
 } from "@/types";
 
@@ -34,12 +33,14 @@ export interface SyncFile {
   version: 1;
   syncedAt: string;
   hosts: SshHost[];
-  credentials: CredentialMeta[];
+  /** Credenciais — incluem password/passphrase em texto claro quando não há criptografia */
+  credentials: Credential[];
   settings: {
     themeId: string;
     locale: string;
     terminal: AppSettings["terminal"];
   };
+  /** Presente quando as senhas foram exportadas com criptografia (senha mestra) */
   encryptedSecrets?: EncryptedCredentials;
 }
 
@@ -62,7 +63,8 @@ export interface SyncResult {
 
 /**
  * Serializa o estado local em um JSON para upload.
- * Se `masterPassword` for fornecida, os segredos são cifrados.
+ * - Sem senha mestra: credenciais incluem password/passphrase em texto claro.
+ * - Com senha mestra: credenciais vão sem segredos + `encryptedSecrets` cifrado.
  */
 export async function buildSyncPayload(
   hosts: SshHost[],
@@ -70,19 +72,19 @@ export async function buildSyncPayload(
   settings: AppSettings,
   masterPassword: string | null
 ): Promise<string> {
-  // Strip de campos sensíveis dos hosts
+  // Strip de campos sensíveis dos hosts (senhas de hosts ficam no sistema de credenciais)
   const cleanHosts = hosts.map(
     ({ passwordRef: _p, passphrase: _pp, ...rest }) => rest as SshHost
   );
 
-  // Metadata das credenciais (sem password/passphrase)
-  const credMeta: CredentialMeta[] = credentials.map(
-    ({ password: _p, passphrase: _pp, ...rest }) => rest
-  );
-
+  let exportedCredentials: Credential[];
   let encryptedSecrets: EncryptedCredentials | undefined;
 
   if (masterPassword) {
+    // Com senha mestra: exporta credenciais sem segredos + segredos cifrados à parte
+    exportedCredentials = credentials.map(
+      ({ password: _p, passphrase: _pp, ...rest }) => rest as Credential
+    );
     const secretsMap: SecretsMap = {};
     for (const cred of credentials) {
       const entry: SecretsMap[string] = {};
@@ -97,6 +99,9 @@ export async function buildSyncPayload(
       });
       encryptedSecrets = JSON.parse(payloadJson) as EncryptedCredentials;
     }
+  } else {
+    // Sem senha mestra: inclui senhas em texto claro (Gist/S3 privado do próprio usuário)
+    exportedCredentials = credentials;
   }
 
   const file: SyncFile = {
@@ -104,7 +109,7 @@ export async function buildSyncPayload(
     version: 1,
     syncedAt: new Date().toISOString(),
     hosts: cleanHosts,
-    credentials: credMeta,
+    credentials: exportedCredentials,
     settings: {
       themeId: settings.themeId,
       locale: settings.locale,

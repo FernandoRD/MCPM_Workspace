@@ -109,10 +109,12 @@ export function HostEditor() {
         ? credentials.find((c) => c.id === form.credentialId)
         : undefined;
       const authMethod = selectedCred?.authMethod ?? "password";
-      addHost({ ...form, tags, authMethod });
+      const newHostData = { ...form, tags, authMethod };
+      addHost(newHostData);
     } else if (id) {
       // Ao editar, não sobrescreve authMethod — preserva o valor existente no host
-      updateHost(id, { ...form, tags });
+      const editData = { ...form, tags };
+      updateHost(id, editData);
     }
     navigate("/");
   };
