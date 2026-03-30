@@ -175,7 +175,17 @@ export async function applySyncPayload(
 
   if (mode === "replace") {
     finalHosts = file.hosts;
-    finalCredentials = remoteCredentials;
+    // No replace, ainda preserva segredos locais se o remoto não os trouxe
+    const localCredsMapReplace = new Map(currentCredentials.map((c) => [c.id, c]));
+    finalCredentials = remoteCredentials.map((rc) => {
+      const local = localCredsMapReplace.get(rc.id);
+      if (!local) return rc;
+      return {
+        ...rc,
+        password: rc.password ?? local.password,
+        passphrase: rc.passphrase ?? local.passphrase,
+      };
+    });
     hostsAdded = file.hosts.length;
     credentialsAdded = remoteCredentials.length;
   } else {
@@ -193,12 +203,19 @@ export async function applySyncPayload(
 
     const localCredsById = new Map(currentCredentials.map((c) => [c.id, c]));
     for (const remoteCred of remoteCredentials) {
-      if (localCredsById.has(remoteCred.id)) {
+      const localCred = localCredsById.get(remoteCred.id);
+      if (localCred) {
         credentialsUpdated++;
+        // Preserva os segredos locais se o remoto não os trouxe (sync sem senha mestra)
+        localCredsById.set(remoteCred.id, {
+          ...remoteCred,
+          password: remoteCred.password ?? localCred.password,
+          passphrase: remoteCred.passphrase ?? localCred.passphrase,
+        });
       } else {
         credentialsAdded++;
+        localCredsById.set(remoteCred.id, remoteCred);
       }
-      localCredsById.set(remoteCred.id, remoteCred);
     }
     finalCredentials = Array.from(localCredsById.values());
   }

@@ -1,6 +1,6 @@
 use chrono::Utc;
 use hmac::{Hmac, Mac};
-use reqwest::{Client, header};
+use reqwest::Client;
 use sha2::{Digest, Sha256};
 
 type HmacSha256 = Hmac<Sha256>;

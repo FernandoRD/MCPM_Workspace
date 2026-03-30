@@ -103,11 +103,16 @@ export function HostEditor() {
       .split(",")
       .map((t) => t.trim())
       .filter(Boolean);
-    const data = { ...form, tags, authMethod: "password" as const };
     if (isNew) {
-      addHost(data);
+      // Para hosts novos, deriva authMethod da credencial selecionada (se houver)
+      const selectedCred = form.credentialId
+        ? credentials.find((c) => c.id === form.credentialId)
+        : undefined;
+      const authMethod = selectedCred?.authMethod ?? "password";
+      addHost({ ...form, tags, authMethod });
     } else if (id) {
-      updateHost(id, data);
+      // Ao editar, não sobrescreve authMethod — preserva o valor existente no host
+      updateHost(id, { ...form, tags });
     }
     navigate("/");
   };
