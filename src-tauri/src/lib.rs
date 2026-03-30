@@ -1,13 +1,17 @@
 mod credentials;
 mod crypto;
+mod ssh;
 mod storage;
 mod totp;
 
+use ssh::SshManager;
 use storage::Storage;
 use std::sync::Mutex;
+use std::sync::Arc;
 
 pub struct AppState {
     pub storage: Mutex<Storage>,
+    pub ssh: Arc<tokio::sync::Mutex<SshManager>>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -20,6 +24,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .manage(AppState {
             storage: Mutex::new(storage),
+            ssh: Arc::new(tokio::sync::Mutex::new(SshManager::new())),
         })
         .invoke_handler(tauri::generate_handler![
             storage::get_app_data_dir,
@@ -32,6 +37,10 @@ pub fn run() {
             totp::generate_totp_code,
             totp::verify_totp_code,
             totp::generate_totp_secret,
+            ssh::ssh_connect,
+            ssh::ssh_send_input,
+            ssh::ssh_resize,
+            ssh::ssh_disconnect,
         ])
         .run(tauri::generate_context!())
         .expect("Erro ao inicializar SSH Vault");

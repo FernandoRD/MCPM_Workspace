@@ -5,6 +5,7 @@
   },
   "nav": {
     "dashboard": "Hosts",
+    "credentials": "Credenciais",
     "settings": "Configurações",
     "sync": "Sincronização",
     "newConnection": "Nova Conexão",
@@ -15,7 +16,6 @@
     "searchPlaceholder": "Buscar hosts...",
     "noHosts": "Nenhum host cadastrado",
     "noHostsDescription": "Adicione seu primeiro servidor SSH para começar",
-    "addFirst": "Adicionar Host",
     "groups": {
       "ungrouped": "Sem grupo"
     },
@@ -265,6 +265,48 @@
     "masterPasswordPrompt": "Senha Mestra para Backup",
     "includeSettings": "Restaurar configurações (tema, idioma, terminal)",
     "includeSettingsHint": "Desmarque para importar apenas os hosts"
+  },
+  "credentials": {
+    "title": "Credenciais",
+    "newCredential": "Nova Credencial",
+    "editCredential": "Editar Credencial",
+    "noCredentials": "Nenhuma credencial cadastrada",
+    "noCredentialsDescription": "Crie credenciais reutilizáveis para seus hosts SSH",
+    "fields": {
+      "label": "Nome / Etiqueta",
+      "labelPlaceholder": "Ex: Chave Pessoal, Admin Produção",
+      "username": "Usuário",
+      "usernamePlaceholder": "Ex: root ou ubuntu",
+      "authMethod": "Tipo de Autenticação",
+      "password": "Senha",
+      "privateKeyPath": "Caminho da Chave",
+      "privateKeyPathPlaceholder": "Ex: ~/.ssh/id_rsa",
+      "passphrase": "Frase-senha da Chave",
+      "agentInfo": "Usa o agente SSH do sistema (ssh-agent / OpenSSH Agent)"
+    },
+    "authMethods": {
+      "password": "Senha",
+      "privateKey": "Chave Privada",
+      "agent": "Agente SSH"
+    },
+    "types": {
+      "password": "Senha",
+      "privateKey": "Chave Privada",
+      "agent": "Agente SSH"
+    },
+    "inUseBy": "Usada por {{count}} host(s)",
+    "notInUse": "Não utilizada",
+    "deleteInUseWarning": "Esta credencial é usada por {{count}} host(s). Removê-la irá desassociar esses hosts.",
+    "noCredentialSelected": "Nenhuma credencial selecionada",
+    "selectCredential": "Selecionar credencial",
+    "manageCredentials": "Gerenciar credenciais",
+    "createFirst": "Criar credencial",
+    "validation": {
+      "labelRequired": "Nome é obrigatório",
+      "usernameRequired": "Usuário é obrigatório",
+      "passwordRequired": "Senha é obrigatória",
+      "privateKeyPathRequired": "Caminho da chave é obrigatório"
+    }
   },
   "common": {
     "loading": "Carregando...",

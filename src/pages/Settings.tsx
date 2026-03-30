@@ -1,6 +1,19 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, ShieldCheck, ShieldOff, Eye, EyeOff, AlertTriangle } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+const TERMINAL_FONTS: { id: string; label: string }[] = [
+  { id: "JetBrains Mono",  label: "JetBrains Mono"  },
+  { id: "Fira Code",       label: "Fira Code"        },
+  { id: "Cascadia Code",   label: "Cascadia Code"    },
+  { id: "Source Code Pro", label: "Source Code Pro"  },
+  { id: "Ubuntu Mono",     label: "Ubuntu Mono"      },
+  { id: "Hack",            label: "Hack"             },
+  { id: "Inconsolata",     label: "Inconsolata"      },
+  { id: "Courier New",     label: "Courier New"      },
+  { id: "monospace",       label: "System Default"   },
+];
 import { invoke } from "@tauri-apps/api/core";
 import { useSettingsStore } from "@/store/settings";
 import { THEMES, ThemeId } from "@/themes";
@@ -8,7 +21,6 @@ import { LOCALES } from "@/lib/i18n";
 import { Select } from "@/components/ui/Select";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import { cn } from "@/lib/utils";
 import { AppSettings } from "@/types";
 
 export function Settings() {
@@ -107,68 +119,108 @@ export function Settings() {
 
           {/* Terminal */}
           <Section title={t("settings.sections.terminal")}>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-5">
+
+              {/* Fonte */}
               <div>
-                <label className="text-sm font-medium text-[var(--text-primary)] block mb-1">
-                  {t("settings.terminal.fontSize")}
+                <label className="text-sm font-medium text-[var(--text-primary)] block mb-2">
+                  {t("settings.terminal.fontFamily")}
                 </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="range"
-                    min={10}
-                    max={24}
-                    value={settings.terminal.fontSize}
-                    onChange={(e) => updateTerminal({ fontSize: parseInt(e.target.value) })}
-                    className="flex-1 accent-[var(--accent)]"
-                  />
-                  <span className="text-sm font-mono text-[var(--text-secondary)] w-8">
-                    {settings.terminal.fontSize}
-                  </span>
+                <div className="grid grid-cols-3 gap-2">
+                  {TERMINAL_FONTS.map((font) => {
+                    const selected = settings.terminal.fontFamily === font.id;
+                    return (
+                      <button
+                        key={font.id}
+                        onClick={() => updateTerminal({ fontFamily: font.id })}
+                        className={cn(
+                          "relative flex flex-col items-start gap-1 rounded-lg border-2 px-3 py-2.5 text-left transition-all",
+                          selected
+                            ? "border-[var(--accent)] bg-[var(--accent-subtle)]"
+                            : "border-[var(--border)] bg-[var(--bg-secondary)] hover:border-[var(--text-muted)]"
+                        )}
+                      >
+                        {selected && (
+                          <Check size={10} className="absolute top-1.5 right-1.5 text-[var(--accent)]" />
+                        )}
+                        <span
+                          className="text-base leading-none text-[var(--text-primary)]"
+                          style={{ fontFamily: `"${font.id}", monospace` }}
+                        >
+                          Aa
+                        </span>
+                        <span className="text-xs text-[var(--text-muted)] truncate w-full">
+                          {font.label}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              <Select
-                id="cursorStyle"
-                label={t("settings.terminal.cursorStyle")}
-                value={settings.terminal.cursorStyle}
-                onChange={(e) =>
-                  updateTerminal({ cursorStyle: e.target.value as "block" | "underline" | "bar" })
-                }
-              >
-                <option value="block">{t("settings.terminal.cursorStyles.block")}</option>
-                <option value="underline">{t("settings.terminal.cursorStyles.underline")}</option>
-                <option value="bar">{t("settings.terminal.cursorStyles.bar")}</option>
-              </Select>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-[var(--text-primary)] block mb-1">
+                    {t("settings.terminal.fontSize")}
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="range"
+                      min={10}
+                      max={24}
+                      value={settings.terminal.fontSize}
+                      onChange={(e) => updateTerminal({ fontSize: parseInt(e.target.value) })}
+                      className="flex-1 accent-[var(--accent)]"
+                    />
+                    <span className="text-sm font-mono text-[var(--text-secondary)] w-8">
+                      {settings.terminal.fontSize}
+                    </span>
+                  </div>
+                </div>
 
-              <div className="col-span-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={settings.terminal.cursorBlink}
-                    onChange={(e) => updateTerminal({ cursorBlink: e.target.checked })}
-                    className="accent-[var(--accent)] w-4 h-4"
-                  />
-                  <span className="text-sm text-[var(--text-primary)]">
-                    {t("settings.terminal.cursorBlink")}
-                  </span>
-                </label>
-              </div>
-
-              <div>
-                <label className="text-sm font-medium text-[var(--text-primary)] block mb-1">
-                  {t("settings.terminal.scrollback")}
-                </label>
-                <input
-                  type="number"
-                  min={500}
-                  max={50000}
-                  step={500}
-                  value={settings.terminal.scrollback}
+                <Select
+                  id="cursorStyle"
+                  label={t("settings.terminal.cursorStyle")}
+                  value={settings.terminal.cursorStyle}
                   onChange={(e) =>
-                    updateTerminal({ scrollback: parseInt(e.target.value) || 5000 })
+                    updateTerminal({ cursorStyle: e.target.value as "block" | "underline" | "bar" })
                   }
-                  className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-focus)]"
-                />
+                >
+                  <option value="block">{t("settings.terminal.cursorStyles.block")}</option>
+                  <option value="underline">{t("settings.terminal.cursorStyles.underline")}</option>
+                  <option value="bar">{t("settings.terminal.cursorStyles.bar")}</option>
+                </Select>
+
+                <div className="col-span-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settings.terminal.cursorBlink}
+                      onChange={(e) => updateTerminal({ cursorBlink: e.target.checked })}
+                      className="accent-[var(--accent)] w-4 h-4"
+                    />
+                    <span className="text-sm text-[var(--text-primary)]">
+                      {t("settings.terminal.cursorBlink")}
+                    </span>
+                  </label>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-[var(--text-primary)] block mb-1">
+                    {t("settings.terminal.scrollback")}
+                  </label>
+                  <input
+                    type="number"
+                    min={500}
+                    max={50000}
+                    step={500}
+                    value={settings.terminal.scrollback}
+                    onChange={(e) =>
+                      updateTerminal({ scrollback: parseInt(e.target.value) || 5000 })
+                    }
+                    className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-focus)]"
+                  />
+                </div>
               </div>
             </div>
           </Section>

@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useHostsStore } from "@/store/hosts";
 import { useSessionsStore } from "@/store/sessions";
+import { useCredentialsStore } from "@/store/credentials";
 import { SshHost } from "@/types";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -28,6 +29,7 @@ export function Dashboard() {
   const hosts = useHostsStore((s) => s.hosts);
   const { deleteHost, duplicateHost } = useHostsStore();
   const openSession = useSessionsStore((s) => s.openSession);
+  const getCredential = useCredentialsStore((s) => s.getCredential);
   const locale = useSettingsStore((s) => s.settings.locale);
   const [search, setSearch] = useState("");
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -55,7 +57,9 @@ export function Dashboard() {
     });
 
   const handleConnect = (host: SshHost) => {
-    const tabId = openSession(host.id, host.label, `${host.username}@${host.host}`);
+    const cred = host.credentialId ? getCredential(host.credentialId) : undefined;
+    const username = cred?.username ?? host.username ?? "";
+    const tabId = openSession(host.id, host.label, username ? `${username}@${host.host}` : host.host);
     navigate(`/terminal/${tabId}`);
   };
 
@@ -166,6 +170,9 @@ function HostCard({
   onDuplicate: (id: string) => void;
 }) {
   const { t } = useTranslation();
+  const getCredential = useCredentialsStore((s) => s.getCredential);
+  const cred = host.credentialId ? getCredential(host.credentialId) : undefined;
+  const username = cred?.username ?? host.username ?? "";
 
   return (
     <div className="relative group flex flex-col gap-3 rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] p-4 hover:border-[var(--border-focus)] transition-colors">
@@ -210,7 +217,7 @@ function HostCard({
       {/* User */}
       <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
         <Server size={11} />
-        <span className="font-mono truncate">{host.username}@{host.host}</span>
+        <span className="font-mono truncate">{username ? `${username}@${host.host}` : host.host}</span>
       </div>
 
       {/* Tags + MFA badge */}
@@ -286,7 +293,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
       </div>
       <Button onClick={onAdd}>
         <Plus size={14} />
-        {t("dashboard.addFirst")}
+        {t("nav.newConnection")}
       </Button>
     </div>
   );

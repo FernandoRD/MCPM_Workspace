@@ -6,6 +6,8 @@ import { Settings } from "@/pages/Settings";
 import { Sync } from "@/pages/Sync";
 import { Backup } from "@/pages/Backup";
 import { TerminalPage } from "@/pages/TerminalPage";
+import { Credentials } from "@/pages/Credentials";
+import { CredentialEditor } from "@/pages/CredentialEditor";
 
 export default function App() {
   return (
@@ -19,6 +21,9 @@ export default function App() {
           <Route path="settings" element={<Settings />} />
           <Route path="sync" element={<Sync />} />
           <Route path="backup" element={<Backup />} />
+          <Route path="credentials" element={<Credentials />} />
+          <Route path="credentials/new" element={<CredentialEditor />} />
+          <Route path="credentials/:id" element={<CredentialEditor />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

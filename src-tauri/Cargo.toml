@@ -31,3 +31,9 @@ base64 = "0.22"
 zeroize = { version = "1", features = ["derive"] }
 # TOTP / MFA
 totp-rs = { version = "5", features = ["gen_secret", "otpauth"] }
+# SSH
+russh = "0.44"
+russh-keys = "0.44"
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+cfg-if = "1"

@@ -1,11 +1,24 @@
 export type AuthMethod = "password" | "privateKey" | "agent";
 
+export interface Credential {
+  id: string;
+  label: string;
+  username: string;
+  authMethod: "password" | "privateKey" | "agent";
+  password?: string;
+  privateKeyPath?: string;
+  passphrase?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface SshHost {
   id: string;
   label: string;
   host: string;
   port: number;
-  username: string;
+  username?: string;
+  credentialId?: string;
   authMethod: AuthMethod;
   // Armazenadas de forma segura — só referência aqui
   passwordRef?: string;

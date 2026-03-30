@@ -392,13 +392,56 @@ O arquivo gerado contém:
 ### Configurar sincronização remota
 
 1. Clique em **Sincronização** na sidebar (ícone de nuvem)
-2. Escolha o provedor:
-   - **GitHub Gist** *(recomendado para uso pessoal)*: crie um [Personal Access Token](https://github.com/settings/tokens) com escopo `gist` e cole no campo Token
-   - **S3 / MinIO**: informe endpoint, bucket, região e credenciais
-   - **WebDAV / Nextcloud**: informe URL, usuário e senha
+2. Escolha o provedor desejado e preencha os campos conforme as instruções abaixo
 3. Clique em **Salvar** e depois **Sincronizar Agora**
 
 Se **"Sincronizar credenciais"** estiver ativo em Configurações → Segurança, será solicitada a senha mestra a cada sync — as credenciais são cifradas antes de sair do dispositivo.
+
+> S3/MinIO, WebDAV/Nextcloud e endpoint customizado estão planejados para a Fase 4.
+
+---
+
+### Configurar GitHub Gist (passo a passo)
+
+O GitHub Gist é o provedor recomendado para uso pessoal: gratuito, sem servidor próprio e com versionamento automático.
+
+#### 1. Criar o Personal Access Token (PAT)
+
+1. Acesse **GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens**
+   (ou use o link direto: [github.com/settings/tokens](https://github.com/settings/tokens))
+2. Clique em **Generate new token**
+3. Preencha:
+   - **Token name**: `SSH Vault Sync` (ou qualquer nome descritivo)
+   - **Expiration**: escolha conforme sua preferência (recomendado: sem expiração ou 1 ano)
+   - **Repository access**: nenhum necessário
+4. Em **Account permissions**, expanda **Gists** e selecione **Read and write**
+5. Clique em **Generate token**
+6. **Copie o token gerado agora** — ele não será exibido novamente
+
+> Se preferir tokens clássicos: acesse **Tokens (classic)**, marque apenas o escopo **`gist`** e gere o token.
+
+#### 2. Configurar no SSH Vault
+
+1. Abra o SSH Vault e clique em **Sincronização** na sidebar
+2. Selecione o card **GitHub Gist**
+3. No campo **Token**, cole o token copiado no passo anterior
+4. No campo **Gist ID**:
+   - **Deixe em branco** → um novo Gist privado será criado automaticamente na primeira sincronização
+   - **Informe um ID existente** → o app usará aquele Gist (útil para migrar de outro dispositivo ou continuar um Gist já existente)
+5. Clique em **Salvar**
+6. Clique em **Sincronizar Agora**
+
+#### 3. Sincronizar em um segundo dispositivo
+
+Para usar o mesmo Gist em outro computador, você precisa do **Gist ID** gerado na primeira sincronização:
+
+1. No dispositivo original, após a primeira sincronização bem-sucedida, volte à tela **Sincronização**
+2. O campo **Gist ID** estará preenchido com o ID do Gist criado (formato: `abc123def456...`)
+3. Copie esse ID
+4. No segundo dispositivo, repita o **Passo 2** acima informando esse ID no campo **Gist ID**
+5. Clique em **Sincronizar Agora** — os hosts e configurações serão importados
+
+> O Gist criado pelo SSH Vault é **privado** por padrão. Você pode visualizá-lo em [gist.github.com](https://gist.github.com) e verificar o conteúdo sincronizado (que conterá apenas metadados — credenciais ficam cifradas se a opção estiver ativa).
 
 ---
 
@@ -516,7 +559,7 @@ ssh_client_dev/
 | 1    | ✅ Completo  | Estrutura, temas, i18n, CRUD de hosts, terminal demo                            |
 | 1.5  | ✅ Completo  | Senha mestra, AES-256-GCM, backup/restore `.sshvault`                           |
 | 1.6  | ✅ Completo  | MFA/TOTP por host (RFC 6238), QR code, código ao vivo, cifrado no sync/backup   |
-| 2    | 🔜 Próxima   | Sessões SSH reais via Rust (`russh`), múltiplas abas                            |
+| 2    | ✅ Completo  | Sessões SSH reais via Rust (`russh`), múltiplas abas                            |
 | 3    | 📋 Planejado | Criptografia local do banco (SQLCipher)                                         |
 | 4    | 📋 Planejado | Sync remoto funcional (Gist, S3, WebDAV) com credenciais cifradas               |
 | 5    | 📋 Planejado | SFTP integrado, split de terminal                                               |

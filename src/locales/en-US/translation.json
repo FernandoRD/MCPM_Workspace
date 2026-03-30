@@ -5,6 +5,7 @@
   },
   "nav": {
     "dashboard": "Hosts",
+    "credentials": "Credentials",
     "settings": "Settings",
     "sync": "Sync",
     "newConnection": "New Connection",
@@ -15,7 +16,6 @@
     "searchPlaceholder": "Search hosts...",
     "noHosts": "No hosts added yet",
     "noHostsDescription": "Add your first SSH server to get started",
-    "addFirst": "Add Host",
     "groups": {
       "ungrouped": "Ungrouped"
     },
@@ -265,6 +265,48 @@
     "masterPasswordPrompt": "Master Password for Backup",
     "includeSettings": "Restore settings (theme, language, terminal)",
     "includeSettingsHint": "Uncheck to import hosts only"
+  },
+  "credentials": {
+    "title": "Credentials",
+    "newCredential": "New Credential",
+    "editCredential": "Edit Credential",
+    "noCredentials": "No credentials added yet",
+    "noCredentialsDescription": "Create reusable credentials for your SSH hosts",
+    "fields": {
+      "label": "Name / Label",
+      "labelPlaceholder": "E.g.: Personal Key, Production Admin",
+      "username": "Username",
+      "usernamePlaceholder": "E.g.: root or ubuntu",
+      "authMethod": "Authentication Type",
+      "password": "Password",
+      "privateKeyPath": "Key Path",
+      "privateKeyPathPlaceholder": "E.g.: ~/.ssh/id_rsa",
+      "passphrase": "Key Passphrase",
+      "agentInfo": "Uses the system SSH agent (ssh-agent / OpenSSH Agent)"
+    },
+    "authMethods": {
+      "password": "Password",
+      "privateKey": "Private Key",
+      "agent": "SSH Agent"
+    },
+    "types": {
+      "password": "Password",
+      "privateKey": "Private Key",
+      "agent": "SSH Agent"
+    },
+    "inUseBy": "Used by {{count}} host(s)",
+    "notInUse": "Not in use",
+    "deleteInUseWarning": "This credential is used by {{count}} host(s). Removing it will disassociate those hosts.",
+    "noCredentialSelected": "No credential selected",
+    "selectCredential": "Select credential",
+    "manageCredentials": "Manage credentials",
+    "createFirst": "Create credential",
+    "validation": {
+      "labelRequired": "Name is required",
+      "usernameRequired": "Username is required",
+      "passwordRequired": "Password is required",
+      "privateKeyPathRequired": "Key path is required"
+    }
   },
   "common": {
     "loading": "Loading...",

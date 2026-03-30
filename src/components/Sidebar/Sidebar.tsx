@@ -6,6 +6,7 @@ import {
   Settings,
   CloudUpload,
   HardDriveDownload,
+  KeyRound,
   Plus,
   Search,
   ChevronDown,
@@ -31,7 +32,7 @@ export function Sidebar() {
     (h) =>
       h.label.toLowerCase().includes(search.toLowerCase()) ||
       h.host.toLowerCase().includes(search.toLowerCase()) ||
-      h.username.toLowerCase().includes(search.toLowerCase())
+      (h.username ?? "").toLowerCase().includes(search.toLowerCase())
   );
 
   const grouped = filtered.reduce<Record<string, SshHost[]>>((acc, host) => {
@@ -56,6 +57,7 @@ export function Sidebar() {
 
   const navItems = [
     { to: "/", icon: Server, label: t("nav.dashboard") },
+    { to: "/credentials", icon: KeyRound, label: t("nav.credentials") },
     { to: "/sync", icon: CloudUpload, label: t("nav.sync") },
     { to: "/backup", icon: HardDriveDownload, label: t("nav.backup") },
     { to: "/settings", icon: Settings, label: t("nav.settings") },
@@ -79,7 +81,7 @@ export function Sidebar() {
             onClick={() => navigate(to)}
             className={cn(
               "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors text-left",
-              location.pathname === to
+              (to === "/" ? location.pathname === to : location.pathname.startsWith(to))
                 ? "bg-[var(--accent-subtle)] text-[var(--accent)]"
                 : "text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
             )}

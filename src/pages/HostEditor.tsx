@@ -1,25 +1,25 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
-import { ChevronDown, ChevronRight, ArrowLeft, RefreshCw } from "lucide-react";
+import { ChevronDown, ChevronRight, ArrowLeft, RefreshCw, Lock, KeyRound, Cpu, Plus } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import QRCode from "react-qr-code";
 import { useHostsStore } from "@/store/hosts";
-import { SshHost, AuthMethod } from "@/types";
+import { useCredentialsStore } from "@/store/credentials";
+import { SshHost, Credential } from "@/types";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { Button } from "@/components/ui/Button";
 import { TotpDisplay } from "@/components/TotpDisplay/TotpDisplay";
+import { cn } from "@/lib/utils";
 
-type FormData = Omit<SshHost, "id" | "createdAt" | "updatedAt">;
+type FormData = Omit<SshHost, "id" | "createdAt" | "updatedAt" | "authMethod" | "passwordRef" | "privateKeyPath" | "passphrase" | "username">;
 
 const DEFAULT_FORM: FormData = {
   label: "",
   host: "",
   port: 22,
-  username: "",
-  authMethod: "password",
   tags: [],
   connectionTimeout: 30,
   keepAliveInterval: 60,
@@ -29,7 +29,6 @@ interface ValidationErrors {
   label?: string;
   host?: string;
   port?: string;
-  username?: string;
 }
 
 interface TotpSetup {
@@ -43,6 +42,7 @@ export function HostEditor() {
   const { id } = useParams<{ id: string }>();
   const isNew = id === "new" || !id;
   const { addHost, updateHost, getHost, hosts } = useHostsStore();
+  const credentials = useCredentialsStore((s) => s.credentials);
 
   const [form, setForm] = useState<FormData>(DEFAULT_FORM);
   const [errors, setErrors] = useState<ValidationErrors>({});
@@ -57,7 +57,7 @@ export function HostEditor() {
     if (!isNew && id) {
       const host = getHost(id);
       if (host) {
-        const { id: _id, createdAt: _c, updatedAt: _u, ...data } = host;
+        const { id: _id, createdAt: _c, updatedAt: _u, authMethod: _a, passwordRef: _p, privateKeyPath: _pk, passphrase: _pp, username: _un, ...data } = host;
         setForm(data);
         setTagsInput(host.tags.join(", "));
       }
@@ -92,7 +92,6 @@ export function HostEditor() {
     const errs: ValidationErrors = {};
     if (!form.label.trim()) errs.label = t("hostEditor.validation.labelRequired");
     if (!form.host.trim()) errs.host = t("hostEditor.validation.hostRequired");
-    if (!form.username.trim()) errs.username = t("hostEditor.validation.usernameRequired");
     if (form.port < 1 || form.port > 65535) errs.port = t("hostEditor.validation.portInvalid");
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -104,7 +103,7 @@ export function HostEditor() {
       .split(",")
       .map((t) => t.trim())
       .filter(Boolean);
-    const data = { ...form, tags };
+    const data = { ...form, tags, authMethod: "password" as const };
     if (isNew) {
       addHost(data);
     } else if (id) {
@@ -167,14 +166,6 @@ export function HostEditor() {
                 onChange={(e) => set("port", parseInt(e.target.value) || 22)}
                 error={errors.port}
               />
-              <Input
-                id="username"
-                label={t("hostEditor.fields.username")}
-                placeholder={t("hostEditor.fields.usernamePlaceholder")}
-                value={form.username}
-                onChange={(e) => set("username", e.target.value)}
-                error={errors.username}
-              />
             </div>
           </Section>
 
@@ -185,48 +176,50 @@ export function HostEditor() {
             open={openSections.has("authentication")}
             onToggle={toggleSection}
           >
-            <div className="flex flex-col gap-4">
-              <Select
-                id="authMethod"
-                label={t("hostEditor.fields.authMethod")}
-                value={form.authMethod}
-                onChange={(e) => set("authMethod", e.target.value as AuthMethod)}
-              >
-                <option value="password">{t("hostEditor.authMethods.password")}</option>
-                <option value="privateKey">{t("hostEditor.authMethods.privateKey")}</option>
-                <option value="agent">{t("hostEditor.authMethods.agent")}</option>
-              </Select>
-
-              {form.authMethod === "password" && (
-                <Input
-                  id="password"
-                  label={t("hostEditor.fields.password")}
-                  type="password"
-                  placeholder="••••••••"
-                  value={form.passwordRef ?? ""}
-                  onChange={(e) => set("passwordRef", e.target.value)}
-                />
-              )}
-
-              {form.authMethod === "privateKey" && (
+            <div className="flex flex-col gap-3 mt-1">
+              {credentials.length === 0 ? (
+                <div className="flex flex-col items-center gap-3 py-6 text-center rounded-lg border border-dashed border-[var(--border)]">
+                  <p className="text-sm text-[var(--text-muted)]">
+                    {t("credentials.noCredentials")}
+                  </p>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => navigate("/credentials/new")}
+                  >
+                    <Plus size={13} />
+                    {t("credentials.createFirst")}
+                  </Button>
+                </div>
+              ) : (
                 <>
-                  <Input
-                    id="privateKeyPath"
-                    label={t("hostEditor.fields.privateKeyPath")}
-                    placeholder={t("hostEditor.fields.privateKeyPathPlaceholder")}
-                    value={form.privateKeyPath ?? ""}
-                    onChange={(e) => set("privateKeyPath", e.target.value)}
-                  />
-                  <Input
-                    id="passphrase"
-                    label={t("hostEditor.fields.passphrase")}
-                    type="password"
-                    placeholder="••••••••"
-                    value={form.passphrase ?? ""}
-                    onChange={(e) => set("passphrase", e.target.value)}
-                  />
+                  <p className="text-xs text-[var(--text-muted)] mb-1">
+                    {t("credentials.selectCredential")}
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {credentials.map((cred) => (
+                      <CredentialCard
+                        key={cred.id}
+                        credential={cred}
+                        selected={form.credentialId === cred.id}
+                        onSelect={() =>
+                          set(
+                            "credentialId",
+                            form.credentialId === cred.id ? undefined : cred.id
+                          )
+                        }
+                      />
+                    ))}
+                  </div>
                 </>
               )}
+              <button
+                type="button"
+                onClick={() => navigate("/credentials")}
+                className="self-start text-xs text-[var(--accent)] hover:underline mt-1"
+              >
+                {t("credentials.manageCredentials")}
+              </button>
             </div>
           </Section>
 
@@ -403,6 +396,54 @@ export function HostEditor() {
         </div>
       </div>
     </div>
+  );
+}
+
+function CredentialCard({
+  credential,
+  selected,
+  onSelect,
+}: {
+  credential: Credential;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const { t } = useTranslation();
+  const icons: Record<string, React.ReactNode> = {
+    password: <Lock size={14} />,
+    privateKey: <KeyRound size={14} />,
+    agent: <Cpu size={14} />,
+  };
+  const typeLabel = t(`credentials.types.${credential.authMethod}`);
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        "flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors",
+        selected
+          ? "border-[var(--accent)] bg-[var(--accent-subtle)]"
+          : "border-[var(--border)] bg-[var(--bg-primary)] hover:border-[var(--border-focus)] hover:bg-[var(--bg-hover)]"
+      )}
+    >
+      <div
+        className={cn(
+          "flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md",
+          selected ? "bg-[var(--accent)] text-white" : "bg-[var(--bg-secondary)] text-[var(--accent)]"
+        )}
+      >
+        {icons[credential.authMethod]}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-[var(--text-primary)] truncate">
+          {credential.label}
+        </p>
+        <p className="text-xs text-[var(--text-muted)] truncate">
+          {credential.username && <span className="font-mono">{credential.username} · </span>}
+          {typeLabel}
+        </p>
+      </div>
+    </button>
   );
 }
 
