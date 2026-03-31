@@ -70,6 +70,14 @@
       "testConnection": "Testar Conexão",
       "browseKey": "Selecionar arquivo..."
     },
+    "copyId": {
+      "title": "Copiar chave pública para o servidor",
+      "description": "Instala a chave pública em ~/.ssh/authorized_keys no servidor remoto. Informe a senha para este primeiro acesso — depois disso, o login pela chave já funcionará.",
+      "passwordLabel": "Senha (primeiro acesso)",
+      "button": "Copiar chave para o servidor",
+      "copying": "Copiando...",
+      "success": "Chave instalada com sucesso! A partir de agora você pode conectar usando a chave privada."
+    },
     "mfa": {
       "section": "Autenticação de Dois Fatores (MFA)",
       "enable": "Habilitar MFA para este host",
@@ -294,7 +302,10 @@
       "password": "Senha",
       "privateKeyContent": "Chave Privada",
       "privateKeyContentPlaceholder": "Cole aqui o conteúdo da sua chave privada (ex: -----BEGIN OPENSSH PRIVATE KEY-----...)",
+      "publicKeyContent": "Chave Pública",
+      "publicKeyContentPlaceholder": "Cole aqui o conteúdo da sua chave pública (ex: ssh-rsa AAAA...)",
       "importFromFile": "Importar arquivo",
+      "optional": "opcional",
       "passphrase": "Frase-senha da Chave",
       "agentInfo": "Usa o agente SSH do sistema (ssh-agent / OpenSSH Agent)"
     },

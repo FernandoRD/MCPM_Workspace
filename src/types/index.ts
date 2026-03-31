@@ -7,6 +7,7 @@ export interface Credential {
   authMethod: "password" | "privateKey" | "agent";
   password?: string;
   privateKeyContent?: string;
+  publicKeyContent?: string;
   passphrase?: string;
   createdAt: string;
   updatedAt: string;

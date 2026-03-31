@@ -348,3 +348,67 @@ pub async fn ssh_disconnect(
     }
     Ok(())
 }
+
+// ─── ssh-copy-id ──────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn ssh_copy_id(
+    host: String,
+    port: u16,
+    username: String,
+    password: String,
+    public_key_content: String,
+) -> Result<(), String> {
+    let config = Arc::new(client::Config::default());
+    let addr = format!("{}:{}", host, port);
+    let mut session = client::connect(config, addr, ClientHandler)
+        .await
+        .map_err(|e| format!("Erro ao conectar: {e}"))?;
+
+    let ok = session
+        .authenticate_password(&username, &password)
+        .await
+        .map_err(|e| format!("Erro de autenticação: {e}"))?;
+
+    if !ok {
+        return Err("Senha incorreta ou autenticação recusada pelo servidor.".into());
+    }
+
+    // Escapa aspas simples no conteúdo da chave para uso no shell
+    let key = public_key_content.trim().replace('\'', "'\\''");
+
+    // Garante ~/.ssh com permissões corretas e adiciona a chave em authorized_keys
+    let cmd = format!(
+        "umask 077; mkdir -p ~/.ssh && \
+         grep -qxF '{key}' ~/.ssh/authorized_keys 2>/dev/null || \
+         echo '{key}' >> ~/.ssh/authorized_keys"
+    );
+
+    let mut channel = session
+        .channel_open_session()
+        .await
+        .map_err(|e| format!("Erro ao abrir canal: {e}"))?;
+
+    channel
+        .exec(true, cmd.as_str())
+        .await
+        .map_err(|e| format!("Erro ao executar comando: {e}"))?;
+
+    // Aguarda o canal fechar e captura eventuais erros de exit status
+    loop {
+        match channel.wait().await {
+            Some(ChannelMsg::ExitStatus { exit_status }) => {
+                if exit_status != 0 {
+                    return Err(format!(
+                        "Comando remoto falhou com status {exit_status}."
+                    ));
+                }
+                break;
+            }
+            Some(ChannelMsg::Close) | None => break,
+            _ => {}
+        }
+    }
+
+    Ok(())
+}

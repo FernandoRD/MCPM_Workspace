@@ -70,6 +70,14 @@
       "testConnection": "Test Connection",
       "browseKey": "Browse..."
     },
+    "copyId": {
+      "title": "Copy public key to server",
+      "description": "Installs the public key in ~/.ssh/authorized_keys on the remote server. Enter the password for this first connection — after this, key-based login will work.",
+      "passwordLabel": "Password (first access)",
+      "button": "Copy key to server",
+      "copying": "Copying...",
+      "success": "Key successfully installed! You can now connect using your private key."
+    },
     "mfa": {
       "section": "Two-Factor Authentication (MFA)",
       "enable": "Enable MFA for this host",
@@ -294,7 +302,10 @@
       "password": "Password",
       "privateKeyContent": "Private Key",
       "privateKeyContentPlaceholder": "Paste the content of your private key here (e.g. -----BEGIN OPENSSH PRIVATE KEY-----...)",
+      "publicKeyContent": "Public Key",
+      "publicKeyContentPlaceholder": "Paste the content of your public key here (e.g. ssh-rsa AAAA...)",
       "importFromFile": "Import from file",
+      "optional": "optional",
       "passphrase": "Key Passphrase",
       "agentInfo": "Uses the system SSH agent (ssh-agent / OpenSSH Agent)"
     },

@@ -214,6 +214,36 @@ export function CredentialEditor() {
                       className="font-mono text-xs"
                     />
                   </div>
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center justify-between">
+                      <label htmlFor="publicKeyContent" className="text-sm font-medium text-[var(--text-primary)]">
+                        {t("credentials.fields.publicKeyContent")}
+                        <span className="ml-1 text-xs font-normal text-[var(--text-muted)]">({t("credentials.fields.optional")})</span>
+                      </label>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 gap-1.5 text-xs"
+                        onClick={async () => {
+                          const path = await open({ multiple: false, directory: false });
+                          if (!path) return;
+                          const content = await readTextFile(path as string);
+                          set("publicKeyContent", content.trim() || undefined);
+                        }}
+                      >
+                        <FolderOpen size={13} />
+                        {t("credentials.fields.importFromFile")}
+                      </Button>
+                    </div>
+                    <Textarea
+                      id="publicKeyContent"
+                      placeholder={t("credentials.fields.publicKeyContentPlaceholder")}
+                      value={form.publicKeyContent ?? ""}
+                      onChange={(e) => set("publicKeyContent", e.target.value || undefined)}
+                      rows={3}
+                      className="font-mono text-xs"
+                    />
+                  </div>
                   <Input
                     id="passphrase"
                     label={t("credentials.fields.passphrase")}

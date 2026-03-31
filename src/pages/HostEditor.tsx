@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
-import { ChevronDown, ChevronRight, ArrowLeft, RefreshCw, Lock, KeyRound, Cpu, Plus } from "lucide-react";
+import { ChevronDown, ChevronRight, ArrowLeft, RefreshCw, Lock, KeyRound, Cpu, Plus, Upload, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import QRCode from "react-qr-code";
 import { useHostsStore } from "@/store/hosts";
@@ -55,6 +55,11 @@ export function HostEditor() {
   const [totpOtpauthUrl, setTotpOtpauthUrl] = useState<string | null>(null);
   const [generatingTotp, setGeneratingTotp] = useState(false);
 
+  // ssh-copy-id
+  const [copyIdPassword, setCopyIdPassword] = useState("");
+  const [copyIdStatus, setCopyIdStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [copyIdError, setCopyIdError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!isNew && id) {
       const host = getHost(id);
@@ -77,6 +82,26 @@ export function HostEditor() {
       setTotpOtpauthUrl(setup.otpauth_url);
     } finally {
       setGeneratingTotp(false);
+    }
+  };
+
+  const handleCopyId = async (credential: Credential) => {
+    if (!form.host || !credential.publicKeyContent) return;
+    setCopyIdStatus("loading");
+    setCopyIdError(null);
+    try {
+      await invoke("ssh_copy_id", {
+        host: form.host,
+        port: form.port,
+        username: credential.username,
+        password: copyIdPassword,
+        publicKeyContent: credential.publicKeyContent.trim(),
+      });
+      setCopyIdStatus("success");
+      setCopyIdPassword("");
+    } catch (e) {
+      setCopyIdStatus("error");
+      setCopyIdError(String(e));
     }
   };
 
@@ -211,15 +236,78 @@ export function HostEditor() {
                         key={cred.id}
                         credential={cred}
                         selected={form.credentialId === cred.id}
-                        onSelect={() =>
-                          set(
-                            "credentialId",
-                            form.credentialId === cred.id ? undefined : cred.id
-                          )
-                        }
+                        onSelect={() => {
+                          set("credentialId", form.credentialId === cred.id ? undefined : cred.id);
+                          setCopyIdStatus("idle");
+                          setCopyIdError(null);
+                          setCopyIdPassword("");
+                        }}
                       />
                     ))}
                   </div>
+                  {/* Painel ssh-copy-id */}
+                  {(() => {
+                    const cred = credentials.find((c) => c.id === form.credentialId);
+                    if (!cred || cred.authMethod !== "privateKey" || !cred.publicKeyContent) return null;
+                    return (
+                      <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-primary)] p-4 flex flex-col gap-3 mt-1">
+                        <div className="flex items-center gap-2">
+                          <Upload size={14} className="text-[var(--accent)] flex-shrink-0" />
+                          <p className="text-sm font-medium text-[var(--text-primary)]">
+                            {t("hostEditor.copyId.title")}
+                          </p>
+                        </div>
+                        <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+                          {t("hostEditor.copyId.description")}
+                        </p>
+                        {copyIdStatus === "success" ? (
+                          <div className="flex items-center gap-2 rounded-md bg-[var(--success-subtle,#d1fae5)] px-3 py-2">
+                            <CheckCircle2 size={14} className="text-[var(--success,#10b981)] flex-shrink-0" />
+                            <p className="text-xs text-[var(--success,#10b981)] font-medium">
+                              {t("hostEditor.copyId.success")}
+                            </p>
+                          </div>
+                        ) : (
+                          <>
+                            <Input
+                              id="copyIdPassword"
+                              label={t("hostEditor.copyId.passwordLabel")}
+                              type="password"
+                              placeholder="••••••••"
+                              value={copyIdPassword}
+                              onChange={(e) => {
+                                setCopyIdPassword(e.target.value);
+                                if (copyIdStatus === "error") {
+                                  setCopyIdStatus("idle");
+                                  setCopyIdError(null);
+                                }
+                              }}
+                            />
+                            {copyIdStatus === "error" && copyIdError && (
+                              <div className="flex items-start gap-2 rounded-md border border-[var(--danger)] bg-[var(--danger-subtle,#fee2e2)] px-3 py-2">
+                                <XCircle size={14} className="text-[var(--danger)] flex-shrink-0 mt-0.5" />
+                                <p className="text-xs text-[var(--danger)]">{copyIdError}</p>
+                              </div>
+                            )}
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              className="self-start gap-2"
+                              disabled={!copyIdPassword.trim() || copyIdStatus === "loading" || !form.host.trim()}
+                              onClick={() => handleCopyId(cred)}
+                            >
+                              {copyIdStatus === "loading"
+                                ? <Loader2 size={13} className="animate-spin" />
+                                : <Upload size={13} />}
+                              {copyIdStatus === "loading"
+                                ? t("hostEditor.copyId.copying")
+                                : t("hostEditor.copyId.button")}
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </>
               )}
               <button

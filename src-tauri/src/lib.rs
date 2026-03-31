@@ -47,6 +47,7 @@ pub fn run() {
             ssh::ssh_send_input,
             ssh::ssh_resize,
             ssh::ssh_disconnect,
+            ssh::ssh_copy_id,
             database::db_get_hosts,
             database::db_save_host,
             database::db_delete_host,
