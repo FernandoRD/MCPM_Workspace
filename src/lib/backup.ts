@@ -75,7 +75,7 @@ export async function exportBackup(
   };
 
   // Limpar campos de senha dos hosts para o JSON em claro
-  const cleanHosts = hosts.map(({ passwordRef: _p, passphrase: _pp, ...rest }) => rest as SshHost);
+  const cleanHosts = hosts.map(({ passwordRef: _p, ...rest }) => rest as SshHost);
 
   let encryptedCredentials: EncryptedCredentials | undefined;
 
@@ -85,8 +85,6 @@ export async function exportBackup(
     for (const host of hosts) {
       const entry: CredentialsMap[string] = {};
       if (host.passwordRef) entry.password = host.passwordRef;
-      if (host.passphrase) entry.passphrase = host.passphrase;
-      if (host.privateKeyPath) entry.privateKeyPath = host.privateKeyPath;
       if (host.totpSecret) entry.totpSecret = host.totpSecret;
       if (Object.keys(entry).length > 0) credMap[host.id] = entry;
     }
@@ -204,8 +202,6 @@ export function mergeCredentials(
     return {
       ...host,
       ...(cred.password ? { passwordRef: cred.password } : {}),
-      ...(cred.passphrase ? { passphrase: cred.passphrase } : {}),
-      ...(cred.privateKeyPath ? { privateKeyPath: cred.privateKeyPath } : {}),
       ...(cred.totpSecret ? { totpSecret: cred.totpSecret } : {}),
     };
   });

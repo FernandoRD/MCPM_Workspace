@@ -74,7 +74,7 @@ export async function buildSyncPayload(
 ): Promise<string> {
   // Strip de campos sensíveis dos hosts (senhas de hosts ficam no sistema de credenciais)
   const cleanHosts = hosts.map(
-    ({ passwordRef: _p, passphrase: _pp, ...rest }) => rest as SshHost
+    ({ passwordRef: _p, ...rest }) => rest as SshHost
   );
 
   let exportedCredentials: Credential[];
@@ -83,13 +83,12 @@ export async function buildSyncPayload(
   if (masterPassword) {
     // Com senha mestra: exporta credenciais sem segredos + segredos cifrados à parte
     exportedCredentials = credentials.map(
-      ({ password: _p, passphrase: _pp, ...rest }) => rest as Credential
+      ({ password: _p, ...rest }) => rest as Credential
     );
     const secretsMap: SecretsMap = {};
     for (const cred of credentials) {
       const entry: SecretsMap[string] = {};
       if (cred.password) entry.password = cred.password;
-      if (cred.passphrase) entry.passphrase = cred.passphrase;
       if (Object.keys(entry).length > 0) secretsMap[cred.id] = entry;
     }
     if (Object.keys(secretsMap).length > 0) {
@@ -188,7 +187,6 @@ export async function applySyncPayload(
       return {
         ...rc,
         password: rc.password ?? local.password,
-        passphrase: rc.passphrase ?? local.passphrase,
       };
     });
     hostsAdded = file.hosts.length;
@@ -215,7 +213,6 @@ export async function applySyncPayload(
         localCredsById.set(remoteCred.id, {
           ...remoteCred,
           password: remoteCred.password ?? localCred.password,
-          passphrase: remoteCred.passphrase ?? localCred.passphrase,
         });
       } else {
         credentialsAdded++;
