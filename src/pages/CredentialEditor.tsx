@@ -1,15 +1,14 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, ChevronDown, ChevronRight, Info, FolderOpen } from "lucide-react";
-import { open } from "@tauri-apps/plugin-dialog";
-import { readTextFile } from "@tauri-apps/plugin-fs";
+import { ArrowLeft, ChevronDown, ChevronRight, Info, KeyRound, Plus } from "lucide-react";
 import { useCredentialsStore } from "@/store/credentials";
+import { useSshKeysStore } from "@/store/sshKeys";
 import { Credential } from "@/types";
 import { Input } from "@/components/ui/Input";
-import { Textarea } from "@/components/ui/Textarea";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
+import { cn } from "@/lib/utils";
 
 type FormData = Omit<Credential, "id" | "createdAt" | "updatedAt">;
 
@@ -23,7 +22,7 @@ interface ValidationErrors {
   label?: string;
   username?: string;
   password?: string;
-  privateKeyContent?: string;
+  keyId?: string;
 }
 
 function Section({
@@ -60,6 +59,7 @@ export function CredentialEditor() {
   const isNew = id === "new" || !id;
 
   const { addCredential, updateCredential, getCredential } = useCredentialsStore();
+  const { sshKeys } = useSshKeysStore();
 
   const [form, setForm] = useState<FormData>(DEFAULT_FORM);
   const [errors, setErrors] = useState<ValidationErrors>({});
@@ -87,13 +87,6 @@ export function CredentialEditor() {
   const set = <K extends keyof FormData>(key: K, value: FormData[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
-  const handleImportKey = async () => {
-    const path = await open({ multiple: false, directory: false });
-    if (!path) return;
-    const content = await readTextFile(path as string);
-    set("privateKeyContent", content.trim() || undefined);
-  };
-
   const validate = (): boolean => {
     const errs: ValidationErrors = {};
     if (!form.label.trim()) errs.label = t("credentials.validation.labelRequired");
@@ -101,8 +94,8 @@ export function CredentialEditor() {
     if (form.authMethod === "password" && !form.password?.trim()) {
       errs.password = t("credentials.validation.passwordRequired");
     }
-    if (form.authMethod === "privateKey" && !form.privateKeyContent?.trim()) {
-      errs.privateKeyContent = t("credentials.validation.privateKeyRequired");
+    if (form.authMethod === "privateKey" && !form.keyId) {
+      errs.keyId = t("credentials.validation.keyRequired");
     }
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -171,9 +164,11 @@ export function CredentialEditor() {
                 id="authMethod"
                 label={t("credentials.fields.authMethod")}
                 value={form.authMethod}
-                onChange={(e) =>
-                  set("authMethod", e.target.value as Credential["authMethod"])
-                }
+                onChange={(e) => {
+                  set("authMethod", e.target.value as Credential["authMethod"]);
+                  set("keyId", undefined);
+                  set("password", undefined);
+                }}
               >
                 <option value="password">{t("credentials.authMethods.password")}</option>
                 <option value="privateKey">{t("credentials.authMethods.privateKey")}</option>
@@ -193,66 +188,74 @@ export function CredentialEditor() {
               )}
 
               {form.authMethod === "privateKey" && (
-                <>
-                  <div className="flex flex-col gap-1">
-                    <div className="flex items-center justify-between">
-                      <label htmlFor="privateKeyContent" className="text-sm font-medium text-[var(--text-primary)]">
-                        {t("credentials.fields.privateKeyContent")}
-                      </label>
-                      <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs" onClick={handleImportKey}>
-                        <FolderOpen size={13} />
-                        {t("credentials.fields.importFromFile")}
-                      </Button>
-                    </div>
-                    <Textarea
-                      id="privateKeyContent"
-                      placeholder={t("credentials.fields.privateKeyContentPlaceholder")}
-                      value={form.privateKeyContent ?? ""}
-                      onChange={(e) => set("privateKeyContent", e.target.value || undefined)}
-                      error={errors.privateKeyContent}
-                      rows={8}
-                      className="font-mono text-xs"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <div className="flex items-center justify-between">
-                      <label htmlFor="publicKeyContent" className="text-sm font-medium text-[var(--text-primary)]">
-                        {t("credentials.fields.publicKeyContent")}
-                        <span className="ml-1 text-xs font-normal text-[var(--text-muted)]">({t("credentials.fields.optional")})</span>
-                      </label>
+                <div className="flex flex-col gap-2">
+                  <label className="text-sm font-medium text-[var(--text-primary)]">
+                    {t("credentials.fields.selectKey")}
+                  </label>
+                  {sshKeys.length === 0 ? (
+                    <div className="flex flex-col items-center gap-3 py-6 text-center rounded-lg border border-dashed border-[var(--border)]">
+                      <p className="text-sm text-[var(--text-muted)]">
+                        {t("credentials.fields.noKeys")}
+                      </p>
                       <Button
-                        variant="ghost"
+                        variant="secondary"
                         size="sm"
-                        className="h-7 gap-1.5 text-xs"
-                        onClick={async () => {
-                          const path = await open({ multiple: false, directory: false });
-                          if (!path) return;
-                          const content = await readTextFile(path as string);
-                          set("publicKeyContent", content.trim() || undefined);
-                        }}
+                        onClick={() => navigate("/ssh-keys/new")}
                       >
-                        <FolderOpen size={13} />
-                        {t("credentials.fields.importFromFile")}
+                        <Plus size={13} />
+                        {t("credentials.fields.createKey")}
                       </Button>
                     </div>
-                    <Textarea
-                      id="publicKeyContent"
-                      placeholder={t("credentials.fields.publicKeyContentPlaceholder")}
-                      value={form.publicKeyContent ?? ""}
-                      onChange={(e) => set("publicKeyContent", e.target.value || undefined)}
-                      rows={3}
-                      className="font-mono text-xs"
-                    />
-                  </div>
-                  <Input
-                    id="passphrase"
-                    label={t("credentials.fields.passphrase")}
-                    type="password"
-                    placeholder="••••••••"
-                    value={form.passphrase ?? ""}
-                    onChange={(e) => set("passphrase", e.target.value || undefined)}
-                  />
-                </>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {sshKeys.map((key) => (
+                        <button
+                          key={key.id}
+                          type="button"
+                          onClick={() => set("keyId", form.keyId === key.id ? undefined : key.id)}
+                          className={cn(
+                            "flex items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors",
+                            form.keyId === key.id
+                              ? "border-[var(--accent)] bg-[var(--accent-subtle)]"
+                              : "border-[var(--border)] bg-[var(--bg-primary)] hover:border-[var(--border-focus)] hover:bg-[var(--bg-hover)]"
+                          )}
+                        >
+                          <div
+                            className={cn(
+                              "flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md",
+                              form.keyId === key.id
+                                ? "bg-[var(--accent)] text-white"
+                                : "bg-[var(--bg-secondary)] text-[var(--accent)]"
+                            )}
+                          >
+                            <KeyRound size={14} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-[var(--text-primary)] truncate">
+                              {key.label}
+                            </p>
+                            <p className="text-xs text-[var(--text-muted)]">
+                              {key.publicKeyContent
+                                ? t("credentials.fields.keyHasPublic")
+                                : t("credentials.fields.keyNoPublic")}
+                              {key.passphrase && ` · ${t("credentials.fields.keyHasPassphrase")}`}
+                            </p>
+                          </div>
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => navigate("/ssh-keys")}
+                        className="self-start text-xs text-[var(--accent)] hover:underline mt-1"
+                      >
+                        {t("credentials.fields.manageKeys")}
+                      </button>
+                    </div>
+                  )}
+                  {errors.keyId && (
+                    <p className="text-xs text-[var(--danger)]">{errors.keyId}</p>
+                  )}
+                </div>
               )}
 
               {form.authMethod === "agent" && (

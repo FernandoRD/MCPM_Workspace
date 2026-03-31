@@ -12,6 +12,7 @@ import { useSessionsStore } from "@/store/sessions";
 import { useHostsStore } from "@/store/hosts";
 import { useSettingsStore } from "@/store/settings";
 import { useCredentialsStore } from "@/store/credentials";
+import { useSshKeysStore } from "@/store/sshKeys";
 import { Button } from "@/components/ui/Button";
 
 interface SshOutputEvent {
@@ -42,6 +43,7 @@ export function TerminalPage() {
   const setLastConnected = useHostsStore((s) => s.setLastConnected);
   const terminalSettings = useSettingsStore((s) => s.settings.terminal);
   const getCredential = useCredentialsStore((s) => s.getCredential);
+  const getSshKey = useSshKeysStore((s) => s.getSshKey);
 
   const tab = tabs.find((t) => t.id === tabId);
   const host = tab ? getHost(tab.hostId) : undefined;
@@ -144,8 +146,9 @@ export function TerminalPage() {
       const authMethod = credential?.authMethod ?? host.authMethod ?? "password";
       const username = credential?.username ?? host.username ?? "";
       const password = credential?.password ?? host.passwordRef ?? null;
-      const privateKeyContent = credential?.privateKeyContent ?? host.privateKeyContent ?? null;
-      const passphrase = credential?.passphrase ?? host.passphrase ?? null;
+      const sshKey = credential?.keyId ? getSshKey(credential.keyId) : undefined;
+      const privateKeyContent = sshKey?.privateKeyContent ?? null;
+      const passphrase = sshKey?.passphrase ?? null;
       invoke("ssh_connect", {
         tabId: tab.id,
         host: host.host,

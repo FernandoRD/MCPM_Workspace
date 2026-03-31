@@ -6,6 +6,7 @@ import {
   CloudUpload,
   HardDriveDownload,
   KeyRound,
+  KeySquare,
   Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -18,6 +19,7 @@ export function Sidebar() {
   const navItems = [
     { to: "/", icon: Server, label: t("nav.dashboard") },
     { to: "/credentials", icon: KeyRound, label: t("nav.credentials") },
+    { to: "/ssh-keys", icon: KeySquare, label: t("nav.sshKeys") },
     { to: "/groups", icon: Layers, label: t("nav.groups") },
     { to: "/sync", icon: CloudUpload, label: t("nav.sync") },
     { to: "/backup", icon: HardDriveDownload, label: t("nav.backup") },

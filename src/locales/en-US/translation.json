@@ -6,6 +6,7 @@
   "nav": {
     "dashboard": "Hosts",
     "credentials": "Credentials",
+    "sshKeys": "SSH Keys",
     "groups": "Groups",
     "settings": "Settings",
     "sync": "Sync",
@@ -293,6 +294,13 @@
     "editCredential": "Edit Credential",
     "noCredentials": "No credentials added yet",
     "noCredentialsDescription": "Create reusable credentials for your SSH hosts",
+    "inUseBy": "Used by {{count}} host(s)",
+    "notInUse": "Not in use",
+    "deleteInUseWarning": "This credential is used by {{count}} host(s). Removing it will disassociate those hosts.",
+    "noCredentialSelected": "No credential selected",
+    "selectCredential": "Select credential",
+    "manageCredentials": "Manage credentials",
+    "createFirst": "Create credential",
     "fields": {
       "label": "Name / Label",
       "labelPlaceholder": "E.g.: Personal Key, Production Admin",
@@ -300,13 +308,13 @@
       "usernamePlaceholder": "E.g.: root or ubuntu",
       "authMethod": "Authentication Type",
       "password": "Password",
-      "privateKeyContent": "Private Key",
-      "privateKeyContentPlaceholder": "Paste the content of your private key here (e.g. -----BEGIN OPENSSH PRIVATE KEY-----...)",
-      "publicKeyContent": "Public Key",
-      "publicKeyContentPlaceholder": "Paste the content of your public key here (e.g. ssh-rsa AAAA...)",
-      "importFromFile": "Import from file",
-      "optional": "optional",
-      "passphrase": "Key Passphrase",
+      "selectKey": "Select SSH Key",
+      "noKeys": "No SSH keys registered",
+      "createKey": "Create key",
+      "manageKeys": "Manage SSH keys",
+      "keyHasPublic": "Has public key",
+      "keyNoPublic": "Private key only",
+      "keyHasPassphrase": "passphrase protected",
       "agentInfo": "Uses the system SSH agent (ssh-agent / OpenSSH Agent)"
     },
     "authMethods": {
@@ -319,17 +327,43 @@
       "privateKey": "Private Key",
       "agent": "SSH Agent"
     },
-    "inUseBy": "Used by {{count}} host(s)",
-    "notInUse": "Not in use",
-    "deleteInUseWarning": "This credential is used by {{count}} host(s). Removing it will disassociate those hosts.",
-    "noCredentialSelected": "No credential selected",
-    "selectCredential": "Select credential",
-    "manageCredentials": "Manage credentials",
-    "createFirst": "Create credential",
     "validation": {
       "labelRequired": "Name is required",
       "usernameRequired": "Username is required",
       "passwordRequired": "Password is required",
+      "keyRequired": "Select an SSH key"
+    }
+  },
+  "sshKeys": {
+    "title": "SSH Keys",
+    "newKey": "New Key",
+    "editKey": "Edit Key",
+    "noKeys": "No keys registered",
+    "noKeysDescription": "Register your SSH keys to use with credentials",
+    "hasPublicKey": "Has public key",
+    "inUseBy": "Used by {{count}} credential(s)",
+    "notInUse": "Not in use",
+    "deleteInUseWarning": "This key is used by {{count}} credential(s). Removing it will disassociate those credentials.",
+    "sections": {
+      "general": "General",
+      "privateKey": "Private Key",
+      "publicKey": "Public Key"
+    },
+    "fields": {
+      "label": "Name / Label",
+      "labelPlaceholder": "E.g.: Personal Key, GitHub, Production",
+      "privateKeyContent": "Private Key",
+      "privateKeyPlaceholder": "Paste the content of your private key here (e.g. -----BEGIN OPENSSH PRIVATE KEY-----...)",
+      "publicKeyContent": "Public Key",
+      "publicKeyPlaceholder": "Paste the content of your public key here (e.g. ssh-rsa AAAA...)",
+      "publicKeyHint": "Required for the ssh-copy-id feature (copy key to remote server).",
+      "passphrase": "Passphrase",
+      "passphraseHint": "Leave blank if the key has no passphrase.",
+      "importFromFile": "Import from file",
+      "optional": "optional"
+    },
+    "validation": {
+      "labelRequired": "Name is required",
       "privateKeyRequired": "Private key content is required"
     }
   },

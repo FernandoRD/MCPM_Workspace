@@ -118,6 +118,12 @@ impl Database {
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS ssh_keys (
+                id         TEXT PRIMARY KEY,
+                data       TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
             ",
         )
         .map_err(|e| format!("Falha na migração do banco: {e}"))
@@ -257,5 +263,58 @@ pub fn db_delete_credential(state: State<AppState>, id: String) -> Result<(), St
 pub fn db_clear_credentials(state: State<AppState>) -> Result<(), String> {
     let conn = state.database.conn.lock().map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM credentials", []).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// ── SSH Keys ──────────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn db_get_ssh_keys(state: State<AppState>) -> Result<Vec<Value>, String> {
+    let conn = state.database.conn.lock().map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare("SELECT data FROM ssh_keys ORDER BY created_at ASC")
+        .map_err(|e| e.to_string())?;
+
+    let rows: Result<Vec<Value>, String> = stmt
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|e| e.to_string())?
+        .map(|r| {
+            r.map_err(|e| e.to_string())
+                .and_then(|s| serde_json::from_str(&s).map_err(|e| e.to_string()))
+        })
+        .collect();
+
+    rows
+}
+
+#[tauri::command]
+pub fn db_save_ssh_key(state: State<AppState>, ssh_key: Value) -> Result<(), String> {
+    let id = ssh_key["id"].as_str().ok_or("SshKey sem id")?;
+    let created_at = ssh_key["createdAt"].as_str().unwrap_or("");
+    let updated_at = ssh_key["updatedAt"].as_str().unwrap_or("");
+    let data = serde_json::to_string(&ssh_key).map_err(|e| e.to_string())?;
+
+    let conn = state.database.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT OR REPLACE INTO ssh_keys (id, data, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
+        params![id, data, created_at, updated_at],
+    )
+    .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn db_delete_ssh_key(state: State<AppState>, id: String) -> Result<(), String> {
+    let conn = state.database.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM ssh_keys WHERE id = ?1", params![id])
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn db_clear_ssh_keys(state: State<AppState>) -> Result<(), String> {
+    let conn = state.database.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM ssh_keys", []).map_err(|e| e.to_string())?;
     Ok(())
 }

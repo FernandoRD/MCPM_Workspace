@@ -1,14 +1,22 @@
 export type AuthMethod = "password" | "privateKey" | "agent";
 
+export interface SshKey {
+  id: string;
+  label: string;
+  privateKeyContent: string;
+  publicKeyContent?: string;
+  passphrase?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Credential {
   id: string;
   label: string;
   username: string;
   authMethod: "password" | "privateKey" | "agent";
   password?: string;
-  privateKeyContent?: string;
-  publicKeyContent?: string;
-  passphrase?: string;
+  keyId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -23,8 +31,6 @@ export interface SshHost {
   authMethod: AuthMethod;
   // Armazenadas de forma segura — só referência aqui
   passwordRef?: string;
-  privateKeyContent?: string;
-  passphrase?: string;
   // MFA / TOTP
   mfaEnabled?: boolean;
   totpSecret?: string;  // Base32 — sempre cifrado no sync/backup

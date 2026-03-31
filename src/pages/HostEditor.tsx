@@ -6,6 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import QRCode from "react-qr-code";
 import { useHostsStore } from "@/store/hosts";
 import { useCredentialsStore } from "@/store/credentials";
+import { useSshKeysStore } from "@/store/sshKeys";
 import { useSettingsStore } from "@/store/settings";
 import { SshHost, Credential } from "@/types";
 import { Input } from "@/components/ui/Input";
@@ -45,6 +46,7 @@ export function HostEditor() {
   const { addHost, updateHost, getHost, hosts } = useHostsStore();
   const savedGroups = useSettingsStore((s) => s.settings.groups);
   const credentials = useCredentialsStore((s) => s.credentials);
+  const getSshKey = useSshKeysStore((s) => s.getSshKey);
 
   const [form, setForm] = useState<FormData>(DEFAULT_FORM);
   const [errors, setErrors] = useState<ValidationErrors>({});
@@ -86,7 +88,9 @@ export function HostEditor() {
   };
 
   const handleCopyId = async (credential: Credential) => {
-    if (!form.host || !credential.publicKeyContent) return;
+    if (!form.host || !credential.keyId) return;
+    const key = getSshKey(credential.keyId);
+    if (!key?.publicKeyContent) return;
     setCopyIdStatus("loading");
     setCopyIdError(null);
     try {
@@ -95,7 +99,7 @@ export function HostEditor() {
         port: form.port,
         username: credential.username,
         password: copyIdPassword,
-        publicKeyContent: credential.publicKeyContent.trim(),
+        publicKeyContent: key.publicKeyContent.trim(),
       });
       setCopyIdStatus("success");
       setCopyIdPassword("");
@@ -248,7 +252,8 @@ export function HostEditor() {
                   {/* Painel ssh-copy-id */}
                   {(() => {
                     const cred = credentials.find((c) => c.id === form.credentialId);
-                    if (!cred || cred.authMethod !== "privateKey" || !cred.publicKeyContent) return null;
+                    const key = cred?.keyId ? getSshKey(cred.keyId) : undefined;
+                    if (!cred || cred.authMethod !== "privateKey" || !key?.publicKeyContent) return null;
                     return (
                       <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-primary)] p-4 flex flex-col gap-3 mt-1">
                         <div className="flex items-center gap-2">

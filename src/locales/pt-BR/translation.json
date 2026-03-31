@@ -6,6 +6,7 @@
   "nav": {
     "dashboard": "Hosts",
     "credentials": "Credenciais",
+    "sshKeys": "Chaves SSH",
     "groups": "Grupos",
     "settings": "Configurações",
     "sync": "Sincronização",
@@ -300,13 +301,13 @@
       "usernamePlaceholder": "Ex: root ou ubuntu",
       "authMethod": "Tipo de Autenticação",
       "password": "Senha",
-      "privateKeyContent": "Chave Privada",
-      "privateKeyContentPlaceholder": "Cole aqui o conteúdo da sua chave privada (ex: -----BEGIN OPENSSH PRIVATE KEY-----...)",
-      "publicKeyContent": "Chave Pública",
-      "publicKeyContentPlaceholder": "Cole aqui o conteúdo da sua chave pública (ex: ssh-rsa AAAA...)",
-      "importFromFile": "Importar arquivo",
-      "optional": "opcional",
-      "passphrase": "Frase-senha da Chave",
+      "selectKey": "Selecionar Chave SSH",
+      "noKeys": "Nenhuma chave SSH cadastrada",
+      "createKey": "Criar chave",
+      "manageKeys": "Gerenciar chaves SSH",
+      "keyHasPublic": "Tem chave pública",
+      "keyNoPublic": "Somente chave privada",
+      "keyHasPassphrase": "protegida por frase-senha",
       "agentInfo": "Usa o agente SSH do sistema (ssh-agent / OpenSSH Agent)"
     },
     "authMethods": {
@@ -330,6 +331,39 @@
       "labelRequired": "Nome é obrigatório",
       "usernameRequired": "Usuário é obrigatório",
       "passwordRequired": "Senha é obrigatória",
+      "keyRequired": "Selecione uma chave SSH"
+    }
+  },
+  "sshKeys": {
+    "title": "Chaves SSH",
+    "newKey": "Nova Chave",
+    "editKey": "Editar Chave",
+    "noKeys": "Nenhuma chave cadastrada",
+    "noKeysDescription": "Cadastre suas chaves SSH para usar com as credenciais",
+    "hasPublicKey": "Tem chave pública",
+    "inUseBy": "Usada por {{count}} credencial(is)",
+    "notInUse": "Não utilizada",
+    "deleteInUseWarning": "Esta chave é usada por {{count}} credencial(is). Removê-la irá desassociar essas credenciais.",
+    "sections": {
+      "general": "Geral",
+      "privateKey": "Chave Privada",
+      "publicKey": "Chave Pública"
+    },
+    "fields": {
+      "label": "Nome / Etiqueta",
+      "labelPlaceholder": "Ex: Chave Pessoal, GitHub, Produção",
+      "privateKeyContent": "Chave Privada",
+      "privateKeyPlaceholder": "Cole aqui o conteúdo da sua chave privada (ex: -----BEGIN OPENSSH PRIVATE KEY-----...)",
+      "publicKeyContent": "Chave Pública",
+      "publicKeyPlaceholder": "Cole aqui o conteúdo da sua chave pública (ex: ssh-rsa AAAA...)",
+      "publicKeyHint": "Necessária para a função ssh-copy-id (copiar chave para o servidor remoto).",
+      "passphrase": "Frase-senha",
+      "passphraseHint": "Deixe em branco se a chave não possui frase-senha.",
+      "importFromFile": "Importar arquivo",
+      "optional": "opcional"
+    },
+    "validation": {
+      "labelRequired": "Nome é obrigatório",
       "privateKeyRequired": "Conteúdo da chave privada é obrigatório"
     }
   },
