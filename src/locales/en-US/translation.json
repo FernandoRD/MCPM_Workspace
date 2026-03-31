@@ -21,6 +21,7 @@
     "noHostsDescription": "Add your first SSH server to get started",
     "host": {
       "connect": "Connect",
+      "openSftp": "Open SFTP",
       "edit": "Edit",
       "delete": "Delete",
       "duplicate": "Duplicate",
@@ -110,8 +111,36 @@
     "paste": "Paste",
     "clear": "Clear terminal",
     "newTab": "New tab",
+    "split": "Split",
     "splitHorizontal": "Split horizontally",
     "splitVertical": "Split vertically"
+  },
+  "sftp": {
+    "title": "SFTP Browser",
+    "connecting": "Connecting...",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "reconnect": "Reconnect",
+    "loading": "Loading...",
+    "emptyFolder": "Empty folder",
+    "upload": "Upload",
+    "download": "Download",
+    "newFolder": "New Folder",
+    "rename": "Rename",
+    "delete": "Delete",
+    "confirmDelete": "Delete \"{{name}}\"?",
+    "confirmDeleteDesc": "This action cannot be undone.",
+    "newFolderName": "Folder name",
+    "newFolderPlaceholder": "New folder...",
+    "renamePlaceholder": "New name...",
+    "pathCopied": "Path copied",
+    "uploadSuccess": "Upload completed",
+    "downloadSuccess": "Download completed",
+    "columns": {
+      "name": "Name",
+      "size": "Size",
+      "modified": "Modified"
+    }
   },
   "settings": {
     "title": "Settings",

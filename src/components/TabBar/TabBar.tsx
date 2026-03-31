@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { X, Plus, Wifi, WifiOff, Loader2 } from "lucide-react";
+import { X, Plus, Wifi, WifiOff, Loader2, FolderOpen } from "lucide-react";
 import { useSessionsStore } from "@/store/sessions";
 import { cn } from "@/lib/utils";
 import { SessionTab } from "@/types";
@@ -12,9 +12,12 @@ export function TabBar() {
 
   if (tabs.length === 0) return null;
 
+  const tabRoute = (tab: SessionTab) =>
+    tab.type === "sftp" ? `/sftp/${tab.id}` : `/terminal/${tab.id}`;
+
   const handleTabClick = (tab: SessionTab) => {
     setActiveTab(tab.id);
-    navigate(`/terminal/${tab.id}`);
+    navigate(tabRoute(tab));
   };
 
   const handleClose = (e: React.MouseEvent, tabId: string) => {
@@ -26,7 +29,7 @@ export function TabBar() {
     } else if (tabId === activeTabId) {
       const idx = tabs.findIndex((t) => t.id === tabId);
       const next = remaining[idx] ?? remaining[idx - 1];
-      if (next) navigate(`/terminal/${next.id}`);
+      if (next) navigate(tabRoute(next));
     }
   };
 
@@ -44,6 +47,7 @@ export function TabBar() {
           )}
         >
           <StatusIcon status={tab.status} />
+          {tab.type === "sftp" && <FolderOpen size={10} className="text-[var(--accent)] shrink-0" />}
           <span className="truncate">{tab.hostLabel}</span>
           <span
             onClick={(e) => handleClose(e, tab.id)}

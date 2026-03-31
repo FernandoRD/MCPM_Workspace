@@ -46,12 +46,23 @@ export interface SshHost {
   color?: string;
 }
 
+export type TabType = "terminal" | "sftp";
+export type SplitDirection = "horizontal" | "vertical";
+
+export interface SshPane {
+  id: string; // used as the SSH session ID in the backend
+  status: "connecting" | "connected" | "disconnected" | "error";
+}
+
 export interface SessionTab {
   id: string;
+  type: TabType;
   hostId: string;
   hostLabel: string;
   hostAddress: string;
   status: "connecting" | "connected" | "disconnected" | "error";
+  panes: SshPane[];
+  splitDirection: SplitDirection;
   createdAt: string;
 }
 

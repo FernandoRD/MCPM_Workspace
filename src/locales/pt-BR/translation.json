@@ -21,6 +21,7 @@
     "noHostsDescription": "Adicione seu primeiro servidor SSH para começar",
     "host": {
       "connect": "Conectar",
+      "openSftp": "Abrir SFTP",
       "edit": "Editar",
       "delete": "Excluir",
       "duplicate": "Duplicar",
@@ -110,8 +111,36 @@
     "paste": "Colar",
     "clear": "Limpar terminal",
     "newTab": "Nova aba",
+    "split": "Dividir",
     "splitHorizontal": "Dividir horizontalmente",
     "splitVertical": "Dividir verticalmente"
+  },
+  "sftp": {
+    "title": "Navegador SFTP",
+    "connecting": "Conectando...",
+    "connected": "Conectado",
+    "disconnected": "Desconectado",
+    "reconnect": "Reconectar",
+    "loading": "Carregando...",
+    "emptyFolder": "Pasta vazia",
+    "upload": "Enviar",
+    "download": "Baixar",
+    "newFolder": "Nova Pasta",
+    "rename": "Renomear",
+    "delete": "Excluir",
+    "confirmDelete": "Excluir \"{{name}}\"?",
+    "confirmDeleteDesc": "Esta ação não pode ser desfeita.",
+    "newFolderName": "Nome da pasta",
+    "newFolderPlaceholder": "Nova pasta...",
+    "renamePlaceholder": "Novo nome...",
+    "pathCopied": "Caminho copiado",
+    "uploadSuccess": "Upload concluído",
+    "downloadSuccess": "Download concluído",
+    "columns": {
+      "name": "Nome",
+      "size": "Tamanho",
+      "modified": "Modificado"
+    }
   },
   "settings": {
     "title": "Configurações",

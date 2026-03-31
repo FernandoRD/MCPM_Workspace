@@ -12,6 +12,7 @@ import {
   MoreVertical,
   ShieldCheck,
   Layers,
+  FolderOpen,
 } from "lucide-react";
 import { useHostsStore } from "@/store/hosts";
 import { useSessionsStore } from "@/store/sessions";
@@ -29,6 +30,7 @@ export function Dashboard() {
   const hosts = useHostsStore((s) => s.hosts);
   const { deleteHost, duplicateHost } = useHostsStore();
   const openSession = useSessionsStore((s) => s.openSession);
+  const openSftpTab = useSessionsStore((s) => s.openSftpTab);
   const getCredential = useCredentialsStore((s) => s.getCredential);
   const locale = useSettingsStore((s) => s.settings.locale);
   const savedGroups = useSettingsStore((s) => s.settings.groups);
@@ -66,6 +68,13 @@ export function Dashboard() {
     const username = cred?.username ?? host.username ?? "";
     const tabId = openSession(host.id, host.label, username ? `${username}@${host.host}` : host.host);
     navigate(`/terminal/${tabId}`);
+  };
+
+  const handleOpenSftp = (host: SshHost) => {
+    const cred = host.credentialId ? getCredential(host.credentialId) : undefined;
+    const username = cred?.username ?? host.username ?? "";
+    const tabId = openSftpTab(host.id, host.label, username ? `${username}@${host.host}` : host.host);
+    navigate(`/sftp/${tabId}`);
   };
 
   return (
@@ -158,6 +167,7 @@ export function Dashboard() {
                       setMenuHostId((prev) => (prev === id ? null : id))
                     }
                     onConnect={handleConnect}
+                    onOpenSftp={handleOpenSftp}
                     onEdit={(h) => navigate(`/hosts/${h.id}`)}
                     onDelete={(id) => deleteHost(id)}
                     onDuplicate={(id) => duplicateHost(id)}
@@ -178,6 +188,7 @@ function HostCard({
   menuOpen,
   onMenuToggle,
   onConnect,
+  onOpenSftp,
   onEdit,
   onDelete,
   onDuplicate,
@@ -187,6 +198,7 @@ function HostCard({
   menuOpen: boolean;
   onMenuToggle: (id: string) => void;
   onConnect: (h: SshHost) => void;
+  onOpenSftp: (h: SshHost) => void;
   onEdit: (h: SshHost) => void;
   onDelete: (id: string) => void;
   onDuplicate: (id: string) => void;
@@ -227,6 +239,7 @@ function HostCard({
           {menuOpen && (
             <div className="absolute right-0 top-8 z-20 w-40 rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] shadow-xl py-1">
               <ContextItem icon={Terminal} label={t("dashboard.host.connect")} onClick={() => onConnect(host)} />
+              <ContextItem icon={FolderOpen} label={t("dashboard.host.openSftp")} onClick={() => onOpenSftp(host)} />
               <ContextItem icon={Edit2} label={t("dashboard.host.edit")} onClick={() => onEdit(host)} />
               <ContextItem icon={Copy} label={t("dashboard.host.duplicate")} onClick={() => onDuplicate(host.id)} />
               <div className="my-1 border-t border-[var(--border)]" />

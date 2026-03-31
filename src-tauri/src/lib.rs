@@ -1,12 +1,14 @@
 mod credentials;
 mod crypto;
 mod database;
+mod sftp;
 mod ssh;
 mod storage;
 mod sync;
 mod totp;
 
 use database::Database;
+use sftp::SftpManager;
 use ssh::SshManager;
 use storage::Storage;
 use std::sync::{Arc, Mutex};
@@ -15,6 +17,7 @@ pub struct AppState {
     pub storage: Mutex<Storage>,
     pub database: Database,
     pub ssh: Arc<tokio::sync::Mutex<SshManager>>,
+    pub sftp: Arc<tokio::sync::Mutex<SftpManager>>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -31,6 +34,7 @@ pub fn run() {
             storage: Mutex::new(storage),
             database,
             ssh: Arc::new(tokio::sync::Mutex::new(SshManager::new())),
+            sftp: Arc::new(tokio::sync::Mutex::new(SftpManager::new())),
         })
         .invoke_handler(tauri::generate_handler![
             storage::get_app_data_dir,
@@ -48,6 +52,14 @@ pub fn run() {
             ssh::ssh_resize,
             ssh::ssh_disconnect,
             ssh::ssh_copy_id,
+            sftp::sftp_connect,
+            sftp::sftp_read_dir,
+            sftp::sftp_download,
+            sftp::sftp_upload,
+            sftp::sftp_mkdir,
+            sftp::sftp_delete,
+            sftp::sftp_rename,
+            sftp::sftp_disconnect,
             database::db_get_hosts,
             database::db_save_host,
             database::db_delete_host,
