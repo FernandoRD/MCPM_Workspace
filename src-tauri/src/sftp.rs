@@ -1,17 +1,34 @@
 use std::collections::HashMap;
+use std::future::Future;
+use std::path::{Path, PathBuf};
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::SystemTime;
 
 use async_trait::async_trait;
+use cfg_if::cfg_if;
 use russh::client;
 use russh_keys::key::PublicKey;
 use russh_sftp::client::SftpSession;
 use serde::Serialize;
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::Mutex;
 
 use crate::AppState;
+
+// ─── Eventos emitidos ao frontend ─────────────────────────────────────────────
+
+#[derive(Clone, Serialize)]
+pub struct SftpProgressEvent {
+    pub session_id: String,
+    /// "upload" | "download"
+    pub operation: String,
+    pub file_name: String,
+    pub bytes_done: u64,
+    /// 0 = desconhecido
+    pub bytes_total: u64,
+}
 
 // ─── Tipos retornados ao frontend ─────────────────────────────────────────────
 
@@ -28,8 +45,10 @@ pub struct SftpEntry {
 // ─── Conexão SFTP ─────────────────────────────────────────────────────────────
 
 struct SftpConnection {
-    /// Mantém a sessão SSH viva enquanto o SFTP estiver aberto
+    /// Mantém a sessão SSH do host alvo viva
     _handle: client::Handle<SftpClientHandler>,
+    /// Mantém a sessão SSH do jump host viva (quando usado)
+    _jump_handle: Option<client::Handle<SftpClientHandler>>,
     sftp: SftpSession,
 }
 
@@ -47,9 +66,46 @@ impl SftpManager {
     }
 }
 
-// ─── Handler SSH mínimo (apenas para o handshake) ─────────────────────────────
+// ─── Known hosts (TOFU) ───────────────────────────────────────────────────────
 
-struct SftpClientHandler;
+fn known_hosts_path(data_dir: &Path) -> PathBuf {
+    data_dir.join("known_hosts.json")
+}
+
+fn load_known_hosts(data_dir: &Path) -> HashMap<String, String> {
+    let path = known_hosts_path(data_dir);
+    std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+fn save_known_hosts(data_dir: &Path, hosts: &HashMap<String, String>) {
+    let path = known_hosts_path(data_dir);
+    if let Ok(json) = serde_json::to_string_pretty(hosts) {
+        let _ = std::fs::write(path, json);
+    }
+}
+
+// ─── Handler SSH com known_hosts TOFU ────────────────────────────────────────
+
+pub struct SftpClientHandler {
+    host_key: String,
+    known_hosts: Arc<std::sync::Mutex<HashMap<String, String>>>,
+}
+
+impl SftpClientHandler {
+    fn new(
+        host: &str,
+        port: u16,
+        known_hosts: Arc<std::sync::Mutex<HashMap<String, String>>>,
+    ) -> Self {
+        Self {
+            host_key: format!("[{}]:{}", host, port),
+            known_hosts,
+        }
+    }
+}
 
 #[async_trait]
 impl client::Handler for SftpClientHandler {
@@ -57,10 +113,119 @@ impl client::Handler for SftpClientHandler {
 
     async fn check_server_key(
         &mut self,
-        _server_public_key: &PublicKey,
+        server_public_key: &PublicKey,
     ) -> Result<bool, Self::Error> {
-        Ok(true)
+        let fingerprint = server_public_key.fingerprint();
+        let mut kh = self.known_hosts.lock().unwrap();
+        match kh.get(&self.host_key).cloned() {
+            None => {
+                // TOFU: primeira conexão — armazena e aceita
+                kh.insert(self.host_key.clone(), fingerprint);
+                Ok(true)
+            }
+            Some(stored) if stored == fingerprint => Ok(true),
+            Some(_) => {
+                // Fingerprint diferente — possível MITM
+                Err(russh::Error::WrongServerSig)
+            }
+        }
     }
+}
+
+// ─── Helper de autenticação ───────────────────────────────────────────────────
+
+async fn authenticate(
+    session: &mut client::Handle<SftpClientHandler>,
+    username: &str,
+    auth_method: &str,
+    password: Option<String>,
+    private_key_content: Option<String>,
+    private_key_passphrase: Option<String>,
+) -> Result<bool, String> {
+    match auth_method {
+        "password" => {
+            let pwd = password.ok_or("Senha não informada")?;
+            session
+                .authenticate_password(username, pwd)
+                .await
+                .map_err(|e| e.to_string())
+        }
+        "privateKey" => {
+            let content = private_key_content.ok_or("Conteúdo da chave não informado")?;
+            let key =
+                russh_keys::decode_secret_key(&content, private_key_passphrase.as_deref())
+                    .map_err(|e| format!("Falha ao decodificar chave: {e}"))?;
+            session
+                .authenticate_publickey(username, Arc::new(key))
+                .await
+                .map_err(|e| e.to_string())
+        }
+        "agent" => {
+            cfg_if! {
+                if #[cfg(unix)] {
+                    use russh_keys::agent::client::AgentClient;
+                    let mut agent = AgentClient::connect_env()
+                        .await
+                        .map_err(|_| "Não foi possível conectar ao agente SSH.".to_string())?;
+                    let ids = agent
+                        .request_identities()
+                        .await
+                        .map_err(|e| e.to_string())?;
+                    let mut ok = false;
+                    for id in ids {
+                        let (returned_agent, result) =
+                            session.authenticate_future(username, id, agent).await;
+                        agent = returned_agent;
+                        if result.unwrap_or(false) {
+                            ok = true;
+                            break;
+                        }
+                    }
+                    Ok(ok)
+                } else {
+                    Err("Agente SSH não suportado nesta plataforma.".into())
+                }
+            }
+        }
+        _ => Err(format!("Método de autenticação desconhecido: {auth_method}")),
+    }
+}
+
+// ─── Delete recursivo ─────────────────────────────────────────────────────────
+
+fn sftp_remove_recursive<'a>(
+    sftp: &'a SftpSession,
+    path: &'a str,
+) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send + 'a>> {
+    Box::pin(async move {
+        let entries = sftp
+            .read_dir(path)
+            .await
+            .map_err(|e| format!("Erro ao listar '{path}': {e}"))?;
+
+        for entry in entries {
+            let name = entry.file_name().to_string();
+            if name == "." || name == ".." {
+                continue;
+            }
+            let child = if path.ends_with('/') {
+                format!("{}{}", path, name)
+            } else {
+                format!("{}/{}", path, name)
+            };
+            if entry.metadata().is_dir() {
+                sftp_remove_recursive(sftp, &child).await?;
+            } else {
+                sftp.remove_file(&child)
+                    .await
+                    .map_err(|e| format!("Erro ao remover '{child}': {e}"))?;
+            }
+        }
+
+        sftp.remove_dir(path)
+            .await
+            .map_err(|e| format!("Erro ao remover diretório '{path}': {e}"))
+    })
 }
 
 // ─── Comandos Tauri ───────────────────────────────────────────────────────────
@@ -76,66 +241,97 @@ pub async fn sftp_connect(
     password: Option<String>,
     private_key_content: Option<String>,
     private_key_passphrase: Option<String>,
+    // Jump host (opcional)
+    jump_host: Option<String>,
+    jump_port: Option<u16>,
+    jump_username: Option<String>,
+    jump_auth_method: Option<String>,
+    jump_password: Option<String>,
+    jump_private_key_content: Option<String>,
+    jump_private_key_passphrase: Option<String>,
 ) -> Result<(), String> {
+    let data_dir = state.storage.lock().unwrap().data_dir.clone();
+    let known_hosts_map = load_known_hosts(&data_dir);
+    let known_hosts = Arc::new(std::sync::Mutex::new(known_hosts_map));
+
     let config = Arc::new(client::Config::default());
-    let addr = format!("{}:{}", host, port);
-    let mut session = client::connect(config, addr, SftpClientHandler)
+
+    // ─── Conecta ao host alvo (direto ou via jump host) ────────────────────────
+
+    let (mut session, jump_handle) = if let Some(ref jhost) = jump_host {
+        let jport = jump_port.unwrap_or(22);
+        let jusername = jump_username.as_deref().unwrap_or(&username);
+        let jauth = jump_auth_method.as_deref().unwrap_or("password");
+
+        let mut jump_session = client::connect(
+            config.clone(),
+            format!("{}:{}", jhost, jport),
+            SftpClientHandler::new(jhost, jport, known_hosts.clone()),
+        )
+        .await
+        .map_err(|e| format!("Erro ao conectar ao jump host '{jhost}': {e}"))?;
+
+        let ok = authenticate(
+            &mut jump_session,
+            jusername,
+            jauth,
+            jump_password,
+            jump_private_key_content,
+            jump_private_key_passphrase,
+        )
+        .await?;
+        if !ok {
+            return Err("Autenticação no jump host falhou.".into());
+        }
+
+        // Abre túnel TCP para o host alvo através do jump host
+        let channel = jump_session
+            .channel_open_direct_tcpip(&host, port as u32, "127.0.0.1", 0)
+            .await
+            .map_err(|e| format!("Erro ao abrir túnel para {host}:{port}: {e}"))?;
+
+        // Conecta o SSH do alvo através do túnel
+        let target_session = client::connect_stream(
+            config.clone(),
+            channel.into_stream(),
+            SftpClientHandler::new(&host, port, known_hosts.clone()),
+        )
+        .await
+        .map_err(|e| format!("Erro ao conectar ao host via jump: {e}"))?;
+
+        (target_session, Some(jump_session))
+    } else {
+        let s = client::connect(
+            config.clone(),
+            format!("{}:{}", host, port),
+            SftpClientHandler::new(&host, port, known_hosts.clone()),
+        )
         .await
         .map_err(|e| format!("Erro ao conectar: {e}"))?;
-
-    let ok = match auth_method.as_str() {
-        "password" => {
-            let pwd = password.ok_or("Senha não informada")?;
-            session
-                .authenticate_password(&username, pwd)
-                .await
-                .map_err(|e| e.to_string())?
-        }
-        "privateKey" => {
-            let content = private_key_content.ok_or("Conteúdo da chave não informado")?;
-            let key =
-                russh_keys::decode_secret_key(&content, private_key_passphrase.as_deref())
-                    .map_err(|e| format!("Falha ao decodificar chave: {e}"))?;
-            session
-                .authenticate_publickey(&username, Arc::new(key))
-                .await
-                .map_err(|e| e.to_string())?
-        }
-        "agent" => {
-            use cfg_if::cfg_if;
-            cfg_if! {
-                if #[cfg(unix)] {
-                    use russh_keys::agent::client::AgentClient;
-                    let agent = AgentClient::connect_env()
-                        .await
-                        .map_err(|_| "Não foi possível conectar ao agente SSH.".to_string())?;
-                    let ids = {
-                        let mut a = agent;
-                        let ids = a.request_identities().await.map_err(|e| e.to_string())?;
-                        let mut ok = false;
-                        for id in &ids {
-                            let (ra, result) = session
-                                .authenticate_future(&username, id.clone(), a)
-                                .await;
-                            a = ra;
-                            if result.unwrap_or(false) { ok = true; break; }
-                        }
-                        ok
-                    };
-                    ids
-                } else {
-                    return Err("Agente SSH não suportado nesta plataforma.".into());
-                }
-            }
-        }
-        _ => return Err(format!("Método de autenticação desconhecido: {auth_method}")),
+        (s, None)
     };
 
+    // ─── Autentica no host alvo ────────────────────────────────────────────────
+
+    let ok = authenticate(
+        &mut session,
+        &username,
+        &auth_method,
+        password,
+        private_key_content,
+        private_key_passphrase,
+    )
+    .await?;
     if !ok {
         return Err("Autenticação falhou. Verifique as credenciais.".into());
     }
 
-    // Abre o canal SFTP
+    // ─── Persiste known_hosts atualizados ─────────────────────────────────────
+
+    save_known_hosts(&data_dir, &known_hosts.lock().unwrap());
+
+    // ─── Abre sessão SFTP ──────────────────────────────────────────────────────
+
     let channel = session
         .channel_open_session()
         .await
@@ -152,6 +348,7 @@ pub async fn sftp_connect(
 
     let conn = Arc::new(Mutex::new(SftpConnection {
         _handle: session,
+        _jump_handle: jump_handle,
         sftp,
     }));
 
@@ -190,7 +387,6 @@ pub async fn sftp_read_dir(
         .into_iter()
         .filter_map(|entry| {
             let name = entry.file_name().to_string();
-            // Ignora entradas especiais "." e ".."
             if name == "." || name == ".." {
                 return None;
             }
@@ -229,6 +425,7 @@ pub async fn sftp_read_dir(
 #[tauri::command]
 pub async fn sftp_download(
     state: State<'_, AppState>,
+    app: AppHandle,
     session_id: String,
     remote_path: String,
     local_path: String,
@@ -241,6 +438,20 @@ pub async fn sftp_download(
             .clone()
     };
     let conn = conn_arc.lock().await;
+
+    let file_name = remote_path
+        .split('/')
+        .next_back()
+        .unwrap_or(&remote_path)
+        .to_string();
+
+    // Obtém tamanho do arquivo remoto para barra de progresso
+    let bytes_total = conn
+        .sftp
+        .metadata(&remote_path)
+        .await
+        .map(|m| m.len())
+        .unwrap_or(0);
 
     let mut remote_file = conn
         .sftp
@@ -253,6 +464,8 @@ pub async fn sftp_download(
         .map_err(|e| format!("Erro ao criar arquivo local: {e}"))?;
 
     let mut buf = vec![0u8; 65536];
+    let mut bytes_done = 0u64;
+
     loop {
         let n = remote_file
             .read(&mut buf)
@@ -265,6 +478,18 @@ pub async fn sftp_download(
             .write_all(&buf[..n])
             .await
             .map_err(|e| format!("Erro ao gravar arquivo local: {e}"))?;
+
+        bytes_done += n as u64;
+        let _ = app.emit(
+            "sftp-progress",
+            SftpProgressEvent {
+                session_id: session_id.clone(),
+                operation: "download".into(),
+                file_name: file_name.clone(),
+                bytes_done,
+                bytes_total,
+            },
+        );
     }
 
     Ok(())
@@ -273,6 +498,7 @@ pub async fn sftp_download(
 #[tauri::command]
 pub async fn sftp_upload(
     state: State<'_, AppState>,
+    app: AppHandle,
     session_id: String,
     local_path: String,
     remote_path: String,
@@ -286,9 +512,22 @@ pub async fn sftp_upload(
     };
     let conn = conn_arc.lock().await;
 
+    let file_name = local_path
+        .split('/')
+        .next_back()
+        .unwrap_or(&local_path)
+        .to_string();
+
     let mut local_file = tokio::fs::File::open(&local_path)
         .await
         .map_err(|e| format!("Erro ao abrir arquivo local: {e}"))?;
+
+    // Obtém tamanho do arquivo local para barra de progresso
+    let bytes_total = local_file
+        .metadata()
+        .await
+        .map(|m| m.len())
+        .unwrap_or(0);
 
     let mut remote_file = conn
         .sftp
@@ -297,6 +536,8 @@ pub async fn sftp_upload(
         .map_err(|e| format!("Erro ao criar arquivo remoto: {e}"))?;
 
     let mut buf = vec![0u8; 65536];
+    let mut bytes_done = 0u64;
+
     loop {
         let n = local_file
             .read(&mut buf)
@@ -309,6 +550,18 @@ pub async fn sftp_upload(
             .write_all(&buf[..n])
             .await
             .map_err(|e| format!("Erro ao enviar dados: {e}"))?;
+
+        bytes_done += n as u64;
+        let _ = app.emit(
+            "sftp-progress",
+            SftpProgressEvent {
+                session_id: session_id.clone(),
+                operation: "upload".into(),
+                file_name: file_name.clone(),
+                bytes_done,
+                bytes_total,
+            },
+        );
     }
 
     Ok(())
@@ -350,10 +603,8 @@ pub async fn sftp_delete(
     };
     let conn = conn_arc.lock().await;
     if is_dir {
-        conn.sftp
-            .remove_dir(&path)
-            .await
-            .map_err(|e| format!("Erro ao remover diretório: {e}"))
+        // Delete recursivo: remove conteúdo antes do diretório
+        sftp_remove_recursive(&conn.sftp, &path).await
     } else {
         conn.sftp
             .remove_file(&path)

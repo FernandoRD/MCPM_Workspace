@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { WifiOff, Columns2, Rows2, X } from "lucide-react";
+import { WifiOff, Columns2, Rows2, X, FolderOpen } from "lucide-react";
 import { useSessionsStore } from "@/store/sessions";
 import { useHostsStore } from "@/store/hosts";
 import { useCredentialsStore } from "@/store/credentials";
@@ -17,6 +17,7 @@ export function TerminalPage() {
   const updatePaneStatus = useSessionsStore((s) => s.updatePaneStatus);
   const addPane = useSessionsStore((s) => s.addPane);
   const closePane = useSessionsStore((s) => s.closePane);
+  const openSftpTab = useSessionsStore((s) => s.openSftpTab);
 
   const getHost = useHostsStore((s) => s.getHost);
   const setLastConnected = useHostsStore((s) => s.setLastConnected);
@@ -46,6 +47,11 @@ export function TerminalPage() {
 
   const isVertical = tab.splitDirection === "vertical";
 
+  const handleOpenSftp = () => {
+    const sftpTabId = openSftpTab(host.id, host.label, tab.hostAddress);
+    navigate(`/sftp/${sftpTabId}`);
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* Split toolbar */}
@@ -66,6 +72,17 @@ export function TerminalPage() {
           title={t("terminal.splitVertical")}
         >
           <Rows2 size={14} />
+        </Button>
+        <div className="flex-1" />
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleOpenSftp}
+          title={t("terminal.openSftp")}
+          className="gap-1.5 text-xs"
+        >
+          <FolderOpen size={14} />
+          {t("terminal.openSftp")}
         </Button>
       </div>
 

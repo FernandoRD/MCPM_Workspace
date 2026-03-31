@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { KeyRound, Pencil, Trash2, Plus, ShieldCheck } from "lucide-react";
+import { KeyRound, Pencil, Trash2, Plus, ShieldCheck, Copy, Check } from "lucide-react";
 import { useSshKeysStore } from "@/store/sshKeys";
 import { useCredentialsStore } from "@/store/credentials";
 import { SshKey } from "@/types";
@@ -11,6 +12,13 @@ export function SshKeys() {
   const navigate = useNavigate();
   const { sshKeys, deleteSshKey } = useSshKeysStore();
   const credentials = useCredentialsStore((s) => s.credentials);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopyPublicKey = (key: SshKey) => {
+    navigator.clipboard.writeText(key.publicKeyContent!);
+    setCopiedId(key.id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   const handleDelete = (key: SshKey) => {
     const usedBy = credentials.filter((c) => c.keyId === key.id);
@@ -95,6 +103,15 @@ export function SshKeys() {
                         </div>
                       </div>
                       <div className="hidden group-hover:flex items-center gap-1 flex-shrink-0">
+                        {key.publicKeyContent && (
+                          <button
+                            onClick={() => handleCopyPublicKey(key)}
+                            className="flex h-7 w-7 items-center justify-center rounded text-[var(--text-muted)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--accent)] transition-colors"
+                            title={t("sshKeys.copyPublicKey")}
+                          >
+                            {copiedId === key.id ? <Check size={14} className="text-[var(--success)]" /> : <Copy size={14} />}
+                          </button>
+                        )}
                         <button
                           onClick={() => navigate(`/ssh-keys/${key.id}`)}
                           className="flex h-7 w-7 items-center justify-center rounded text-[var(--text-muted)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)] transition-colors"

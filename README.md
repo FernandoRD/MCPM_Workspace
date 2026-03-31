@@ -12,6 +12,7 @@ Gerenciador de conexões SSH com sincronização remota e backup de configuraç�
 - **Múltiplos métodos de autenticação** — senha, chave privada ou agente SSH
 - **Jump Host** — conexão via host intermediário (bastião)
 - **Terminal integrado** — emulador xterm.js com múltiplas abas
+- **SFTP integrado** — navegador de arquivos remoto com upload, download, criação de diretórios, renomeação e exclusão
 - **Temas visuais** — Dark, Light, Dracula, Nord, Catppuccin, Solarized Dark
 - **Idiomas** — Português (BR) e English (US)
 - **Banco de dados cifrado** — hosts, credenciais e configurações armazenados em SQLite cifrado com SQLCipher; chave de criptografia gerada aleatoriamente e protegida no keychain do SO
@@ -490,12 +491,14 @@ ssh_client_dev/
 │   │   ├── Layout/           # AppLayout principal
 │   │   ├── Sidebar/          # Navegação e lista de hosts
 │   │   ├── TabBar/           # Abas de sessões abertas
+│   │   ├── Terminal/         # SshPane — painel xterm.js por aba
 │   │   ├── TotpDisplay/      # Código TOTP ao vivo + countdown
 │   │   └── ui/               # Button, Input, Modal, Badge...
 │   ├── pages/                # Páginas da aplicação
 │   │   ├── Dashboard.tsx     # Grid de hosts
 │   │   ├── HostEditor.tsx    # Formulário de host
 │   │   ├── TerminalPage.tsx  # Terminal xterm.js
+│   │   ├── SftpPage.tsx      # Navegador de arquivos SFTP
 │   │   ├── Settings.tsx      # Configurações + senha mestra
 │   │   ├── Sync.tsx          # Sincronização remota (todos os providers)
 │   │   ├── Backup.tsx        # Export / Import de backup
@@ -523,6 +526,7 @@ ssh_client_dev/
         ├── crypto.rs         # Argon2id + AES-256-GCM
         ├── totp.rs           # TOTP/MFA — RFC 6238 (totp-rs)
         ├── ssh.rs            # Sessões SSH reais (russh)
+        ├── sftp.rs           # Sessões SFTP (russh-sftp): listar, download, upload, mkdir, rename, delete
         └── sync.rs           # Provedores de sync: Gist, WebDAV, S3, Custom
 ```
 
@@ -579,17 +583,17 @@ ssh_client_dev/
 
 ## Fases de desenvolvimento
 
-| Fase | Status       | Conteúdo                                                                                    |
-| ---- | ------------ | ------------------------------------------------------------------------------------------- |
-| 1    | ✅ Completo  | Estrutura, temas, i18n, CRUD de hosts, terminal demo                                        |
-| 1.5  | ✅ Completo  | Senha mestra, AES-256-GCM, backup/restore `.sshvault`                                       |
-| 1.6  | ✅ Completo  | MFA/TOTP por host (RFC 6238), QR code, código ao vivo, cifrado no sync/backup               |
-| 2    | ✅ Completo  | Sessões SSH reais via Rust (`russh`), múltiplas abas                                        |
-| 3    | ✅ Completo  | Banco SQLCipher cifrado; migração automática do localStorage; chave no keychain do SO       |
-| 4    | ✅ Completo  | Sync remoto funcional: GitHub Gist, S3/MinIO (Sig V4), WebDAV, Custom REST; bidirecional    |
-| 5    | 📋 Planejado | SFTP integrado, split de terminal                                                           |
-| 6    | 📋 Planejado | Compatibilidade SSH: presets legado/muito-legado, KEX, ciphers, MACs e host-key por host    |
-| 7    | 📋 Planejado | Gerenciador de chaves SSH: gerar Ed25519/ECDSA/RSA, fingerprint, deploy via ssh-copy-id     |
+| Fase | Status | Conteúdo |
+| --- | --- | --- |
+| 1 | ✅ Completo | Estrutura, temas, i18n, CRUD de hosts, terminal demo |
+| 1.5 | ✅ Completo | Senha mestra, AES-256-GCM, backup/restore `.sshvault` |
+| 1.6 | ✅ Completo | MFA/TOTP por host (RFC 6238), QR code, código ao vivo, cifrado no sync/backup |
+| 2 | ✅ Completo | Sessões SSH reais via Rust (`russh`), múltiplas abas |
+| 3 | ✅ Completo | Banco SQLCipher cifrado; migração automática do localStorage; chave no keychain do SO |
+| 4 | ✅ Completo | Sync remoto funcional: GitHub Gist, S3/MinIO (Sig V4), WebDAV, Custom REST; bidirecional |
+| 5 | ✅ Completo | SFTP integrado: navegador de arquivos, upload/download com barra de progresso, mkdir, rename, delete recursivo; suporte a Jump Host; known hosts TOFU; botões Terminal↔SFTP |
+| 6 | 📋 Planejado | Compatibilidade SSH: presets legado/muito-legado, KEX, ciphers, MACs e host-key por host |
+| 7 | 🚧 Em andamento | Gerenciador de chaves SSH: gerar Ed25519/ECDSA/RSA, fingerprint, deploy via ssh-copy-id (deploy implementado) |
 
 ---
 

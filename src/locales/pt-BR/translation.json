@@ -113,7 +113,8 @@
     "newTab": "Nova aba",
     "split": "Dividir",
     "splitHorizontal": "Dividir horizontalmente",
-    "splitVertical": "Dividir verticalmente"
+    "splitVertical": "Dividir verticalmente",
+    "openSftp": "Abrir SFTP"
   },
   "sftp": {
     "title": "Navegador SFTP",
@@ -136,6 +137,7 @@
     "pathCopied": "Caminho copiado",
     "uploadSuccess": "Upload concluído",
     "downloadSuccess": "Download concluído",
+    "openTerminal": "Abrir Terminal",
     "columns": {
       "name": "Nome",
       "size": "Tamanho",
@@ -373,10 +375,25 @@
     "inUseBy": "Usada por {{count}} credencial(is)",
     "notInUse": "Não utilizada",
     "deleteInUseWarning": "Esta chave é usada por {{count}} credencial(is). Removê-la irá desassociar essas credenciais.",
+    "copyPublicKey": "Copiar chave pública",
     "sections": {
       "general": "Geral",
       "privateKey": "Chave Privada",
-      "publicKey": "Chave Pública"
+      "publicKey": "Chave Pública",
+      "deploy": "Deploy para Servidor"
+    },
+    "deploy": {
+      "description": "Copia sua chave pública para ~/.ssh/authorized_keys no servidor remoto. Requer autenticação por senha para este acesso inicial.",
+      "selectHost": "Preencher a partir de host",
+      "selectHostPlaceholder": "Escolha um host...",
+      "host": "Host / IP",
+      "port": "Porta",
+      "username": "Usuário",
+      "password": "Senha (acesso inicial)",
+      "passwordHint": "Usada apenas para esta operação. Não será salva.",
+      "deploy": "Fazer Deploy",
+      "deploying": "Enviando...",
+      "success": "Chave pública enviada com sucesso! Você já pode conectar usando esta chave."
     },
     "fields": {
       "label": "Nome / Etiqueta",

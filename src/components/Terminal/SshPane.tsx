@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { WifiOff, RotateCcw } from "lucide-react";
 import { Terminal } from "@xterm/xterm";
@@ -43,10 +43,21 @@ export function SshPane({
   const xtermRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const statusRef = useRef<"connecting" | "connected" | "disconnected" | "error">("connecting");
+  const [overlayStatus, setOverlayStatus] = useState<"idle" | "disconnected" | "error">("idle");
+  // cleanupRef: roda quando a conexão precisa ser encerrada (após connect() finalizar)
+  const cleanupRef = useRef<(() => void) | null>(null);
+  // cancelRef: cancela um connect() ainda em andamento (antes de cleanupRef estar pronto)
+  const cancelRef = useRef<(() => void) | null>(null);
   const terminalSettings = useSettingsStore((s) => s.settings.terminal);
 
   const connect = useCallback(async () => {
     if (!termRef.current) return;
+
+    // Registra canceller imediatamente (antes de qualquer await) para que o
+    // cleanup do useEffect consiga abortar mesmo que connect() ainda esteja
+    // aguardando os listen() resolverem (problema do React StrictMode).
+    let cancelled = false;
+    cancelRef.current = () => { cancelled = true; };
 
     let xterm = xtermRef.current;
     if (!xterm) {
@@ -82,7 +93,6 @@ export function SshPane({
       invoke("ssh_send_input", { tabId: paneId, data }).catch(() => {});
     });
 
-    let cancelled = false;
     let wasConnected = false;
     const registered: UnlistenFn[] = [];
 
@@ -102,6 +112,8 @@ export function SshPane({
       if (event.payload.tab_id !== paneId) return;
       const s = event.payload.status;
       statusRef.current = s;
+      if (s === "disconnected" || s === "error") setOverlayStatus(s);
+      else setOverlayStatus("idle");
       onStatusChange(paneId, s);
       if (s === "connected") {
         wasConnected = true;
@@ -123,8 +135,11 @@ export function SshPane({
       cols: dims.cols ?? 80,
       rows: dims.rows ?? 24,
     }).catch((err: string) => {
-      xtermRef.current?.writeln(`\r\n\x1b[1;31mErro: ${err}\x1b[0m\r\n`);
-      onStatusChange(paneId, "error");
+      if (!cancelled) {
+        xtermRef.current?.writeln(`\r\n\x1b[1;31mErro: ${err}\x1b[0m\r\n`);
+        setOverlayStatus("error");
+        onStatusChange(paneId, "error");
+      }
     });
 
     const resizeObserver = new ResizeObserver(() => {
@@ -134,8 +149,10 @@ export function SshPane({
     });
     if (termRef.current) resizeObserver.observe(termRef.current);
 
-    // Store cleanup in a ref so re-renders don't re-register
-    (termRef.current as any).__cleanup = () => {
+    // Guarda o cleanup no ref (não em termRef.current, pois React zera refs antes
+    // de chamar o cleanup do useEffect, o que causava leak de listeners).
+    if (!termRef.current) return;
+    cleanupRef.current = () => {
       cancelled = true;
       registered.forEach((f) => f());
       resizeObserver.disconnect();
@@ -150,8 +167,12 @@ export function SshPane({
   useEffect(() => {
     connect();
     return () => {
-      const cleanup = (termRef.current as any)?.__cleanup;
-      if (cleanup) cleanup();
+      // cancelRef para abortar connect() que ainda esteja aguardando listen() resolver.
+      // cleanupRef para encerrar uma conexão já estabelecida.
+      cancelRef.current?.();
+      cleanupRef.current?.();
+      cancelRef.current = null;
+      cleanupRef.current = null;
       xtermRef.current?.dispose();
       xtermRef.current = null;
       fitRef.current = null;
@@ -160,32 +181,31 @@ export function SshPane({
   }, [paneId]);
 
   const handleReconnect = () => {
-    // Clear terminal and reconnect
-    xtermRef.current?.clear();
+    cancelRef.current?.();
+    cleanupRef.current?.();
+    cancelRef.current = null;
+    cleanupRef.current = null;
+    statusRef.current = "connecting";
+    setOverlayStatus("idle");
     onStatusChange(paneId, "connecting");
+    xtermRef.current?.clear();
     connect();
   };
 
-  const currentStatus = statusRef.current;
-
-  if (currentStatus === "disconnected" || currentStatus === "error") {
-    return (
-      <div className="flex flex-col items-center justify-center h-full gap-4 bg-[var(--bg-primary)]">
-        <WifiOff size={28} className="text-[var(--danger)]" />
-        <p className="text-sm text-[var(--text-primary)]">{t("terminal.disconnected")}</p>
-        <Button size="sm" onClick={handleReconnect}>
-          <RotateCcw size={13} />
-          {t("terminal.reconnect")}
-        </Button>
-      </div>
-    );
-  }
-
   return (
-    <div
-      ref={termRef}
-      className="h-full w-full"
-      style={{ backgroundColor: "var(--terminal-bg)" }}
-    />
+    <div className="relative h-full w-full" style={{ backgroundColor: "var(--terminal-bg)" }}>
+      {/* Terminal div is always mounted so termRef stays valid for reconnect */}
+      <div ref={termRef} className="h-full w-full" />
+      {(overlayStatus === "disconnected" || overlayStatus === "error") && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-[var(--bg-primary)]">
+          <WifiOff size={28} className="text-[var(--danger)]" />
+          <p className="text-sm text-[var(--text-primary)]">{t("terminal.disconnected")}</p>
+          <Button size="sm" onClick={handleReconnect}>
+            <RotateCcw size={13} />
+            {t("terminal.reconnect")}
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }

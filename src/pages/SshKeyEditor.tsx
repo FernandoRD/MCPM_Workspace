@@ -1,10 +1,13 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, ChevronDown, ChevronRight, FolderOpen } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight, FolderOpen, Server, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readTextFile } from "@tauri-apps/plugin-fs";
+import { invoke } from "@tauri-apps/api/core";
 import { useSshKeysStore } from "@/store/sshKeys";
+import { useHostsStore } from "@/store/hosts";
+import { useCredentialsStore } from "@/store/credentials";
 import { SshKey } from "@/types";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
@@ -51,6 +54,15 @@ function Section({
   );
 }
 
+interface DeployForm {
+  host: string;
+  port: string;
+  username: string;
+  password: string;
+}
+
+type DeployStatus = "idle" | "deploying" | "success" | "error";
+
 export function SshKeyEditor() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -58,12 +70,19 @@ export function SshKeyEditor() {
   const isNew = id === "new" || !id;
 
   const { addSshKey, updateSshKey, getSshKey } = useSshKeysStore();
+  const hosts = useHostsStore((s) => s.hosts);
+  const getCredential = useCredentialsStore((s) => s.getCredential);
 
   const [form, setForm] = useState<FormData>(DEFAULT_FORM);
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [openSections, setOpenSections] = useState<Set<string>>(
     new Set(["general", "privateKey", "publicKey"])
   );
+
+  // Deploy (ssh-copy-id) state
+  const [deployForm, setDeployForm] = useState<DeployForm>({ host: "", port: "22", username: "", password: "" });
+  const [deployStatus, setDeployStatus] = useState<DeployStatus>("idle");
+  const [deployError, setDeployError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isNew && id) {
@@ -90,6 +109,40 @@ export function SshKeyEditor() {
     if (!path) return;
     const content = await readTextFile(path as string);
     set(field, content.trim());
+  };
+
+  const setDeploy = <K extends keyof DeployForm>(key: K, value: DeployForm[K]) =>
+    setDeployForm((prev) => ({ ...prev, [key]: value }));
+
+  const fillFromHost = (hostId: string) => {
+    const h = hosts.find((x) => x.id === hostId);
+    if (!h) return;
+    const cred = h.credentialId ? getCredential(h.credentialId) : undefined;
+    setDeployForm({
+      host: h.host,
+      port: String(h.port),
+      username: cred?.username ?? h.username ?? "",
+      password: cred?.password ?? "",
+    });
+  };
+
+  const handleDeploy = async () => {
+    if (!form.publicKeyContent?.trim()) return;
+    setDeployStatus("deploying");
+    setDeployError(null);
+    try {
+      await invoke("ssh_copy_id", {
+        host: deployForm.host,
+        port: parseInt(deployForm.port, 10) || 22,
+        username: deployForm.username,
+        password: deployForm.password,
+        publicKeyContent: form.publicKeyContent.trim(),
+      });
+      setDeployStatus("success");
+    } catch (err) {
+      setDeployStatus("error");
+      setDeployError(String(err));
+    }
   };
 
   const validate = (): boolean => {
@@ -228,6 +281,107 @@ export function SshKeyEditor() {
               </div>
             </div>
           </Section>
+
+          {/* Deploy to Server (ssh-copy-id) — only when public key is set */}
+          {!isNew && form.publicKeyContent?.trim() && (
+            <Section
+              id="deploy"
+              title={t("sshKeys.sections.deploy")}
+              open={openSections.has("deploy")}
+              onToggle={toggleSection}
+            >
+              <div className="flex flex-col gap-4 mt-3">
+                <p className="text-xs text-[var(--text-muted)]">
+                  {t("sshKeys.deploy.description")}
+                </p>
+
+                {/* Quick-fill from host */}
+                {hosts.length > 0 && (
+                  <div className="flex flex-col gap-1">
+                    <label className="text-sm font-medium text-[var(--text-primary)]">
+                      {t("sshKeys.deploy.selectHost")}
+                    </label>
+                    <select
+                      defaultValue=""
+                      onChange={(e) => fillFromHost(e.target.value)}
+                      className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--bg-secondary)] px-3 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-focus)]"
+                    >
+                      <option value="">{t("sshKeys.deploy.selectHostPlaceholder")}</option>
+                      {hosts.map((h) => (
+                        <option key={h.id} value={h.id}>
+                          {h.label} ({h.host}:{h.port})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2">
+                    <Input
+                      id="deploy-host"
+                      label={t("sshKeys.deploy.host")}
+                      placeholder="192.168.1.10"
+                      value={deployForm.host}
+                      onChange={(e) => setDeploy("host", e.target.value)}
+                    />
+                  </div>
+                  <Input
+                    id="deploy-port"
+                    label={t("sshKeys.deploy.port")}
+                    placeholder="22"
+                    value={deployForm.port}
+                    onChange={(e) => setDeploy("port", e.target.value)}
+                  />
+                </div>
+
+                <Input
+                  id="deploy-username"
+                  label={t("sshKeys.deploy.username")}
+                  placeholder="ubuntu"
+                  value={deployForm.username}
+                  onChange={(e) => setDeploy("username", e.target.value)}
+                />
+
+                <Input
+                  id="deploy-password"
+                  label={t("sshKeys.deploy.password")}
+                  type="password"
+                  placeholder="••••••••"
+                  value={deployForm.password}
+                  onChange={(e) => setDeploy("password", e.target.value)}
+                  hint={t("sshKeys.deploy.passwordHint")}
+                />
+
+                {/* Feedback */}
+                {deployStatus === "success" && (
+                  <div className="flex items-center gap-2 text-sm text-[var(--success)]">
+                    <CheckCircle2 size={15} />
+                    {t("sshKeys.deploy.success")}
+                  </div>
+                )}
+                {deployStatus === "error" && deployError && (
+                  <div className="flex items-start gap-2 text-sm text-[var(--danger)]">
+                    <AlertCircle size={15} className="mt-0.5 shrink-0" />
+                    <span>{deployError}</span>
+                  </div>
+                )}
+
+                <div className="flex justify-end">
+                  <Button
+                    onClick={handleDeploy}
+                    disabled={deployStatus === "deploying" || !deployForm.host || !deployForm.username || !deployForm.password}
+                  >
+                    {deployStatus === "deploying" ? (
+                      <><Loader2 size={14} className="animate-spin" />{t("sshKeys.deploy.deploying")}</>
+                    ) : (
+                      <><Server size={14} />{t("sshKeys.deploy.deploy")}</>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </Section>
+          )}
 
           {/* Actions */}
           <div className="flex items-center justify-end gap-3 pt-2">

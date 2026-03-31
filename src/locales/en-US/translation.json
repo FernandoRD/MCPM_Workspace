@@ -113,7 +113,8 @@
     "newTab": "New tab",
     "split": "Split",
     "splitHorizontal": "Split horizontally",
-    "splitVertical": "Split vertically"
+    "splitVertical": "Split vertically",
+    "openSftp": "Open SFTP"
   },
   "sftp": {
     "title": "SFTP Browser",
@@ -136,6 +137,7 @@
     "pathCopied": "Path copied",
     "uploadSuccess": "Upload completed",
     "downloadSuccess": "Download completed",
+    "openTerminal": "Open Terminal",
     "columns": {
       "name": "Name",
       "size": "Size",
@@ -373,10 +375,25 @@
     "inUseBy": "Used by {{count}} credential(s)",
     "notInUse": "Not in use",
     "deleteInUseWarning": "This key is used by {{count}} credential(s). Removing it will disassociate those credentials.",
+    "copyPublicKey": "Copy public key",
     "sections": {
       "general": "General",
       "privateKey": "Private Key",
-      "publicKey": "Public Key"
+      "publicKey": "Public Key",
+      "deploy": "Deploy to Server"
+    },
+    "deploy": {
+      "description": "Copies your public key to ~/.ssh/authorized_keys on the remote server. Requires password authentication for this initial access.",
+      "selectHost": "Fill from host",
+      "selectHostPlaceholder": "Choose a host...",
+      "host": "Host / IP",
+      "port": "Port",
+      "username": "Username",
+      "password": "Password (initial access)",
+      "passwordHint": "Used only for this operation. Will not be saved.",
+      "deploy": "Deploy Key",
+      "deploying": "Deploying...",
+      "success": "Public key deployed successfully! You can now connect using this key."
     },
     "fields": {
       "label": "Name / Label",
