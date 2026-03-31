@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, ChevronDown, ChevronRight, FolderOpen, Server, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight, FolderOpen, Server, CheckCircle2, AlertCircle, Loader2, Wand2, Copy, Check } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readTextFile } from "@tauri-apps/plugin-fs";
 import { invoke } from "@tauri-apps/api/core";
@@ -62,6 +62,8 @@ interface DeployForm {
 }
 
 type DeployStatus = "idle" | "deploying" | "success" | "error";
+type GenerateStatus = "idle" | "generating" | "done" | "error";
+type KeyType = "ed25519" | "ecdsa" | "rsa2048" | "rsa4096";
 
 export function SshKeyEditor() {
   const { t } = useTranslation();
@@ -76,13 +78,20 @@ export function SshKeyEditor() {
   const [form, setForm] = useState<FormData>(DEFAULT_FORM);
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [openSections, setOpenSections] = useState<Set<string>>(
-    new Set(["general", "privateKey", "publicKey"])
+    new Set(isNew ? ["generate", "general"] : ["general", "privateKey", "publicKey"])
   );
 
   // Deploy (ssh-copy-id) state
   const [deployForm, setDeployForm] = useState<DeployForm>({ host: "", port: "22", username: "", password: "" });
   const [deployStatus, setDeployStatus] = useState<DeployStatus>("idle");
   const [deployError, setDeployError] = useState<string | null>(null);
+
+  // Generate key state
+  const [genKeyType, setGenKeyType] = useState<KeyType>("ed25519");
+  const [genComment, setGenComment] = useState("");
+  const [generateStatus, setGenerateStatus] = useState<GenerateStatus>("idle");
+  const [generateError, setGenerateError] = useState<string | null>(null);
+  const [fingerprintCopied, setFingerprintCopied] = useState(false);
 
   useEffect(() => {
     if (!isNew && id) {
@@ -145,6 +154,35 @@ export function SshKeyEditor() {
     }
   };
 
+  const handleGenerate = async () => {
+    setGenerateStatus("generating");
+    setGenerateError(null);
+    try {
+      const result = await invoke<{ private_key: string; public_key: string; fingerprint: string }>(
+        "ssh_generate_key",
+        { keyType: genKeyType, comment: genComment.trim() || null }
+      );
+      set("privateKeyContent", result.private_key);
+      set("publicKeyContent", result.public_key);
+      setLastFingerprint(result.fingerprint);
+      setGenerateStatus("done");
+      // Abre as seções de chave para o usuário ver o resultado
+      setOpenSections((prev) => new Set([...prev, "privateKey", "publicKey"]));
+    } catch (err) {
+      setGenerateStatus("error");
+      setGenerateError(String(err));
+    }
+  };
+
+  const handleCopyFingerprint = (fingerprint: string) => {
+    navigator.clipboard.writeText(fingerprint);
+    setFingerprintCopied(true);
+    setTimeout(() => setFingerprintCopied(false), 2000);
+  };
+
+  // Fingerprint retornado pela última geração de chave
+  const [lastFingerprint, setLastFingerprint] = useState<string | null>(null);
+
   const validate = (): boolean => {
     const errs: ValidationErrors = {};
     if (!form.label.trim()) errs.label = t("sshKeys.validation.labelRequired");
@@ -177,6 +215,104 @@ export function SshKeyEditor() {
 
       <div className="flex-1 overflow-auto">
         <div className="max-w-2xl mx-auto px-6 py-6 flex flex-col gap-4">
+          {/* Generate Key — only when creating new */}
+          {isNew && (
+            <Section
+              id="generate"
+              title={t("sshKeys.sections.generate")}
+              open={openSections.has("generate")}
+              onToggle={toggleSection}
+            >
+              <div className="flex flex-col gap-4 mt-3">
+                <p className="text-xs text-[var(--text-muted)]">
+                  {t("sshKeys.generate.description")}
+                </p>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm font-medium text-[var(--text-primary)]">
+                    {t("sshKeys.generate.keyType")}
+                  </label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {(["ed25519", "ecdsa", "rsa2048", "rsa4096"] as KeyType[]).map((kt) => (
+                      <button
+                        key={kt}
+                        onClick={() => setGenKeyType(kt)}
+                        className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                          genKeyType === kt
+                            ? "border-[var(--accent)] bg-[var(--accent-subtle)] text-[var(--accent)]"
+                            : "border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--border-focus)] hover:text-[var(--text-primary)]"
+                        }`}
+                      >
+                        {kt === "rsa2048" ? "RSA 2048" : kt === "rsa4096" ? "RSA 4096" : kt.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-[var(--text-muted)] mt-1">
+                    {genKeyType === "ed25519" && t("sshKeys.generate.ed25519Hint")}
+                    {genKeyType === "ecdsa" && t("sshKeys.generate.ecdsaHint")}
+                    {(genKeyType === "rsa2048" || genKeyType === "rsa4096") && t("sshKeys.generate.rsaHint")}
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm font-medium text-[var(--text-primary)]">
+                    {t("sshKeys.generate.comment")}
+                    <span className="ml-1 text-xs font-normal text-[var(--text-muted)]">
+                      ({t("sshKeys.fields.optional")})
+                    </span>
+                  </label>
+                  <input
+                    type="text"
+                    value={genComment}
+                    onChange={(e) => setGenComment(e.target.value)}
+                    placeholder={t("sshKeys.generate.commentPlaceholder")}
+                    className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-focus)]"
+                  />
+                </div>
+
+                {generateStatus === "error" && generateError && (
+                  <div className="flex items-start gap-2 text-sm text-[var(--danger)]">
+                    <AlertCircle size={15} className="mt-0.5 shrink-0" />
+                    <span>{generateError}</span>
+                  </div>
+                )}
+                {generateStatus === "done" && (
+                  <div className="flex items-center gap-2 text-sm text-[var(--success)]">
+                    <CheckCircle2 size={15} />
+                    {t("sshKeys.generate.success")}
+                    {lastFingerprint && (
+                      <span className="ml-2 font-mono text-xs text-[var(--text-muted)] truncate">
+                        {lastFingerprint}
+                      </span>
+                    )}
+                    {lastFingerprint && (
+                      <button
+                        onClick={() => handleCopyFingerprint(lastFingerprint)}
+                        className="ml-auto shrink-0 text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors"
+                        title={t("sshKeys.generate.copyFingerprint")}
+                      >
+                        {fingerprintCopied ? <Check size={13} className="text-[var(--success)]" /> : <Copy size={13} />}
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex justify-end">
+                  <Button
+                    onClick={handleGenerate}
+                    disabled={generateStatus === "generating"}
+                  >
+                    {generateStatus === "generating" ? (
+                      <><Loader2 size={14} className="animate-spin" />{t("sshKeys.generate.generating")}</>
+                    ) : (
+                      <><Wand2 size={14} />{t("sshKeys.generate.generate")}</>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </Section>
+          )}
+
           {/* General */}
           <Section
             id="general"
@@ -278,6 +414,19 @@ export function SshKeyEditor() {
                 <p className="text-xs text-[var(--text-muted)]">
                   {t("sshKeys.fields.publicKeyHint")}
                 </p>
+                {lastFingerprint && (
+                  <div className="flex items-center gap-2 rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 py-2">
+                    <span className="text-xs text-[var(--text-muted)] shrink-0">Fingerprint:</span>
+                    <span className="font-mono text-xs text-[var(--text-primary)] truncate flex-1">{lastFingerprint}</span>
+                    <button
+                      onClick={() => handleCopyFingerprint(lastFingerprint)}
+                      className="shrink-0 text-[var(--text-muted)] hover:text-[var(--accent)] transition-colors"
+                      title={t("sshKeys.generate.copyFingerprint")}
+                    >
+                      {fingerprintCopied ? <Check size={13} className="text-[var(--success)]" /> : <Copy size={13} />}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </Section>

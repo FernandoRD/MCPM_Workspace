@@ -377,10 +377,24 @@
     "deleteInUseWarning": "Esta chave é usada por {{count}} credencial(is). Removê-la irá desassociar essas credenciais.",
     "copyPublicKey": "Copiar chave pública",
     "sections": {
+      "generate": "Gerar Nova Chave",
       "general": "Geral",
       "privateKey": "Chave Privada",
       "publicKey": "Chave Pública",
       "deploy": "Deploy para Servidor"
+    },
+    "generate": {
+      "description": "Gera um novo par de chaves SSH (privada + pública). A chave privada será preenchida automaticamente no formulário abaixo.",
+      "keyType": "Tipo de chave",
+      "comment": "Comentário",
+      "commentPlaceholder": "usuario@maquina",
+      "ed25519Hint": "Recomendado. Mais seguro, mais rápido e menor que RSA.",
+      "ecdsaHint": "Compatível com sistemas mais antigos que não suportam Ed25519.",
+      "rsaHint": "Ampla compatibilidade. Use RSA 4096 para maior segurança.",
+      "generate": "Gerar Par de Chaves",
+      "generating": "Gerando...",
+      "success": "Par de chaves gerado com sucesso!",
+      "copyFingerprint": "Copiar fingerprint"
     },
     "deploy": {
       "description": "Copia sua chave pública para ~/.ssh/authorized_keys no servidor remoto. Requer autenticação por senha para este acesso inicial.",

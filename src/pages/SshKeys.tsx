@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { KeyRound, Pencil, Trash2, Plus, ShieldCheck, Copy, Check } from "lucide-react";
+import { KeyRound, Pencil, Trash2, Plus, ShieldCheck, Copy, Check, Wand2 } from "lucide-react";
 import { useSshKeysStore } from "@/store/sshKeys";
 import { useCredentialsStore } from "@/store/credentials";
 import { SshKey } from "@/types";
@@ -13,6 +13,15 @@ export function SshKeys() {
   const { sshKeys, deleteSshKey } = useSshKeysStore();
   const credentials = useCredentialsStore((s) => s.credentials);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const keyTypeLabel = (pub?: string): string | null => {
+    if (!pub) return null;
+    if (pub.startsWith("ssh-ed25519")) return "Ed25519";
+    if (pub.startsWith("ecdsa-sha2-nistp256")) return "ECDSA P-256";
+    if (pub.startsWith("ecdsa-sha2-nistp384")) return "ECDSA P-384";
+    if (pub.startsWith("ssh-rsa")) return "RSA";
+    return null;
+  };
 
   const handleCopyPublicKey = (key: SshKey) => {
     navigator.clipboard.writeText(key.publicKeyContent!);
@@ -84,6 +93,12 @@ export function SshKeys() {
                           <span className="text-base font-semibold text-[var(--text-primary)] truncate">
                             {key.label}
                           </span>
+                          {keyTypeLabel(key.publicKeyContent) && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-[var(--accent-subtle)] text-[var(--accent)] border-[var(--accent)]/20">
+                              <Wand2 size={11} />
+                              {keyTypeLabel(key.publicKeyContent)}
+                            </span>
+                          )}
                           {key.publicKeyContent && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border bg-green-500/10 text-green-400 border-green-500/20">
                               <ShieldCheck size={11} />

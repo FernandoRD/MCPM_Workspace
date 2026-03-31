@@ -377,10 +377,24 @@
     "deleteInUseWarning": "This key is used by {{count}} credential(s). Removing it will disassociate those credentials.",
     "copyPublicKey": "Copy public key",
     "sections": {
+      "generate": "Generate New Key",
       "general": "General",
       "privateKey": "Private Key",
       "publicKey": "Public Key",
       "deploy": "Deploy to Server"
+    },
+    "generate": {
+      "description": "Generates a new SSH key pair (private + public). The private key will be automatically filled in the form below.",
+      "keyType": "Key type",
+      "comment": "Comment",
+      "commentPlaceholder": "user@machine",
+      "ed25519Hint": "Recommended. More secure, faster and smaller than RSA.",
+      "ecdsaHint": "Compatible with older systems that do not support Ed25519.",
+      "rsaHint": "Wide compatibility. Use RSA 4096 for higher security.",
+      "generate": "Generate Key Pair",
+      "generating": "Generating...",
+      "success": "Key pair generated successfully!",
+      "copyFingerprint": "Copy fingerprint"
     },
     "deploy": {
       "description": "Copies your public key to ~/.ssh/authorized_keys on the remote server. Requires password authentication for this initial access.",

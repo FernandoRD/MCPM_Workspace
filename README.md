@@ -593,7 +593,7 @@ ssh_client_dev/
 | 4 | ✅ Completo | Sync remoto funcional: GitHub Gist, S3/MinIO (Sig V4), WebDAV, Custom REST; bidirecional |
 | 5 | ✅ Completo | SFTP integrado: navegador de arquivos, upload/download com barra de progresso, mkdir, rename, delete recursivo; suporte a Jump Host; known hosts TOFU; botões Terminal↔SFTP |
 | 6 | 📋 Planejado | Compatibilidade SSH: presets legado/muito-legado, KEX, ciphers, MACs e host-key por host |
-| 7 | 🚧 Em andamento | Gerenciador de chaves SSH: gerar Ed25519/ECDSA/RSA, fingerprint, deploy via ssh-copy-id (deploy implementado) |
+| 7 | ✅ Completo | Gerenciador de chaves SSH: gerar Ed25519/ECDSA/RSA 2048-4096, fingerprint, deploy via ssh-copy-id, tipo de chave detectado na listagem |
 
 ---
 

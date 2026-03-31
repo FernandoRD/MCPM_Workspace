@@ -52,6 +52,7 @@ pub fn run() {
             ssh::ssh_resize,
             ssh::ssh_disconnect,
             ssh::ssh_copy_id,
+            ssh::ssh_generate_key,
             sftp::sftp_connect,
             sftp::sftp_read_dir,
             sftp::sftp_download,

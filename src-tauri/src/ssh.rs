@@ -412,3 +412,76 @@ pub async fn ssh_copy_id(
 
     Ok(())
 }
+
+// ─── Geração de par de chaves SSH ─────────────────────────────────────────────
+
+#[derive(serde::Serialize)]
+pub struct GeneratedKeyPair {
+    /// Chave privada no formato PKCS#8 PEM
+    pub private_key: String,
+    /// Chave pública no formato OpenSSH de uma linha (ssh-ed25519 AAAA... comment)
+    pub public_key: String,
+    /// Fingerprint SHA-256 da chave pública (SHA256:xxxx)
+    pub fingerprint: String,
+}
+
+#[tauri::command]
+pub fn ssh_generate_key(
+    key_type: String,
+    comment: Option<String>,
+) -> Result<GeneratedKeyPair, String> {
+    use russh_keys::encode_pkcs8_pem;
+    use russh_keys::key::{KeyPair, SignatureHash};
+
+    let pair: KeyPair = match key_type.as_str() {
+        "ed25519" => KeyPair::generate_ed25519()
+            .ok_or("Falha ao gerar chave Ed25519")?,
+        "ecdsa" => {
+            use rand::rngs::OsRng;
+            let signing_key = p256::ecdsa::SigningKey::random(&mut OsRng);
+            let scalar_bytes = signing_key.to_bytes();
+            let ec_key = russh_keys::ec::PrivateKey::new_from_secret_scalar(
+                b"ecdsa-sha2-nistp256",
+                &scalar_bytes,
+            )
+            .map_err(|e| format!("Falha ao criar chave ECDSA: {e}"))?;
+            KeyPair::EC { key: ec_key }
+        }
+        "rsa2048" => KeyPair::generate_rsa(2048, SignatureHash::SHA2_256)
+            .ok_or("Falha ao gerar chave RSA-2048")?,
+        "rsa4096" => KeyPair::generate_rsa(4096, SignatureHash::SHA2_256)
+            .ok_or("Falha ao gerar chave RSA-4096")?,
+        _ => return Err(format!("Tipo de chave desconhecido: {key_type}")),
+    };
+
+    // Serializa chave privada como PEM PKCS#8
+    let mut private_pem: Vec<u8> = Vec::new();
+    encode_pkcs8_pem(&pair, &mut private_pem)
+        .map_err(|e| format!("Falha ao serializar chave privada: {e}"))?;
+    let private_key = String::from_utf8(private_pem)
+        .map_err(|e| format!("Falha ao converter PEM para string: {e}"))?;
+
+    // Serializa chave pública no formato OpenSSH de uma linha
+    let pub_key = pair
+        .clone_public_key()
+        .map_err(|e| format!("Falha ao obter chave pública: {e}"))?;
+    let fingerprint = pub_key.fingerprint();
+
+    let mut pub_bytes: Vec<u8> = Vec::new();
+    russh_keys::write_public_key_base64(&mut pub_bytes, &pub_key)
+        .map_err(|e| format!("Falha ao serializar chave pública: {e}"))?;
+    let pub_str = String::from_utf8(pub_bytes)
+        .map_err(|e| format!("Falha ao converter chave pública para string: {e}"))?;
+
+    // Adiciona o comentário ao final da linha da chave pública
+    let public_key = match comment.filter(|s| !s.trim().is_empty()) {
+        Some(c) => format!("{} {}", pub_str.trim_end(), c),
+        None => pub_str.trim_end().to_string(),
+    };
+
+    Ok(GeneratedKeyPair {
+        private_key,
+        public_key,
+        fingerprint,
+    })
+}
