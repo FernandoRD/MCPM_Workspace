@@ -671,8 +671,21 @@ Soluções (escolha uma):
   | `downloadBootstrapper` | ~0 MB | Sim | Baixa o runtime da internet durante a instalação |
   | `embedBootstrapper` | ~1.8 MB | Sim | Bootstrapper embutido, ainda baixa o runtime |
   | `offlineInstaller` | ~150 MB | Não | Runtime completo embutido — recomendado para Win10 |
+  | `fixedRuntime` | variável | Não | Versão específica do runtime embutida — maior controle, exige baixar o runtime manualmente e incluir no projeto |
+  | `skip` | ~0 MB | — | Não instala nada — assume que o WebView2 já existe no destino |
 
   > O build com `offlineInstaller` deve ser executado no próprio Windows — o Tauri baixa o pacote offline da Microsoft durante o `npm run tauri build`.
+
+  Para usar `fixedRuntime`, baixe o runtime desejado em [developer.microsoft.com/microsoft-edge/webview2](https://developer.microsoft.com/microsoft-edge/webview2/), extraia na raiz do projeto e configure:
+
+  ```json
+  "windows": {
+    "webviewInstallMode": {
+      "type": "fixedRuntime",
+      "path": "./Microsoft.WebView2.FixedVersionRuntime.131.0.2903.112.x64"
+    }
+  }
+  ```
 
 ##### 2. Visual C++ Redistributable ausente
 
