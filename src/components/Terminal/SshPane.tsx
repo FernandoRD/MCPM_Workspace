@@ -19,6 +19,9 @@ interface SshPaneProps {
   password: string | null;
   privateKeyContent: string | null;
   passphrase: string | null;
+  sshCompatPreset?: string;
+  keepAliveInterval?: number;
+  connectionTimeout?: number;
   onStatusChange: (paneId: string, status: "connecting" | "connected" | "disconnected" | "error") => void;
   onConnected: () => void;
 }
@@ -35,6 +38,9 @@ export function SshPane({
   password,
   privateKeyContent,
   passphrase,
+  sshCompatPreset,
+  keepAliveInterval,
+  connectionTimeout,
   onStatusChange,
   onConnected,
 }: SshPaneProps) {
@@ -132,6 +138,9 @@ export function SshPane({
       password,
       privateKeyContent,
       privateKeyPassphrase: passphrase,
+      sshCompatPreset: sshCompatPreset ?? "modern",
+      keepaliveInterval: keepAliveInterval ?? 0,
+      connectionTimeout: connectionTimeout ?? 30,
       cols: dims.cols ?? 80,
       rows: dims.rows ?? 24,
     }).catch((err: string) => {

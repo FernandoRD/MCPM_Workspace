@@ -8,7 +8,7 @@ import { useHostsStore } from "@/store/hosts";
 import { useCredentialsStore } from "@/store/credentials";
 import { useSshKeysStore } from "@/store/sshKeys";
 import { useSettingsStore } from "@/store/settings";
-import { SshHost, Credential } from "@/types";
+import { SshHost, Credential, SshCompatPreset } from "@/types";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
@@ -25,6 +25,7 @@ const DEFAULT_FORM: FormData = {
   tags: [],
   connectionTimeout: 30,
   keepAliveInterval: 60,
+  sshCompat: { preset: "modern" },
 };
 
 interface ValidationErrors {
@@ -402,6 +403,58 @@ export function HostEditor() {
                 value={form.notes ?? ""}
                 onChange={(e) => set("notes", e.target.value || undefined)}
               />
+            </div>
+          </Section>
+
+          {/* SSH Compat Section */}
+          <Section
+            id="sshCompat"
+            title={t("hostEditor.sshCompat.section")}
+            open={openSections.has("sshCompat")}
+            onToggle={toggleSection}
+          >
+            <div className="flex flex-col gap-3">
+              <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+                {t("hostEditor.sshCompat.description")}
+              </p>
+              <div className="flex flex-col gap-2">
+                {(["modern", "legacy", "very-legacy"] as SshCompatPreset[]).map((preset) => {
+                  const selected = (form.sshCompat?.preset ?? "modern") === preset;
+                  return (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => set("sshCompat", { preset })}
+                      className={cn(
+                        "flex flex-col gap-1 rounded-lg border px-4 py-3 text-left transition-colors",
+                        selected
+                          ? "border-[var(--accent)] bg-[var(--accent-subtle)]"
+                          : "border-[var(--border)] bg-[var(--bg-primary)] hover:border-[var(--border-focus)] hover:bg-[var(--bg-hover)]"
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className={cn(
+                          "text-sm font-semibold",
+                          selected ? "text-[var(--accent)]" : "text-[var(--text-primary)]"
+                        )}>
+                          {t(`hostEditor.sshCompat.${preset === "very-legacy" ? "veryLegacy" : preset}`)}
+                        </span>
+                        {preset === "modern" && (
+                          <span className="rounded-full bg-[var(--success-subtle,#d1fae5)] px-2 py-0.5 text-[10px] font-medium text-[var(--success,#10b981)]">
+                            Recomendado
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-[var(--text-muted)]">
+                        {t(`hostEditor.sshCompat.${preset === "very-legacy" ? "veryLegacyDesc" : preset + "Desc"}`)}
+                      </p>
+                      <p className="text-[11px] font-mono text-[var(--text-muted)] opacity-70">
+                        {t(`hostEditor.sshCompat.${preset === "very-legacy" ? "veryLegacyAlgos" : preset + "Algos"}`)}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </Section>
 

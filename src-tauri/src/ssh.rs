@@ -1,11 +1,16 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
 use cfg_if::cfg_if;
+use russh::{cipher, compression, kex, mac};
 use russh::client;
+use russh::Preferred;
 use russh::ChannelMsg;
 use russh_keys::agent::client::AgentClient;
 use russh_keys::key::PublicKey;
@@ -13,6 +18,65 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::mpsc;
+
+// ─── Algoritmos legado (KEX + ciphers + MACs + host-key) ─────────────────────
+
+// KEX: inclui DH-Group14-SHA1 para servidores com OpenSSH ≤ 7
+static LEGACY_KEX: &[kex::Name] = &[
+    kex::CURVE25519,
+    kex::CURVE25519_PRE_RFC_8731,
+    kex::DH_G16_SHA512,
+    kex::DH_G14_SHA256,
+    kex::ECDH_SHA2_NISTP256,
+    kex::ECDH_SHA2_NISTP384,
+    kex::ECDH_SHA2_NISTP521,
+    kex::DH_G14_SHA1,   // legado: OpenSSH ≤ 7, equipamentos de rede
+];
+
+// KEX muito legado: adiciona DH-Group1-SHA1 (Oakley Group 2)
+static VERY_LEGACY_KEX: &[kex::Name] = &[
+    kex::CURVE25519,
+    kex::CURVE25519_PRE_RFC_8731,
+    kex::DH_G16_SHA512,
+    kex::DH_G14_SHA256,
+    kex::ECDH_SHA2_NISTP256,
+    kex::ECDH_SHA2_NISTP384,
+    kex::ECDH_SHA2_NISTP521,
+    kex::DH_G14_SHA1,
+    kex::DH_G1_SHA1,    // muito legado: CentOS 5, RHEL 5
+];
+
+static LEGACY_CIPHER: &[cipher::Name] = &[
+    cipher::CHACHA20_POLY1305,
+    cipher::AES_256_GCM,
+    cipher::AES_256_CTR,
+    cipher::AES_192_CTR,
+    cipher::AES_128_CTR,
+    cipher::AES_256_CBC,  // legado: servidor sem suporte a CTR
+    cipher::AES_192_CBC,
+    cipher::AES_128_CBC,
+];
+
+static LEGACY_MAC: &[mac::Name] = &[
+    mac::HMAC_SHA256_ETM,
+    mac::HMAC_SHA512_ETM,
+    mac::HMAC_SHA256,
+    mac::HMAC_SHA512,
+    mac::HMAC_SHA1_ETM,
+    mac::HMAC_SHA1,     // legado
+];
+
+static LEGACY_KEY: &[russh_keys::key::Name] = &[
+    russh_keys::key::ED25519,
+    russh_keys::key::ECDSA_SHA2_NISTP256,
+    russh_keys::key::ECDSA_SHA2_NISTP384,
+    russh_keys::key::ECDSA_SHA2_NISTP521,
+    russh_keys::key::RSA_SHA2_256,
+    russh_keys::key::RSA_SHA2_512,
+    russh_keys::key::SSH_RSA, // legado: ssh-rsa com SHA-1
+];
+
+static LEGACY_COMPRESSION: &[compression::Name] = &[compression::NONE];
 
 // ─── Eventos emitidos ao frontend ─────────────────────────────────────────────
 
@@ -57,9 +121,42 @@ impl SshManager {
     }
 }
 
-// ─── Handler russh ────────────────────────────────────────────────────────────
+// ─── Known hosts (TOFU) ───────────────────────────────────────────────────────
 
-struct ClientHandler;
+fn known_hosts_path(data_dir: &Path) -> std::path::PathBuf {
+    data_dir.join("known_hosts.json")
+}
+
+fn load_known_hosts(data_dir: &Path) -> HashMap<String, String> {
+    let path = known_hosts_path(data_dir);
+    std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+fn save_known_hosts(data_dir: &Path, hosts: &HashMap<String, String>) {
+    let path = known_hosts_path(data_dir);
+    if let Ok(json) = serde_json::to_string_pretty(hosts) {
+        let _ = std::fs::write(path, json);
+    }
+}
+
+// ─── Handler russh com TOFU known_hosts ──────────────────────────────────────
+
+struct ClientHandler {
+    host_key: String,
+    known_hosts: Arc<std::sync::Mutex<HashMap<String, String>>>,
+}
+
+impl ClientHandler {
+    fn new(host: &str, port: u16, known_hosts: Arc<std::sync::Mutex<HashMap<String, String>>>) -> Self {
+        Self {
+            host_key: format!("[{}]:{}", host, port),
+            known_hosts,
+        }
+    }
+}
 
 #[async_trait]
 impl client::Handler for ClientHandler {
@@ -67,11 +164,69 @@ impl client::Handler for ClientHandler {
 
     async fn check_server_key(
         &mut self,
-        _server_public_key: &PublicKey,
+        server_public_key: &PublicKey,
     ) -> Result<bool, Self::Error> {
-        // TODO fase 3: verificar known_hosts
-        Ok(true)
+        let fingerprint = server_public_key.fingerprint();
+        let mut kh = self.known_hosts.lock().unwrap();
+        match kh.get(&self.host_key).cloned() {
+            None => {
+                // TOFU: primeira conexão — armazena e aceita
+                kh.insert(self.host_key.clone(), fingerprint);
+                Ok(true)
+            }
+            Some(stored) if stored == fingerprint => Ok(true),
+            Some(_) => {
+                // Fingerprint diferente — possível MITM
+                Err(russh::Error::WrongServerSig)
+            }
+        }
     }
+}
+
+// ─── Configuração SSH por preset de compatibilidade ──────────────────────────
+
+fn build_ssh_config(
+    preset: &str,
+    keepalive_secs: u32,
+    timeout_secs: u32,
+) -> Arc<client::Config> {
+    let mut config = client::Config::default();
+
+    // Aplica preset de compatibilidade
+    match preset {
+        "legacy" => {
+            config.preferred = Preferred {
+                kex: Cow::Borrowed(LEGACY_KEX),
+                key: Cow::Borrowed(LEGACY_KEY),
+                cipher: Cow::Borrowed(LEGACY_CIPHER),
+                mac: Cow::Borrowed(LEGACY_MAC),
+                compression: Cow::Borrowed(LEGACY_COMPRESSION),
+            };
+        }
+        "very-legacy" => {
+            config.preferred = Preferred {
+                kex: Cow::Borrowed(VERY_LEGACY_KEX),
+                key: Cow::Borrowed(LEGACY_KEY),
+                cipher: Cow::Borrowed(LEGACY_CIPHER),
+                mac: Cow::Borrowed(LEGACY_MAC),
+                compression: Cow::Borrowed(LEGACY_COMPRESSION),
+            };
+        }
+        _ => {} // "modern" ou desconhecido → padrão seguro
+    }
+
+    // Keepalive
+    if keepalive_secs > 0 {
+        config.keepalive_interval = Some(Duration::from_secs(keepalive_secs as u64));
+        config.keepalive_max = 3;
+    }
+
+    // Timeout de inatividade
+    if timeout_secs > 0 {
+        config.inactivity_timeout = Some(Duration::from_secs(timeout_secs as u64));
+    }
+
+    Arc::new(config)
 }
 
 // ─── Auth por agente (genérico sobre o tipo de stream) ───────────────────────
@@ -127,6 +282,9 @@ pub async fn ssh_connect(
     password: Option<String>,
     private_key_content: Option<String>,
     private_key_passphrase: Option<String>,
+    ssh_compat_preset: Option<String>,
+    keepalive_interval: Option<u32>,
+    connection_timeout: Option<u32>,
     cols: u16,
     rows: u16,
 ) -> Result<(), String> {
@@ -139,11 +297,23 @@ pub async fn ssh_connect(
         },
     );
 
-    let config = Arc::new(client::Config::default());
+    let preset = ssh_compat_preset.as_deref().unwrap_or("modern");
+    let keepalive = keepalive_interval.unwrap_or(0);
+    let timeout = connection_timeout.unwrap_or(30);
+    let config = build_ssh_config(preset, keepalive, timeout);
+
+    let data_dir = state.storage.lock().unwrap().data_dir.clone();
+    let known_hosts_map = load_known_hosts(&data_dir);
+    let known_hosts = Arc::new(std::sync::Mutex::new(known_hosts_map));
+
     let addr = format!("{}:{}", host, port);
-    let mut session = client::connect(config, addr, ClientHandler)
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut session = client::connect(
+        config,
+        addr,
+        ClientHandler::new(&host, port, known_hosts.clone()),
+    )
+    .await
+    .map_err(|e| e.to_string())?;
 
     let ok = match auth_method.as_str() {
         "password" => {
@@ -209,6 +379,9 @@ pub async fn ssh_connect(
         );
         return Err("Autenticação falhou".into());
     }
+
+    // Persiste known_hosts atualizados após autenticação bem-sucedida
+    save_known_hosts(&data_dir, &known_hosts.lock().unwrap());
 
     let mut channel = session
         .channel_open_session()
@@ -361,9 +534,16 @@ pub async fn ssh_copy_id(
 ) -> Result<(), String> {
     let config = Arc::new(client::Config::default());
     let addr = format!("{}:{}", host, port);
-    let mut session = client::connect(config, addr, ClientHandler)
-        .await
-        .map_err(|e| format!("Erro ao conectar: {e}"))?;
+
+    // Usa known_hosts em memória (sem persistência) para o ssh-copy-id
+    let known_hosts = Arc::new(std::sync::Mutex::new(HashMap::<String, String>::new()));
+    let mut session = client::connect(
+        config,
+        addr,
+        ClientHandler::new(&host, port, known_hosts),
+    )
+    .await
+    .map_err(|e| format!("Erro ao conectar: {e}"))?;
 
     let ok = session
         .authenticate_password(&username, &password)

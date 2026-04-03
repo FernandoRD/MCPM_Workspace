@@ -131,6 +131,9 @@ export function SftpPage() {
         password,
         privateKeyContent,
         privateKeyPassphrase,
+        sshCompatPreset: host.sshCompat?.preset ?? "modern",
+        keepaliveInterval: host.keepAliveInterval ?? 0,
+        connectionTimeout: host.connectionTimeout ?? 30,
         // Jump host (null quando não configurado)
         jumpHost: jumpHost?.host ?? null,
         jumpPort: jumpHost?.port ?? null,

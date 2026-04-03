@@ -1,9 +1,10 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use async_trait::async_trait;
 use cfg_if::cfg_if;
@@ -228,6 +229,79 @@ fn sftp_remove_recursive<'a>(
     })
 }
 
+// ─── Configuração SSH por preset (reusa as constantes de ssh.rs) ──────────────
+
+fn build_sftp_config(
+    preset: &str,
+    keepalive_secs: u32,
+    timeout_secs: u32,
+) -> Arc<client::Config> {
+    use russh::{cipher, compression, kex, mac};
+    use russh::Preferred;
+
+    static LEGACY_KEX: &[kex::Name] = &[
+        kex::CURVE25519, kex::CURVE25519_PRE_RFC_8731, kex::DH_G16_SHA512,
+        kex::DH_G14_SHA256, kex::ECDH_SHA2_NISTP256, kex::ECDH_SHA2_NISTP384,
+        kex::ECDH_SHA2_NISTP521, kex::DH_G14_SHA1,
+    ];
+    static VERY_LEGACY_KEX: &[kex::Name] = &[
+        kex::CURVE25519, kex::CURVE25519_PRE_RFC_8731, kex::DH_G16_SHA512,
+        kex::DH_G14_SHA256, kex::ECDH_SHA2_NISTP256, kex::ECDH_SHA2_NISTP384,
+        kex::ECDH_SHA2_NISTP521, kex::DH_G14_SHA1, kex::DH_G1_SHA1,
+    ];
+    static LEGACY_CIPHER: &[cipher::Name] = &[
+        cipher::CHACHA20_POLY1305, cipher::AES_256_GCM, cipher::AES_256_CTR,
+        cipher::AES_192_CTR, cipher::AES_128_CTR, cipher::AES_256_CBC,
+        cipher::AES_192_CBC, cipher::AES_128_CBC,
+    ];
+    static LEGACY_MAC: &[mac::Name] = &[
+        mac::HMAC_SHA256_ETM, mac::HMAC_SHA512_ETM, mac::HMAC_SHA256,
+        mac::HMAC_SHA512, mac::HMAC_SHA1_ETM, mac::HMAC_SHA1,
+    ];
+    static LEGACY_KEY: &[russh_keys::key::Name] = &[
+        russh_keys::key::ED25519, russh_keys::key::ECDSA_SHA2_NISTP256,
+        russh_keys::key::ECDSA_SHA2_NISTP384, russh_keys::key::ECDSA_SHA2_NISTP521,
+        russh_keys::key::RSA_SHA2_256, russh_keys::key::RSA_SHA2_512,
+        russh_keys::key::SSH_RSA,
+    ];
+    static LEGACY_COMPRESSION: &[compression::Name] = &[compression::NONE];
+
+    let mut config = client::Config::default();
+
+    match preset {
+        "legacy" => {
+            config.preferred = Preferred {
+                kex: Cow::Borrowed(LEGACY_KEX),
+                key: Cow::Borrowed(LEGACY_KEY),
+                cipher: Cow::Borrowed(LEGACY_CIPHER),
+                mac: Cow::Borrowed(LEGACY_MAC),
+                compression: Cow::Borrowed(LEGACY_COMPRESSION),
+            };
+        }
+        "very-legacy" => {
+            config.preferred = Preferred {
+                kex: Cow::Borrowed(VERY_LEGACY_KEX),
+                key: Cow::Borrowed(LEGACY_KEY),
+                cipher: Cow::Borrowed(LEGACY_CIPHER),
+                mac: Cow::Borrowed(LEGACY_MAC),
+                compression: Cow::Borrowed(LEGACY_COMPRESSION),
+            };
+        }
+        _ => {}
+    }
+
+    if keepalive_secs > 0 {
+        config.keepalive_interval = Some(Duration::from_secs(keepalive_secs as u64));
+        config.keepalive_max = 3;
+    }
+
+    if timeout_secs > 0 {
+        config.inactivity_timeout = Some(Duration::from_secs(timeout_secs as u64));
+    }
+
+    Arc::new(config)
+}
+
 // ─── Comandos Tauri ───────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -241,6 +315,9 @@ pub async fn sftp_connect(
     password: Option<String>,
     private_key_content: Option<String>,
     private_key_passphrase: Option<String>,
+    ssh_compat_preset: Option<String>,
+    keepalive_interval: Option<u32>,
+    connection_timeout: Option<u32>,
     // Jump host (opcional)
     jump_host: Option<String>,
     jump_port: Option<u16>,
@@ -254,7 +331,10 @@ pub async fn sftp_connect(
     let known_hosts_map = load_known_hosts(&data_dir);
     let known_hosts = Arc::new(std::sync::Mutex::new(known_hosts_map));
 
-    let config = Arc::new(client::Config::default());
+    let preset = ssh_compat_preset.as_deref().unwrap_or("modern");
+    let keepalive = keepalive_interval.unwrap_or(0);
+    let timeout = connection_timeout.unwrap_or(30);
+    let config = build_sftp_config(preset, keepalive, timeout);
 
     // ─── Conecta ao host alvo (direto ou via jump host) ────────────────────────
 

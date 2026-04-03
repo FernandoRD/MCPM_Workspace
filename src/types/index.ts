@@ -1,5 +1,11 @@
 export type AuthMethod = "password" | "privateKey" | "agent";
 
+export type SshCompatPreset = "modern" | "legacy" | "very-legacy";
+
+export interface SshCompatOptions {
+  preset: SshCompatPreset;
+}
+
 export interface SshKey {
   id: string;
   label: string;
@@ -44,6 +50,7 @@ export interface SshHost {
   createdAt: string;
   updatedAt: string;
   color?: string;
+  sshCompat?: SshCompatOptions;
 }
 
 export type TabType = "terminal" | "sftp";

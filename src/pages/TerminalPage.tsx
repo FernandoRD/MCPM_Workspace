@@ -121,6 +121,9 @@ export function TerminalPage() {
               password={password}
               privateKeyContent={privateKeyContent}
               passphrase={passphrase}
+              sshCompatPreset={host.sshCompat?.preset}
+              keepAliveInterval={host.keepAliveInterval}
+              connectionTimeout={host.connectionTimeout}
               onStatusChange={(pid, status) => updatePaneStatus(pid, status)}
               onConnected={() => setLastConnected(host.id)}
             />

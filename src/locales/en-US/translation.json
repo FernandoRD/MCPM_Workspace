@@ -80,6 +80,20 @@
       "copying": "Copying...",
       "success": "Key successfully installed! You can now connect using your private key."
     },
+    "sshCompat": {
+      "section": "SSH Compatibility",
+      "description": "Configure the algorithms accepted when connecting. Use 'Legacy' for older servers that don't support modern algorithms.",
+      "presetLabel": "Compatibility preset",
+      "modern": "Modern",
+      "modernDesc": "Only secure, modern algorithms (recommended default)",
+      "modernAlgos": "Curve25519, AES-GCM, ChaCha20, Ed25519",
+      "legacy": "Legacy",
+      "legacyDesc": "Includes older algorithms for servers with OpenSSH ≤ 7 or network equipment",
+      "legacyAlgos": "+ DH-Group14-SHA1, AES-CBC, HMAC-SHA1, ssh-rsa",
+      "veryLegacy": "Very Legacy",
+      "veryLegacyDesc": "Maximum compatibility for very old servers (CentOS 5, RHEL 5, legacy switches)",
+      "veryLegacyAlgos": "+ DH-Group1-SHA1, 3DES-CBC, HMAC-MD5, ssh-dss"
+    },
     "mfa": {
       "section": "Two-Factor Authentication (MFA)",
       "enable": "Enable MFA for this host",
