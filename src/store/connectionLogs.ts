@@ -27,7 +27,7 @@ interface ConnectionLogsStore {
   clearLogs: () => void;
 }
 
-export const useConnectionLogsStore = create<ConnectionLogsStore>()((set, get) => ({
+export const useConnectionLogsStore = create<ConnectionLogsStore>()((set, _get) => ({
   logs: [],
   initialized: false,
 
