@@ -25,7 +25,7 @@ import { AppSettings } from "@/types";
 
 export function Settings() {
   const { t } = useTranslation();
-  const { settings, setTheme, setLocale, updateTerminal, updateSecurity, resetSettings } =
+  const { settings, setTheme, setLocale, updateTerminal, updateSecurity, updateSsh, resetSettings } =
     useSettingsStore();
   const [saved, setSaved] = useState(false);
 
@@ -220,6 +220,47 @@ export function Settings() {
                     }
                     className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-focus)]"
                   />
+                </div>
+              </div>
+            </div>
+          </Section>
+
+          {/* SSH */}
+          <Section title={t("settings.sections.ssh")}>
+            <div className="flex flex-col gap-4">
+              <p className="text-sm text-[var(--text-secondary)]">
+                {t("settings.ssh.description")}
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm font-medium text-[var(--text-primary)]">
+                    {t("settings.ssh.keepAliveInterval")}
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={settings.ssh?.keepAliveInterval ?? 60}
+                    onChange={(e) => updateSsh({ keepAliveInterval: Math.max(0, parseInt(e.target.value) || 0) })}
+                    className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-focus)]"
+                  />
+                  <p className="text-xs text-[var(--text-muted)]">
+                    {t("settings.ssh.keepAliveHint")}
+                  </p>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-sm font-medium text-[var(--text-primary)]">
+                    {t("settings.ssh.inactivityTimeout")}
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={settings.ssh?.inactivityTimeout ?? 0}
+                    onChange={(e) => updateSsh({ inactivityTimeout: Math.max(0, parseInt(e.target.value) || 0) })}
+                    className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-focus)]"
+                  />
+                  <p className="text-xs text-[var(--text-muted)]">
+                    {t("settings.ssh.inactivityTimeoutHint")}
+                  </p>
                 </div>
               </div>
             </div>

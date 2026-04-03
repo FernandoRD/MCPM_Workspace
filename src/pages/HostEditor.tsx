@@ -23,8 +23,6 @@ const DEFAULT_FORM: FormData = {
   host: "",
   port: 22,
   tags: [],
-  connectionTimeout: 30,
-  keepAliveInterval: 60,
   sshCompat: { preset: "modern" },
 };
 
@@ -377,24 +375,6 @@ export function HostEditor() {
                   ))}
                 </Select>
               )}
-              <div className="grid grid-cols-2 gap-4">
-                <Input
-                  id="keepAlive"
-                  label={t("hostEditor.fields.keepAliveInterval")}
-                  type="number"
-                  min={0}
-                  value={form.keepAliveInterval ?? 60}
-                  onChange={(e) => set("keepAliveInterval", parseInt(e.target.value) || 0)}
-                />
-                <Input
-                  id="timeout"
-                  label={t("hostEditor.fields.connectionTimeout")}
-                  type="number"
-                  min={1}
-                  value={form.connectionTimeout ?? 30}
-                  onChange={(e) => set("connectionTimeout", parseInt(e.target.value) || 30)}
-                />
-              </div>
               <Textarea
                 id="notes"
                 label={t("hostEditor.fields.notes")}

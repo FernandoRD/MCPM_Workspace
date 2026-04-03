@@ -44,8 +44,6 @@ export interface SshHost {
   tags: string[];
   notes?: string;
   jumpHostId?: string;
-  keepAliveInterval?: number;
-  connectionTimeout?: number;
   lastConnectedAt?: string;
   createdAt: string;
   updatedAt: string;
@@ -111,6 +109,10 @@ export interface AppSettings {
     cursorStyle: "block" | "underline" | "bar";
     cursorBlink: boolean;
     scrollback: number;
+  };
+  ssh: {
+    keepAliveInterval: number;
+    inactivityTimeout: number;
   };
   security: {
     /** true se uma senha mestra foi definida (a senha em si nunca é salva aqui) */

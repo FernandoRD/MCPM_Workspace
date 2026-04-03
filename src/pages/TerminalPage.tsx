@@ -1,10 +1,12 @@
 import { useParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { WifiOff, Columns2, Rows2, X, FolderOpen } from "lucide-react";
+import { useRef, useCallback } from "react";
 import { useSessionsStore } from "@/store/sessions";
 import { useHostsStore } from "@/store/hosts";
 import { useCredentialsStore } from "@/store/credentials";
 import { useSshKeysStore } from "@/store/sshKeys";
+import { useConnectionLogsStore } from "@/store/connectionLogs";
 import { SshPane } from "@/components/Terminal/SshPane";
 import { Button } from "@/components/ui/Button";
 
@@ -17,15 +19,42 @@ export function TerminalPage() {
   const updatePaneStatus = useSessionsStore((s) => s.updatePaneStatus);
   const addPane = useSessionsStore((s) => s.addPane);
   const closePane = useSessionsStore((s) => s.closePane);
+  const closeSession = useSessionsStore((s) => s.closeSession);
   const openSftpTab = useSessionsStore((s) => s.openSftpTab);
 
   const getHost = useHostsStore((s) => s.getHost);
   const setLastConnected = useHostsStore((s) => s.setLastConnected);
   const getCredential = useCredentialsStore((s) => s.getCredential);
   const getSshKey = useSshKeysStore((s) => s.getSshKey);
+  const openLog = useConnectionLogsStore((s) => s.openLog);
+  const closeLog = useConnectionLogsStore((s) => s.closeLog);
 
   const tab = tabs.find((t) => t.id === tabId);
   const host = tab ? getHost(tab.hostId) : undefined;
+
+  // Navega de volta ao Dashboard quando a sessão (pane principal) desconecta
+  const everConnectedRef = useRef(false);
+  const logIdRef = useRef<string | null>(null);
+  const handleDisconnected = useCallback((status: "disconnected" | "error" = "disconnected") => {
+    if (logIdRef.current) closeLog(logIdRef.current, status);
+    if (!everConnectedRef.current) return; // falha na conexão inicial — já mostra erro no terminal
+    if (tabId) closeSession(tabId);
+    navigate("/");
+  }, [tabId, closeSession, navigate, closeLog]);
+  const handleConnected = useCallback(() => {
+    everConnectedRef.current = true;
+    if (tab) {
+      setLastConnected(tab.hostId);
+      logIdRef.current = openLog({
+        hostId: tab.hostId,
+        hostLabel: tab.hostLabel,
+        hostAddress: tab.hostAddress,
+        sessionType: "terminal",
+        connectedAt: new Date().toISOString(),
+        status: "connected",
+      });
+    }
+  }, [tab, setLastConnected, openLog]);
 
   if (!tab || !host) {
     return (
@@ -122,10 +151,9 @@ export function TerminalPage() {
               privateKeyContent={privateKeyContent}
               passphrase={passphrase}
               sshCompatPreset={host.sshCompat?.preset}
-              keepAliveInterval={host.keepAliveInterval}
-              connectionTimeout={host.connectionTimeout}
               onStatusChange={(pid, status) => updatePaneStatus(pid, status)}
-              onConnected={() => setLastConnected(host.id)}
+              onConnected={pane.id === tab.id ? handleConnected : () => setLastConnected(host.id)}
+              onDisconnected={pane.id === tab.id ? handleDisconnected : undefined}
             />
           </div>
         ))}

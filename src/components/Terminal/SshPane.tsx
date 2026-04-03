@@ -1,6 +1,4 @@
-import { useEffect, useRef, useCallback, useState } from "react";
-import { useTranslation } from "react-i18next";
-import { WifiOff, RotateCcw } from "lucide-react";
+import { useEffect, useRef, useCallback } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
@@ -8,7 +6,6 @@ import "@xterm/xterm/css/xterm.css";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { useSettingsStore } from "@/store/settings";
-import { Button } from "@/components/ui/Button";
 
 interface SshPaneProps {
   paneId: string;
@@ -20,10 +17,9 @@ interface SshPaneProps {
   privateKeyContent: string | null;
   passphrase: string | null;
   sshCompatPreset?: string;
-  keepAliveInterval?: number;
-  connectionTimeout?: number;
   onStatusChange: (paneId: string, status: "connecting" | "connected" | "disconnected" | "error") => void;
   onConnected: () => void;
+  onDisconnected?: (status: "disconnected" | "error") => void;
 }
 
 interface SshOutputEvent { tab_id: string; data: string }
@@ -39,22 +35,22 @@ export function SshPane({
   privateKeyContent,
   passphrase,
   sshCompatPreset,
-  keepAliveInterval,
-  connectionTimeout,
   onStatusChange,
   onConnected,
+  onDisconnected,
 }: SshPaneProps) {
-  const { t } = useTranslation();
   const termRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const statusRef = useRef<"connecting" | "connected" | "disconnected" | "error">("connecting");
-  const [overlayStatus, setOverlayStatus] = useState<"idle" | "disconnected" | "error">("idle");
+  const onDisconnectedRef = useRef(onDisconnected);
+  onDisconnectedRef.current = onDisconnected;
   // cleanupRef: roda quando a conexão precisa ser encerrada (após connect() finalizar)
   const cleanupRef = useRef<(() => void) | null>(null);
   // cancelRef: cancela um connect() ainda em andamento (antes de cleanupRef estar pronto)
   const cancelRef = useRef<(() => void) | null>(null);
   const terminalSettings = useSettingsStore((s) => s.settings.terminal);
+  const sshSettings = useSettingsStore((s) => s.settings.ssh);
 
   const connect = useCallback(async () => {
     if (!termRef.current) return;
@@ -90,6 +86,14 @@ export function SshPane({
       fitAddon.fit();
       xtermRef.current = xterm;
       fitRef.current = fitAddon;
+
+      // Permite que AltGr (reportado como Ctrl+Alt no X11/WebKit) e teclas mortas
+      // (dead keys para ç, ~, ´, etc.) sejam compostas pelo browser antes de chegar
+      // ao onData — sem isso, xterm intercepta o keydown e impede a composição.
+      xterm.attachCustomKeyEventHandler((ev: KeyboardEvent) => {
+        if (ev.getModifierState("AltGraph") || (ev.altKey && ev.ctrlKey)) return false;
+        return true;
+      });
     }
 
     const fitAddon = fitRef.current!;
@@ -118,12 +122,15 @@ export function SshPane({
       if (event.payload.tab_id !== paneId) return;
       const s = event.payload.status;
       statusRef.current = s;
-      if (s === "disconnected" || s === "error") setOverlayStatus(s);
-      else setOverlayStatus("idle");
       onStatusChange(paneId, s);
       if (s === "connected") {
         wasConnected = true;
         onConnected();
+        // Captura o foco do teclado assim que a sessão estiver pronta
+        xtermRef.current?.focus();
+      }
+      if (s === "disconnected" || s === "error") {
+        onDisconnectedRef.current?.(s);
       }
     });
     if (cancelled) { ul2(); dataDispose.dispose(); registered.forEach((f) => f()); return; }
@@ -139,14 +146,13 @@ export function SshPane({
       privateKeyContent,
       privateKeyPassphrase: passphrase,
       sshCompatPreset: sshCompatPreset ?? "modern",
-      keepaliveInterval: keepAliveInterval ?? 0,
-      connectionTimeout: connectionTimeout ?? 30,
+      keepaliveInterval: sshSettings?.keepAliveInterval ?? 60,
+      connectionTimeout: sshSettings?.inactivityTimeout ?? 0,
       cols: dims.cols ?? 80,
       rows: dims.rows ?? 24,
     }).catch((err: string) => {
       if (!cancelled) {
         xtermRef.current?.writeln(`\r\n\x1b[1;31mErro: ${err}\x1b[0m\r\n`);
-        setOverlayStatus("error");
         onStatusChange(paneId, "error");
       }
     });
@@ -189,32 +195,9 @@ export function SshPane({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paneId]);
 
-  const handleReconnect = () => {
-    cancelRef.current?.();
-    cleanupRef.current?.();
-    cancelRef.current = null;
-    cleanupRef.current = null;
-    statusRef.current = "connecting";
-    setOverlayStatus("idle");
-    onStatusChange(paneId, "connecting");
-    xtermRef.current?.clear();
-    connect();
-  };
-
   return (
     <div className="relative h-full w-full" style={{ backgroundColor: "var(--terminal-bg)" }}>
-      {/* Terminal div is always mounted so termRef stays valid for reconnect */}
       <div ref={termRef} className="h-full w-full" />
-      {(overlayStatus === "disconnected" || overlayStatus === "error") && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-[var(--bg-primary)]">
-          <WifiOff size={28} className="text-[var(--danger)]" />
-          <p className="text-sm text-[var(--text-primary)]">{t("terminal.disconnected")}</p>
-          <Button size="sm" onClick={handleReconnect}>
-            <RotateCcw size={13} />
-            {t("terminal.reconnect")}
-          </Button>
-        </div>
-      )}
     </div>
   );
 }

@@ -8,6 +8,7 @@ import {
   KeyRound,
   KeySquare,
   Layers,
+  History,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +22,7 @@ export function Sidebar() {
     { to: "/credentials", icon: KeyRound, label: t("nav.credentials") },
     { to: "/ssh-keys", icon: KeySquare, label: t("nav.sshKeys") },
     { to: "/groups", icon: Layers, label: t("nav.groups") },
+    { to: "/connection-log", icon: History, label: t("nav.connectionLog") },
     { to: "/sync", icon: CloudUpload, label: t("nav.sync") },
     { to: "/backup", icon: HardDriveDownload, label: t("nav.backup") },
     { to: "/settings", icon: Settings, label: t("nav.settings") },

@@ -643,6 +643,54 @@ Pacotes gerados em `src-tauri\target\release\bundle\`:
 | `.exe` (NSIS) | `nsis\SSH Vault_0.1.0_x64-setup.exe` |
 | `.msi` | `msi\SSH Vault_0.1.0_x64_en-US.msi` |
 
+#### Compatibilidade com Windows 10
+
+Builds gerados no Windows 11 podem não abrir corretamente no Windows 10. As causas mais comuns e suas soluções estão listadas abaixo.
+
+##### 1. WebView2 ausente ou desatualizado (causa mais comum)
+
+O Windows 11 inclui o WebView2 por padrão; o Windows 10 pode não tê-lo. Sem ele, a janela abre em branco ou a aplicação fecha imediatamente sem mensagem de erro.
+
+Soluções (escolha uma):
+
+- **Instalar o WebView2 Runtime no Windows 10** — baixe o instalador Evergreen em [developer.microsoft.com/microsoft-edge/webview2](https://developer.microsoft.com/microsoft-edge/webview2/) e execute no computador de destino.
+
+- **Embutir o WebView2 no próprio instalador** — configuração já adotada neste projeto (`offlineInstaller` em `tauri.conf.json`). O instalador gerado inclui o runtime completo (~150 MB a mais), eliminando qualquer dependência externa:
+
+  ```json
+  // src-tauri/tauri.conf.json
+  "windows": {
+    "webviewInstallMode": {
+      "type": "offlineInstaller"
+    }
+  }
+  ```
+
+  | Modo | Tamanho extra | Requer internet | Comportamento |
+  | --- | --- | --- | --- |
+  | `downloadBootstrapper` | ~0 MB | Sim | Baixa o runtime da internet durante a instalação |
+  | `embedBootstrapper` | ~1.8 MB | Sim | Bootstrapper embutido, ainda baixa o runtime |
+  | `offlineInstaller` | ~150 MB | Não | Runtime completo embutido — recomendado para Win10 |
+
+  > O build com `offlineInstaller` deve ser executado no próprio Windows — o Tauri baixa o pacote offline da Microsoft durante o `npm run tauri build`.
+
+##### 2. Visual C++ Redistributable ausente
+
+Sintoma: mensagem `VCRUNTIME140.dll is missing` ao tentar abrir o app.
+
+Solução: instale o [Visual C++ Redistributable 2015–2022 (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe) no computador de destino.
+
+##### 3. Diagnosticando sem mensagem de erro visível
+
+Se a janela simplesmente não aparecer ou fechar imediatamente, execute o `.exe` pelo PowerShell para ver a saída de erro:
+
+```powershell
+cd "C:\Program Files\SSH Vault"
+& ".\SSH Vault.exe"
+```
+
+Qualquer erro de inicialização será exibido no terminal.
+
 ### Build no macOS
 
 ```bash

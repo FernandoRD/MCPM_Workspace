@@ -15,6 +15,7 @@ import {
   FolderOpen,
 } from "lucide-react";
 import { useHostsStore } from "@/store/hosts";
+import { useUIStore } from "@/store/uiStore";
 import { useSessionsStore } from "@/store/sessions";
 import { useCredentialsStore } from "@/store/credentials";
 import { useSettingsStore } from "@/store/settings";
@@ -35,8 +36,10 @@ export function Dashboard() {
   const locale = useSettingsStore((s) => s.settings.locale);
   const savedGroups = useSettingsStore((s) => s.settings.groups);
 
-  const [search, setSearch] = useState("");
-  const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
+  const search = useUIStore((s) => s.dashboardSearch);
+  const setSearch = useUIStore((s) => s.setDashboardSearch);
+  const selectedGroup = useUIStore((s) => s.dashboardSelectedGroup);
+  const setSelectedGroup = useUIStore((s) => s.setDashboardSelectedGroup);
   const [menuHostId, setMenuHostId] = useState<string | null>(null);
 
   // Todos os grupos (derivados dos hosts + salvos manualmente)

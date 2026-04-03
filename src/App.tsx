@@ -13,10 +13,12 @@ import { CredentialEditor } from "@/pages/CredentialEditor";
 import { SshKeys } from "@/pages/SshKeys";
 import { SshKeyEditor } from "@/pages/SshKeyEditor";
 import { Groups } from "@/pages/Groups";
+import { ConnectionLog } from "@/pages/ConnectionLog";
 import { useHostsStore } from "@/store/hosts";
 import { useSettingsStore } from "@/store/settings";
 import { useCredentialsStore } from "@/store/credentials";
 import { useSshKeysStore } from "@/store/sshKeys";
+import { useConnectionLogsStore } from "@/store/connectionLogs";
 
 export default function App() {
   const [ready, setReady] = useState(false);
@@ -24,9 +26,10 @@ export default function App() {
   const initSettings = useSettingsStore((s) => s.init);
   const initCredentials = useCredentialsStore((s) => s.init);
   const initSshKeys = useSshKeysStore((s) => s.init);
+  const initConnectionLogs = useConnectionLogsStore((s) => s.init);
 
   useEffect(() => {
-    Promise.all([initSettings(), initHosts(), initCredentials(), initSshKeys()]).finally(() =>
+    Promise.all([initSettings(), initHosts(), initCredentials(), initSshKeys(), initConnectionLogs()]).finally(() =>
       setReady(true)
     );
   }, []);
@@ -68,6 +71,7 @@ export default function App() {
           <Route path="ssh-keys/new" element={<SshKeyEditor />} />
           <Route path="ssh-keys/:id" element={<SshKeyEditor />} />
           <Route path="groups" element={<Groups />} />
+          <Route path="connection-log" element={<ConnectionLog />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

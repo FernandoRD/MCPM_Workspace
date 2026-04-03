@@ -12,6 +12,7 @@ interface SettingsStore {
   setLocale: (locale: string) => void;
   updateTerminal: (terminal: Partial<AppSettings["terminal"]>) => void;
   updateSecurity: (security: Partial<AppSettings["security"]>) => void;
+  updateSsh: (ssh: Partial<AppSettings["ssh"]>) => void;
   updateSync: (sync: Partial<AppSettings["sync"]>) => void;
   updateGroups: (groups: string[]) => void;
   resetSettings: () => void;
@@ -30,6 +31,10 @@ const DEFAULT_SETTINGS: AppSettings = {
   security: {
     masterPasswordSet: false,
     syncCredentials: false,
+  },
+  ssh: {
+    keepAliveInterval: 60,
+    inactivityTimeout: 0,
   },
   sync: {
     provider: null,
@@ -118,6 +123,16 @@ export const useSettingsStore = create<SettingsStore>()((set, _get) => ({
       const settings = {
         ...s.settings,
         security: { ...s.settings.security, ...security },
+      };
+      persistSettings(settings);
+      return { settings };
+    }),
+
+  updateSsh: (ssh) =>
+    set((s) => {
+      const settings = {
+        ...s.settings,
+        ssh: { ...DEFAULT_SETTINGS.ssh, ...s.settings.ssh, ...ssh },
       };
       persistSettings(settings);
       return { settings };

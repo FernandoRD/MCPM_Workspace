@@ -124,6 +124,19 @@ impl Database {
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS connection_logs (
+                id           TEXT PRIMARY KEY,
+                host_id      TEXT NOT NULL,
+                host_label   TEXT NOT NULL,
+                host_address TEXT NOT NULL,
+                session_type TEXT NOT NULL,
+                connected_at TEXT NOT NULL,
+                disconnected_at TEXT,
+                duration_secs   INTEGER,
+                status       TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_connection_logs_connected_at
+                ON connection_logs (connected_at DESC);
             ",
         )
         .map_err(|e| format!("Falha na migração do banco: {e}"))
@@ -316,5 +329,73 @@ pub fn db_delete_ssh_key(state: State<AppState>, id: String) -> Result<(), Strin
 pub fn db_clear_ssh_keys(state: State<AppState>) -> Result<(), String> {
     let conn = state.database.conn.lock().map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM ssh_keys", []).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// ── Connection Logs ───────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn db_add_connection_log(state: State<AppState>, log: Value) -> Result<(), String> {
+    let id           = log["id"].as_str().ok_or("log sem id")?;
+    let host_id      = log["hostId"].as_str().unwrap_or("");
+    let host_label   = log["hostLabel"].as_str().unwrap_or("");
+    let host_address = log["hostAddress"].as_str().unwrap_or("");
+    let session_type = log["sessionType"].as_str().unwrap_or("terminal");
+    let connected_at = log["connectedAt"].as_str().unwrap_or("");
+    let disconnected_at = log["disconnectedAt"].as_str();
+    let duration_secs   = log["durationSecs"].as_i64();
+    let status          = log["status"].as_str().unwrap_or("connected");
+
+    let conn = state.database.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT OR REPLACE INTO connection_logs
+         (id, host_id, host_label, host_address, session_type, connected_at, disconnected_at, duration_secs, status)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)",
+        params![id, host_id, host_label, host_address, session_type,
+                connected_at, disconnected_at, duration_secs, status],
+    )
+    .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn db_get_connection_logs(state: State<AppState>, limit: Option<i64>) -> Result<Vec<Value>, String> {
+    let limit = limit.unwrap_or(200);
+    let conn = state.database.conn.lock().map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, host_id, host_label, host_address, session_type,
+                    connected_at, disconnected_at, duration_secs, status
+             FROM connection_logs
+             ORDER BY connected_at DESC
+             LIMIT ?1",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let rows: Result<Vec<Value>, String> = stmt
+        .query_map([limit], |row| {
+            Ok(serde_json::json!({
+                "id":             row.get::<_, String>(0)?,
+                "hostId":         row.get::<_, String>(1)?,
+                "hostLabel":      row.get::<_, String>(2)?,
+                "hostAddress":    row.get::<_, String>(3)?,
+                "sessionType":    row.get::<_, String>(4)?,
+                "connectedAt":    row.get::<_, String>(5)?,
+                "disconnectedAt": row.get::<_, Option<String>>(6)?,
+                "durationSecs":   row.get::<_, Option<i64>>(7)?,
+                "status":         row.get::<_, String>(8)?,
+            }))
+        })
+        .map_err(|e| e.to_string())?
+        .map(|r| r.map_err(|e| e.to_string()))
+        .collect();
+
+    rows
+}
+
+#[tauri::command]
+pub fn db_clear_connection_logs(state: State<AppState>) -> Result<(), String> {
+    let conn = state.database.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM connection_logs", []).map_err(|e| e.to_string())?;
     Ok(())
 }

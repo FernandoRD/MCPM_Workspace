@@ -27,6 +27,8 @@ import { useSessionsStore } from "@/store/sessions";
 import { useHostsStore } from "@/store/hosts";
 import { useCredentialsStore } from "@/store/credentials";
 import { useSshKeysStore } from "@/store/sshKeys";
+import { useSettingsStore } from "@/store/settings";
+import { useConnectionLogsStore } from "@/store/connectionLogs";
 import { Button } from "@/components/ui/Button";
 
 interface SftpEntry {
@@ -73,6 +75,9 @@ export function SftpPage() {
   const setLastConnected = useHostsStore((s) => s.setLastConnected);
   const getCredential = useCredentialsStore((s) => s.getCredential);
   const getSshKey = useSshKeysStore((s) => s.getSshKey);
+  const sshSettings = useSettingsStore((s) => s.settings.ssh);
+  const openLog = useConnectionLogsStore((s) => s.openLog);
+  const closeLog = useConnectionLogsStore((s) => s.closeLog);
 
   const tab = tabs.find((t) => t.id === tabId);
   const host = tab ? getHost(tab.hostId) : undefined;
@@ -100,6 +105,7 @@ export function SftpPage() {
   const [deletingEntry, setDeletingEntry] = useState<SftpEntry | null>(null);
 
   const sessionId = tabId!;
+  const logIdRef = useRef<string | null>(null);
 
   const connect = useCallback(async () => {
     if (!host) return;
@@ -132,8 +138,8 @@ export function SftpPage() {
         privateKeyContent,
         privateKeyPassphrase,
         sshCompatPreset: host.sshCompat?.preset ?? "modern",
-        keepaliveInterval: host.keepAliveInterval ?? 0,
-        connectionTimeout: host.connectionTimeout ?? 30,
+        keepaliveInterval: sshSettings?.keepAliveInterval ?? 60,
+        connectionTimeout: sshSettings?.inactivityTimeout ?? 0,
         // Jump host (null quando não configurado)
         jumpHost: jumpHost?.host ?? null,
         jumpPort: jumpHost?.port ?? null,
@@ -146,6 +152,14 @@ export function SftpPage() {
       setStatus("connected");
       setLastConnected(host.id);
       updatePaneStatus(sessionId, "connected");
+      logIdRef.current = openLog({
+        hostId: host.id,
+        hostLabel: host.label,
+        hostAddress: tab!.hostAddress,
+        sessionType: "sftp",
+        connectedAt: new Date().toISOString(),
+        status: "connected",
+      });
       await loadDir("/");
     } catch (err) {
       setStatus("error");
@@ -173,6 +187,7 @@ export function SftpPage() {
   useEffect(() => {
     connect();
     return () => {
+      if (logIdRef.current) closeLog(logIdRef.current, "disconnected");
       invoke("sftp_disconnect", { sessionId }).catch(() => {});
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps

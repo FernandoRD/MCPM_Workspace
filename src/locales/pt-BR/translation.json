@@ -8,6 +8,7 @@
     "credentials": "Credenciais",
     "sshKeys": "Chaves SSH",
     "groups": "Grupos",
+    "connectionLog": "Log de Conexões",
     "settings": "Configurações",
     "sync": "Sincronização",
     "newConnection": "Nova Conexão",
@@ -58,8 +59,7 @@
       "notesPlaceholder": "Observações sobre este servidor...",
       "jumpHost": "Jump Host (Proxy)",
       "jumpHostPlaceholder": "Selecionar host de salto...",
-      "keepAliveInterval": "Keep-alive (segundos)",
-      "connectionTimeout": "Timeout de Conexão (segundos)"
+      "keepAliveInterval": "Keep-alive (segundos)"
     },
     "authMethods": {
       "password": "Senha",
@@ -164,8 +164,16 @@
       "appearance": "Aparência",
       "language": "Idioma",
       "terminal": "Terminal",
+      "ssh": "SSH",
       "security": "Segurança",
       "sync": "Sincronização"
+    },
+    "ssh": {
+      "description": "Configurações globais de conexão SSH, aplicadas a todas as sessões.",
+      "keepAliveInterval": "Keep-alive (segundos)",
+      "keepAliveHint": "Envia um pacote de manutenção a cada N segundos para evitar desconexão por inatividade. 0 = desabilitado.",
+      "inactivityTimeout": "Timeout de inatividade (segundos)",
+      "inactivityTimeoutHint": "Encerra a sessão após N segundos sem atividade. 0 = nunca desconectar (recomendado)."
     },
     "appearance": {
       "theme": "Tema",
@@ -454,6 +462,25 @@
     "deleteTitle": "Excluir Grupo",
     "deleteConfirm": "Tem certeza que deseja excluir o grupo \"{{name}}\"?",
     "deleteWarning": "Os {{count}} host(s) deste grupo ficarão sem grupo, mas não serão excluídos."
+  },
+  "connectionLog": {
+    "title": "Log de Conexões",
+    "clear": "Limpar log",
+    "empty": "Nenhuma conexão registrada",
+    "host": "Host",
+    "type": "Tipo",
+    "connectedAt": "Conectado em",
+    "duration": "Duração",
+    "status": "Status",
+    "sessionType": {
+      "terminal": "Terminal",
+      "sftp": "SFTP"
+    },
+    "statusLabel": {
+      "connected": "Ativa",
+      "disconnected": "Encerrada",
+      "error": "Erro"
+    }
   },
   "common": {
     "loading": "Carregando...",

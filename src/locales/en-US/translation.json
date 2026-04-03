@@ -8,6 +8,7 @@
     "credentials": "Credentials",
     "sshKeys": "SSH Keys",
     "groups": "Groups",
+    "connectionLog": "Connection Log",
     "settings": "Settings",
     "sync": "Sync",
     "newConnection": "New Connection",
@@ -58,8 +59,7 @@
       "notesPlaceholder": "Notes about this server...",
       "jumpHost": "Jump Host (Proxy)",
       "jumpHostPlaceholder": "Select jump host...",
-      "keepAliveInterval": "Keep-alive (seconds)",
-      "connectionTimeout": "Connection Timeout (seconds)"
+      "keepAliveInterval": "Keep-alive (seconds)"
     },
     "authMethods": {
       "password": "Password",
@@ -164,8 +164,16 @@
       "appearance": "Appearance",
       "language": "Language",
       "terminal": "Terminal",
+      "ssh": "SSH",
       "security": "Security",
       "sync": "Sync"
+    },
+    "ssh": {
+      "description": "Global SSH connection settings, applied to all sessions.",
+      "keepAliveInterval": "Keep-alive (seconds)",
+      "keepAliveHint": "Sends a keepalive packet every N seconds to prevent disconnection due to inactivity. 0 = disabled.",
+      "inactivityTimeout": "Inactivity timeout (seconds)",
+      "inactivityTimeoutHint": "Closes the session after N seconds with no activity. 0 = never disconnect (recommended)."
     },
     "appearance": {
       "theme": "Theme",
@@ -454,6 +462,25 @@
     "deleteTitle": "Delete Group",
     "deleteConfirm": "Are you sure you want to delete the group \"{{name}}\"?",
     "deleteWarning": "The {{count}} host(s) in this group will become ungrouped, but will not be deleted."
+  },
+  "connectionLog": {
+    "title": "Connection Log",
+    "clear": "Clear log",
+    "empty": "No connections recorded",
+    "host": "Host",
+    "type": "Type",
+    "connectedAt": "Connected at",
+    "duration": "Duration",
+    "status": "Status",
+    "sessionType": {
+      "terminal": "Terminal",
+      "sftp": "SFTP"
+    },
+    "statusLabel": {
+      "connected": "Active",
+      "disconnected": "Closed",
+      "error": "Error"
+    }
   },
   "common": {
     "loading": "Loading...",
