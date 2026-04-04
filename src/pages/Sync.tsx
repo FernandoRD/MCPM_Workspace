@@ -10,6 +10,7 @@ import { notify } from "@/lib/notifications";
 import { useHostsStore } from "@/store/hosts";
 import { useSettingsStore } from "@/store/settings";
 import { useCredentialsStore } from "@/store/credentials";
+import { useSshKeysStore } from "@/store/sshKeys";
 import { AppSettings, SyncProvider } from "@/types";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
@@ -32,7 +33,9 @@ export function Sync() {
   const replaceHosts = useHostsStore((s) => s.replaceHosts);
   const credentials = useCredentialsStore((s) => s.credentials);
   const replaceCredentials = useCredentialsStore((s) => s.replaceCredentials);
-  const { settings, updateSync } = useSettingsStore();
+  const sshKeys = useSshKeysStore((s) => s.sshKeys);
+  const replaceSshKeys = useSshKeysStore((s) => s.replaceSshKeys);
+  const { settings, updateSync, replaceSettings } = useSettingsStore();
   const sync = settings.sync;
   const security = settings.security;
 
@@ -75,7 +78,7 @@ export function Sync() {
     setError(null);
     setLastResult(null);
     try {
-      const payload = await buildSyncPayload(hosts, credentials, settings, masterPassword);
+      const payload = await buildSyncPayload(hosts, credentials, sshKeys, settings, masterPassword);
       const newGistId = await pushToProvider(sync, payload);
       if (newGistId) updateSync({ gist: { ...sync.gist!, gistId: newGistId } });
       updateSync({ lastSyncAt: new Date().toISOString() });
@@ -101,8 +104,12 @@ export function Sync() {
         "merge",
         hosts,
         credentials,
+        sshKeys,
+        settings,
         replaceHosts,
-        replaceCredentials
+        replaceCredentials,
+        replaceSshKeys,
+        replaceSettings
       );
       updateSync({ lastSyncAt: new Date().toISOString() });
       setLastResult(result);
@@ -697,6 +704,8 @@ function StatusCard({
               hostsUpdated: lastResult.hostsUpdated,
               credentialsAdded: lastResult.credentialsAdded,
               credentialsUpdated: lastResult.credentialsUpdated,
+              sshKeysAdded: lastResult.sshKeysAdded,
+              sshKeysUpdated: lastResult.sshKeysUpdated,
             })}
           </p>
         )}

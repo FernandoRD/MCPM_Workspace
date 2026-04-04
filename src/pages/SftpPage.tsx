@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useLocation, useParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   Folder,
@@ -30,6 +30,8 @@ import { useSshKeysStore } from "@/store/sshKeys";
 import { useSettingsStore } from "@/store/settings";
 import { useConnectionLogsStore } from "@/store/connectionLogs";
 import { Button } from "@/components/ui/Button";
+import { launchTerminalSession } from "@/lib/sessionLauncher";
+import { readSessionBootstrap, withStandaloneQuery } from "@/lib/windowMode";
 
 interface SftpEntry {
   name: string;
@@ -66,9 +68,11 @@ function formatDate(ts?: number): string {
 export function SftpPage() {
   const { t } = useTranslation();
   const { tabId } = useParams<{ tabId: string }>();
+  const location = useLocation();
   const navigate = useNavigate();
 
   const tabs = useSessionsStore((s) => s.tabs);
+  const ensureSession = useSessionsStore((s) => s.ensureSession);
   const updatePaneStatus = useSessionsStore((s) => s.updatePaneStatus);
   const openSession = useSessionsStore((s) => s.openSession);
   const getHost = useHostsStore((s) => s.getHost);
@@ -76,11 +80,30 @@ export function SftpPage() {
   const getCredential = useCredentialsStore((s) => s.getCredential);
   const getSshKey = useSshKeysStore((s) => s.getSshKey);
   const sshSettings = useSettingsStore((s) => s.settings.ssh);
+  const sessionOpenMode = useSettingsStore((s) => s.settings.terminal.sessionOpenMode);
   const openLog = useConnectionLogsStore((s) => s.openLog);
   const closeLog = useConnectionLogsStore((s) => s.closeLog);
+  const bootstrap = readSessionBootstrap(location.search);
+  const standaloneWindow = bootstrap.standalone;
 
   const tab = tabs.find((t) => t.id === tabId);
   const host = tab ? getHost(tab.hostId) : undefined;
+
+  useEffect(() => {
+    if (!tabId || tab || !bootstrap.standalone || !bootstrap.hostId) return;
+
+    ensureSession({
+      id: tabId,
+      type: "sftp",
+      hostId: bootstrap.hostId,
+      hostLabel: bootstrap.hostLabel ?? "SFTP",
+      hostAddress: bootstrap.hostAddress ?? bootstrap.hostLabel ?? "",
+      status: "connecting",
+      panes: [],
+      splitDirection: "horizontal",
+      createdAt: new Date().toISOString(),
+    });
+  }, [bootstrap.hostAddress, bootstrap.hostId, bootstrap.hostLabel, bootstrap.standalone, ensureSession, tab, tabId]);
 
   const [status, setStatus] = useState<Status>("connecting");
   const [currentPath, setCurrentPath] = useState("/");
@@ -327,12 +350,20 @@ export function SftpPage() {
         [{ label: "/", path: "/" }]
       );
 
+  if (!tab && bootstrap.standalone && bootstrap.hostId) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-4">
+        <p className="text-[var(--text-muted)]">Carregando sessão...</p>
+      </div>
+    );
+  }
+
   if (!tab || !host) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
         <WifiOff size={32} className="text-[var(--text-muted)]" />
         <p className="text-[var(--text-muted)]">Sessão não encontrada</p>
-        <Button onClick={() => navigate("/")}>Voltar</Button>
+        <Button onClick={() => navigate(withStandaloneQuery("/", bootstrap.standalone))}>Voltar</Button>
       </div>
     );
   }
@@ -445,9 +476,16 @@ export function SftpPage() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => {
-              const termTabId = openSession(host.id, host.label, tab.hostAddress);
-              navigate(`/terminal/${termTabId}`);
+            onClick={async () => {
+              const route = await launchTerminalSession({
+                hostId: host.id,
+                hostLabel: host.label,
+                hostAddress: tab.hostAddress,
+                openMode: sessionOpenMode,
+                openSession,
+                standaloneWindow,
+              });
+              if (route) navigate(route);
             }}
             title={t("sftp.openTerminal")}
             className="gap-1.5 text-xs"

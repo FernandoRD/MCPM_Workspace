@@ -13,7 +13,8 @@
     "settings": "Configurações",
     "sync": "Sincronização",
     "newConnection": "Nova Conexão",
-    "backup": "Backup"
+    "backup": "Backup",
+    "quickConnect": "Quick Connect"
   },
   "dashboard": {
     "title": "Hosts",
@@ -201,6 +202,12 @@
       "cursorStyle": "Estilo do Cursor",
       "cursorBlink": "Cursor piscante",
       "scrollback": "Linhas de histórico",
+      "sessionOpenMode": "Abrir sessões SSH em",
+      "sessionOpenModeHint": "Escolha se novas sessões de terminal devem abrir como aba na janela atual ou em uma janela dedicada.",
+      "sessionOpenModes": {
+        "tab": "Mesma janela",
+        "window": "Janelas separadas"
+      },
       "cursorStyles": {
         "block": "Bloco",
         "underline": "Sublinhado",
@@ -256,7 +263,7 @@
       "error": "Erro na sincronização",
       "notConfigured": "Não configurado",
       "lastSync": "Última sincronização: {{date}}",
-      "importResult": "Importado: {{hostsAdded}} hosts novos, {{hostsUpdated}} atualizados, {{credentialsAdded}} credenciais novas, {{credentialsUpdated}} atualizadas"
+      "importResult": "Importado: {{hostsAdded}} hosts novos, {{hostsUpdated}} atualizados, {{credentialsAdded}} credenciais novas, {{credentialsUpdated}} atualizadas, {{sshKeysAdded}} chaves novas, {{sshKeysUpdated}} atualizadas"
     },
     "providers": {
       "title": "Provedor de Sincronização",
@@ -527,6 +534,24 @@
       "agent": "Agente SSH"
     },
     "importToVault": "Importar para o Vault"
+  },
+  "commandPalette": {
+    "searchPlaceholder": "Buscar hosts, telas ou usar user@host:porta",
+    "quickActions": "Acoes rapidas",
+    "quickConnect": "Hosts",
+    "directConnect": "Quick Connect",
+    "directConnectHint": "Conecta sem cadastrar o host usando o SSH agent da maquina.",
+    "directConnectAction": "Conectar",
+    "results": "{{count}} resultado(s)",
+    "noHosts": "Nenhum host encontrado",
+    "terminal": "Terminal",
+    "sftp": "SFTP",
+    "actions": {
+      "newHost": "Novo host",
+      "openBackup": "Abrir backup",
+      "openSettings": "Abrir configuracoes",
+      "openOperations": "Abrir operacoes"
+    }
   },
   "common": {
     "loading": "Carregando...",

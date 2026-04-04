@@ -10,13 +10,16 @@ import {
   Layers,
   History,
   PlugZap,
+  Search,
 } from "lucide-react";
+import { useUIStore } from "@/store/uiStore";
 import { cn } from "@/lib/utils";
 
 export function Sidebar() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
+  const openCommandPalette = useUIStore((s) => s.openCommandPalette);
 
   const navItems = [
     { to: "/", icon: Server, label: t("nav.dashboard") },
@@ -42,6 +45,18 @@ export function Sidebar() {
 
       {/* Nav links */}
       <nav className="flex flex-col gap-0.5 px-2 py-3">
+        <button
+          onClick={openCommandPalette}
+          className="mb-2 flex items-center justify-between rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 py-2 text-sm text-[var(--text-primary)] transition-colors hover:border-[var(--border-focus)] hover:bg-[var(--bg-hover)]"
+        >
+          <span className="inline-flex items-center gap-2.5">
+            <Search size={16} className="text-[var(--accent)]" />
+            {t("nav.quickConnect")}
+          </span>
+          <span className="rounded border border-[var(--border)] px-1.5 py-0.5 text-[10px] text-[var(--text-muted)]">
+            Ctrl+K
+          </span>
+        </button>
         {navItems.map(({ to, icon: Icon, label }) => (
           <button
             key={to}

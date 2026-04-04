@@ -7,11 +7,14 @@ interface UIStore {
   dashboardSelectedGroup: string | null;
   dashboardSortBy: DashboardSortBy;
   dashboardSelectedTags: string[];
+  commandPaletteOpen: boolean;
   setDashboardSearch: (v: string) => void;
   setDashboardSelectedGroup: (v: string | null) => void;
   setDashboardSortBy: (v: DashboardSortBy) => void;
   toggleDashboardTag: (tag: string) => void;
   clearDashboardTags: () => void;
+  openCommandPalette: () => void;
+  closeCommandPalette: () => void;
 }
 
 export const useUIStore = create<UIStore>()((set) => ({
@@ -19,6 +22,7 @@ export const useUIStore = create<UIStore>()((set) => ({
   dashboardSelectedGroup: null,
   dashboardSortBy: "label-asc",
   dashboardSelectedTags: [],
+  commandPaletteOpen: false,
   setDashboardSearch: (v) => set({ dashboardSearch: v }),
   setDashboardSelectedGroup: (v) => set({ dashboardSelectedGroup: v }),
   setDashboardSortBy: (v) => set({ dashboardSortBy: v }),
@@ -29,4 +33,6 @@ export const useUIStore = create<UIStore>()((set) => ({
         : [...s.dashboardSelectedTags, tag],
     })),
   clearDashboardTags: () => set({ dashboardSelectedTags: [] }),
+  openCommandPalette: () => set({ commandPaletteOpen: true }),
+  closeCommandPalette: () => set({ commandPaletteOpen: false }),
 }));

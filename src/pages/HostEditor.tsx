@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { Button } from "@/components/ui/Button";
+import { TagBadge } from "@/components/ui/TagBadge";
 import { TotpDisplay } from "@/components/TotpDisplay/TotpDisplay";
 import { cn } from "@/lib/utils";
 
@@ -60,6 +61,10 @@ export function HostEditor() {
   const [copyIdPassword, setCopyIdPassword] = useState("");
   const [copyIdStatus, setCopyIdStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [copyIdError, setCopyIdError] = useState<string | null>(null);
+  const parsedTags = tagsInput
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
 
   useEffect(() => {
     if (!isNew && id) {
@@ -129,10 +134,7 @@ export function HostEditor() {
 
   const handleSave = () => {
     if (!validate()) return;
-    const tags = tagsInput
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
+    const tags = parsedTags;
     if (isNew) {
       // Para hosts novos, deriva authMethod da credencial selecionada (se houver)
       const selectedCred = form.credentialId
@@ -360,6 +362,13 @@ export function HostEditor() {
                 onChange={(e) => setTagsInput(e.target.value)}
                 hint="Separe as tags por vírgula"
               />
+              {parsedTags.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {parsedTags.map((tag) => (
+                    <TagBadge key={`preview:${tag}`} tag={tag} />
+                  ))}
+                </div>
+              )}
               {otherHosts.length > 0 && (
                 <Select
                   id="jumpHost"

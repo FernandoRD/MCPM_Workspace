@@ -61,12 +61,25 @@ export interface SshPane {
   status: "connecting" | "connected" | "disconnected" | "error";
 }
 
+export interface SessionConnection {
+  source: "saved-host" | "quick-connect";
+  host: string;
+  port: number;
+  username: string;
+  authMethod: AuthMethod;
+  password?: string | null;
+  privateKeyContent?: string | null;
+  passphrase?: string | null;
+  sshCompatPreset?: SshCompatPreset;
+}
+
 export interface SessionTab {
   id: string;
   type: TabType;
   hostId: string;
   hostLabel: string;
   hostAddress: string;
+  connection?: SessionConnection;
   status: "connecting" | "connected" | "disconnected" | "error";
   panes: SshPane[];
   splitDirection: SplitDirection;
@@ -111,6 +124,7 @@ export interface AppSettings {
     cursorStyle: "block" | "underline" | "bar";
     cursorBlink: boolean;
     scrollback: number;
+    sessionOpenMode: "tab" | "window";
   };
   ssh: {
     keepAliveInterval: number;

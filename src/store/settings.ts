@@ -16,6 +16,7 @@ interface SettingsStore {
   updateSync: (sync: Partial<AppSettings["sync"]>) => void;
   updateGroups: (groups: string[]) => void;
   updateProductivity: (productivity: Partial<AppSettings["productivity"]>) => void;
+  replaceSettings: (settings: AppSettings) => void;
   resetSettings: () => void;
 }
 
@@ -28,6 +29,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     cursorStyle: "block",
     cursorBlink: true,
     scrollback: 5000,
+    sessionOpenMode: "tab",
   },
   security: {
     masterPasswordSet: false,
@@ -50,8 +52,39 @@ const DEFAULT_SETTINGS: AppSettings = {
   },
 };
 
+function normalizeSettings(settings?: Partial<AppSettings> | null): AppSettings {
+  return {
+    ...DEFAULT_SETTINGS,
+    ...settings,
+    terminal: {
+      ...DEFAULT_SETTINGS.terminal,
+      ...(settings?.terminal ?? {}),
+    },
+    security: {
+      ...DEFAULT_SETTINGS.security,
+      ...(settings?.security ?? {}),
+    },
+    ssh: {
+      ...DEFAULT_SETTINGS.ssh,
+      ...(settings?.ssh ?? {}),
+    },
+    sync: {
+      ...DEFAULT_SETTINGS.sync,
+      ...(settings?.sync ?? {}),
+    },
+    groups: settings?.groups ?? DEFAULT_SETTINGS.groups,
+    productivity: {
+      ...DEFAULT_SETTINGS.productivity,
+      ...(settings?.productivity ?? {}),
+      snippets: settings?.productivity?.snippets ?? DEFAULT_SETTINGS.productivity.snippets,
+      tunnels: settings?.productivity?.tunnels ?? DEFAULT_SETTINGS.productivity.tunnels,
+      workspaces: settings?.productivity?.workspaces ?? DEFAULT_SETTINGS.productivity.workspaces,
+    },
+  };
+}
+
 function persistSettings(settings: AppSettings) {
-  invoke("db_save_settings", { settings }).catch(console.error);
+  invoke("db_save_settings", { settings: normalizeSettings(settings) }).catch(console.error);
 }
 
 export const useSettingsStore = create<SettingsStore>()((set, _get) => ({
@@ -68,7 +101,7 @@ export const useSettingsStore = create<SettingsStore>()((set, _get) => ({
         if (legacy) {
           try {
             const parsed = JSON.parse(legacy);
-            const legacySettings: AppSettings = parsed.state?.settings ?? DEFAULT_SETTINGS;
+            const legacySettings = normalizeSettings(parsed.state?.settings);
             await invoke("db_save_settings", { settings: legacySettings });
             localStorage.removeItem("ssh-vault-settings");
             applyTheme(legacySettings.themeId as ThemeId);
@@ -86,9 +119,10 @@ export const useSettingsStore = create<SettingsStore>()((set, _get) => ({
         return;
       }
 
-      applyTheme(loaded.themeId as ThemeId);
-      i18n.changeLanguage(loaded.locale);
-      set({ settings: loaded, initialized: true });
+      const normalized = normalizeSettings(loaded);
+      applyTheme(normalized.themeId as ThemeId);
+      i18n.changeLanguage(normalized.locale);
+      set({ settings: normalized, initialized: true });
     } catch (e) {
       console.error("Falha ao inicializar settings store:", e);
       applyTheme(DEFAULT_SETTINGS.themeId as ThemeId);
@@ -171,6 +205,14 @@ export const useSettingsStore = create<SettingsStore>()((set, _get) => ({
       persistSettings(settings);
       return { settings };
     }),
+
+  replaceSettings: (settings) => {
+    const normalized = normalizeSettings(settings);
+    applyTheme(normalized.themeId as ThemeId);
+    i18n.changeLanguage(normalized.locale);
+    set({ settings: normalized });
+    persistSettings(normalized);
+  },
 
   resetSettings: () => {
     applyTheme(DEFAULT_SETTINGS.themeId as ThemeId);

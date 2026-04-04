@@ -1,7 +1,8 @@
-import { useParams, useNavigate } from "react-router-dom";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useCallback, useEffect, useRef } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { WifiOff, Columns2, Rows2, X, FolderOpen } from "lucide-react";
-import { useRef, useCallback } from "react";
 import { notify } from "@/lib/notifications";
 import { useSessionsStore } from "@/store/sessions";
 import { useHostsStore } from "@/store/hosts";
@@ -10,13 +11,17 @@ import { useSshKeysStore } from "@/store/sshKeys";
 import { useConnectionLogsStore } from "@/store/connectionLogs";
 import { SshPane } from "@/components/Terminal/SshPane";
 import { Button } from "@/components/ui/Button";
+import { SessionConnection } from "@/types";
+import { buildSessionRoute, readSessionBootstrap, withStandaloneQuery } from "@/lib/windowMode";
 
 export function TerminalPage() {
   const { t } = useTranslation();
   const { tabId } = useParams<{ tabId: string }>();
+  const location = useLocation();
   const navigate = useNavigate();
 
   const tabs = useSessionsStore((s) => s.tabs);
+  const ensureSession = useSessionsStore((s) => s.ensureSession);
   const updatePaneStatus = useSessionsStore((s) => s.updatePaneStatus);
   const addPane = useSessionsStore((s) => s.addPane);
   const closePane = useSessionsStore((s) => s.closePane);
@@ -29,9 +34,38 @@ export function TerminalPage() {
   const getSshKey = useSshKeysStore((s) => s.getSshKey);
   const openLog = useConnectionLogsStore((s) => s.openLog);
   const closeLog = useConnectionLogsStore((s) => s.closeLog);
+  const bootstrap = readSessionBootstrap(location.search);
 
   const tab = tabs.find((t) => t.id === tabId);
   const host = tab ? getHost(tab.hostId) : undefined;
+  const sessionConnection = tab?.connection;
+
+  useEffect(() => {
+    if (!tabId || tab || !bootstrap.standalone || !bootstrap.hostId) return;
+
+    const connection: SessionConnection | undefined = bootstrap.quickConnect && bootstrap.connectionHost
+      ? {
+          source: "quick-connect",
+          host: bootstrap.connectionHost,
+          port: bootstrap.connectionPort ?? 22,
+          username: bootstrap.connectionUsername ?? "",
+          authMethod: (bootstrap.connectionAuthMethod as SessionConnection["authMethod"]) ?? "agent",
+        }
+      : undefined;
+
+    ensureSession({
+      id: tabId,
+      type: "terminal",
+      hostId: bootstrap.hostId,
+      hostLabel: bootstrap.hostLabel ?? "SSH",
+      hostAddress: bootstrap.hostAddress ?? bootstrap.hostLabel ?? "",
+      connection,
+      status: "connecting",
+      panes: [{ id: tabId, status: "connecting" }],
+      splitDirection: "horizontal",
+      createdAt: new Date().toISOString(),
+    });
+  }, [bootstrap.connectionAuthMethod, bootstrap.connectionHost, bootstrap.connectionPort, bootstrap.connectionUsername, bootstrap.hostAddress, bootstrap.hostId, bootstrap.hostLabel, bootstrap.quickConnect, bootstrap.standalone, ensureSession, tab, tabId]);
 
   // Navega de volta ao Dashboard quando a sessão (pane principal) desconecta
   const everConnectedRef = useRef(false);
@@ -53,13 +87,21 @@ export function TerminalPage() {
       notify("SSH Vault", t("notifications.sshDropped", { host: hostLabelRef.current }));
     }
     if (tabId) closeSession(tabId);
+    if (bootstrap.standalone) {
+      void getCurrentWindow().close().catch(() => {
+        navigate(withStandaloneQuery("/", true));
+      });
+      return;
+    }
     navigate("/");
-  }, [tabId, closeSession, navigate, closeLog, t]);
+  }, [bootstrap.standalone, tabId, closeSession, navigate, closeLog, t]);
 
   const handleConnected = useCallback(() => {
     everConnectedRef.current = true;
     if (tab) {
-      setLastConnected(tab.hostId);
+      if (!tab.connection) {
+        setLastConnected(tab.hostId);
+      }
       logIdRef.current = openLog({
         hostId: tab.hostId,
         hostLabel: tab.hostLabel,
@@ -72,29 +114,48 @@ export function TerminalPage() {
     }
   }, [tab, setLastConnected, openLog, t]);
 
-  if (!tab || !host) {
+  if (!tab && bootstrap.standalone && bootstrap.hostId) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
-        <WifiOff size={32} className="text-[var(--text-muted)]" />
-        <p className="text-[var(--text-muted)]">Sessão não encontrada</p>
-        <Button onClick={() => navigate("/")}>Voltar</Button>
+        <p className="text-[var(--text-muted)]">Carregando sessão...</p>
       </div>
     );
   }
 
-  const credential = host.credentialId ? getCredential(host.credentialId) : undefined;
-  const authMethod = credential?.authMethod ?? host.authMethod ?? "password";
-  const username = credential?.username ?? host.username ?? "";
-  const password = credential?.password ?? host.passwordRef ?? null;
-  const sshKey = credential?.keyId ? getSshKey(credential.keyId) : undefined;
-  const privateKeyContent = sshKey?.privateKeyContent ?? null;
-  const passphrase = sshKey?.passphrase ?? null;
+  if (!tab || (!host && !sessionConnection)) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-4">
+        <WifiOff size={32} className="text-[var(--text-muted)]" />
+        <p className="text-[var(--text-muted)]">Sessão não encontrada</p>
+        <Button onClick={() => navigate(withStandaloneQuery("/", bootstrap.standalone))}>Voltar</Button>
+      </div>
+    );
+  }
+
+  const credential = host?.credentialId ? getCredential(host.credentialId) : undefined;
+  const authMethod = sessionConnection?.authMethod ?? credential?.authMethod ?? host?.authMethod ?? "password";
+  const username = sessionConnection?.username ?? credential?.username ?? host?.username ?? "";
+  const password = sessionConnection?.password ?? credential?.password ?? host?.passwordRef ?? null;
+  const sshKey = host && credential?.keyId ? getSshKey(credential.keyId) : undefined;
+  const privateKeyContent = sessionConnection?.privateKeyContent ?? sshKey?.privateKeyContent ?? null;
+  const passphrase = sessionConnection?.passphrase ?? sshKey?.passphrase ?? null;
+  const targetHost = sessionConnection?.host ?? host!.host;
+  const targetPort = sessionConnection?.port ?? host!.port;
+  const targetCompatPreset = sessionConnection?.sshCompatPreset ?? host?.sshCompat?.preset;
 
   const isVertical = tab.splitDirection === "vertical";
 
   const handleOpenSftp = () => {
+    if (!host) return;
     const sftpTabId = openSftpTab(host.id, host.label, tab.hostAddress);
-    navigate(`/sftp/${sftpTabId}`);
+    navigate(
+      buildSessionRoute("sftp", sftpTabId, {
+        standalone: bootstrap.standalone,
+        hostId: bootstrap.standalone ? host.id : undefined,
+        hostLabel: bootstrap.standalone ? host.label : undefined,
+        hostAddress: bootstrap.standalone ? tab.hostAddress : undefined,
+      })
+    );
   };
 
   return (
@@ -125,6 +186,7 @@ export function TerminalPage() {
           onClick={handleOpenSftp}
           title={t("terminal.openSftp")}
           className="gap-1.5 text-xs"
+          disabled={!host}
         >
           <FolderOpen size={14} />
           {t("terminal.openSftp")}
@@ -159,16 +221,16 @@ export function TerminalPage() {
 
             <SshPane
               paneId={pane.id}
-              host={host.host}
-              port={host.port}
+              host={targetHost}
+              port={targetPort}
               authMethod={authMethod}
               username={username}
               password={password}
               privateKeyContent={privateKeyContent}
               passphrase={passphrase}
-              sshCompatPreset={host.sshCompat?.preset}
+              sshCompatPreset={targetCompatPreset}
               onStatusChange={(pid, status) => updatePaneStatus(pid, status)}
-              onConnected={pane.id === tab.id ? handleConnected : () => setLastConnected(host.id)}
+              onConnected={pane.id === tab.id ? handleConnected : () => { if (host) setLastConnected(host.id); }}
               onDisconnected={pane.id === tab.id ? handleDisconnected : undefined}
             />
           </div>

@@ -24,7 +24,21 @@ import {
   AppSettings,
   Credential,
   EncryptedCredentials,
+  SshKey,
 } from "@/types";
+import {
+  buildPortableSettings,
+  buildTransferSecretsPayload,
+  hydrateCredentials,
+  hydrateHosts,
+  hydrateSshKeys,
+  mergePortableSettings,
+  PortableSyncSettings,
+  sanitizeCredentials,
+  sanitizeHosts,
+  sanitizeSshKeys,
+  TransferSecretsPayload,
+} from "@/lib/portableState";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -33,23 +47,13 @@ export interface SyncFile {
   version: 1;
   syncedAt: string;
   hosts: SshHost[];
-  /** Credenciais — incluem password/passphrase em texto claro quando não há criptografia */
+  /** Credenciais sem segredos sensíveis */
   credentials: Credential[];
-  settings: {
-    themeId: string;
-    locale: string;
-    terminal: AppSettings["terminal"];
-  };
-  /** Presente quando as senhas foram exportadas com criptografia (senha mestra) */
+  /** Chaves SSH sem material privado */
+  sshKeys: SshKey[];
+  settings: PortableSyncSettings;
+  /** Presente quando segredos foram exportados com criptografia (senha mestra) */
   encryptedSecrets?: EncryptedCredentials;
-}
-
-/** Mapa de segredos que vai cifrado — { credId: { password?, passphrase? } } */
-interface SecretsMap {
-  [credId: string]: {
-    password?: string;
-    passphrase?: string;
-  };
 }
 
 export interface SyncResult {
@@ -57,6 +61,8 @@ export interface SyncResult {
   hostsUpdated: number;
   credentialsAdded: number;
   credentialsUpdated: number;
+  sshKeysAdded: number;
+  sshKeysUpdated: number;
 }
 
 // ─── Build payload ────────────────────────────────────────────────────────────
@@ -69,38 +75,24 @@ export interface SyncResult {
 export async function buildSyncPayload(
   hosts: SshHost[],
   credentials: Credential[],
+  sshKeys: SshKey[],
   settings: AppSettings,
   masterPassword: string | null
 ): Promise<string> {
-  // Strip de campos sensíveis dos hosts (senhas de hosts ficam no sistema de credenciais)
-  const cleanHosts = hosts.map(
-    ({ passwordRef: _p, ...rest }) => rest as SshHost
-  );
-
-  let exportedCredentials: Credential[];
+  const cleanHosts = sanitizeHosts(hosts);
+  const exportedCredentials = sanitizeCredentials(credentials);
+  const exportedSshKeys = sanitizeSshKeys(sshKeys);
   let encryptedSecrets: EncryptedCredentials | undefined;
 
   if (masterPassword) {
-    // Com senha mestra: exporta credenciais sem segredos + segredos cifrados à parte
-    exportedCredentials = credentials.map(
-      ({ password: _p, ...rest }) => rest as Credential
-    );
-    const secretsMap: SecretsMap = {};
-    for (const cred of credentials) {
-      const entry: SecretsMap[string] = {};
-      if (cred.password) entry.password = cred.password;
-      if (Object.keys(entry).length > 0) secretsMap[cred.id] = entry;
-    }
-    if (Object.keys(secretsMap).length > 0) {
+    const secretsPayload = buildTransferSecretsPayload(hosts, credentials, sshKeys, settings);
+    if (secretsPayload) {
       const payloadJson = await invoke<string>("encrypt_credentials", {
-        credentialsJson: JSON.stringify(secretsMap),
+        credentialsJson: JSON.stringify(secretsPayload),
         masterPassword,
       });
       encryptedSecrets = JSON.parse(payloadJson) as EncryptedCredentials;
     }
-  } else {
-    // Sem senha mestra: inclui senhas em texto claro (Gist/S3 privado do próprio usuário)
-    exportedCredentials = credentials;
   }
 
   const file: SyncFile = {
@@ -109,11 +101,8 @@ export async function buildSyncPayload(
     syncedAt: new Date().toISOString(),
     hosts: cleanHosts,
     credentials: exportedCredentials,
-    settings: {
-      themeId: settings.themeId,
-      locale: settings.locale,
-      terminal: settings.terminal,
-    },
+    sshKeys: exportedSshKeys,
+    settings: buildPortableSettings(settings),
     ...(encryptedSecrets ? { encryptedSecrets } : {}),
   };
 
@@ -151,50 +140,46 @@ export async function applySyncPayload(
   mode: "merge" | "replace",
   currentHosts: SshHost[],
   currentCredentials: Credential[],
+  currentSshKeys: SshKey[],
+  currentSettings: AppSettings,
   replaceHosts: (hosts: SshHost[]) => void,
-  replaceCredentials: (credentials: Credential[]) => void
+  replaceCredentials: (credentials: Credential[]) => void,
+  replaceSshKeys: (sshKeys: SshKey[]) => void,
+  replaceSettings: (settings: AppSettings) => void
 ): Promise<SyncResult> {
-  // Decifra segredos se disponível
-  let secretsMap: SecretsMap = {};
+  let secretsPayload: TransferSecretsPayload = {};
   if (file.encryptedSecrets && masterPassword) {
     const credJson = await invoke<string>("decrypt_credentials", {
       encryptedPayloadJson: JSON.stringify(file.encryptedSecrets),
       masterPassword,
     });
-    secretsMap = JSON.parse(credJson) as SecretsMap;
+    secretsPayload = JSON.parse(credJson) as TransferSecretsPayload;
   }
 
-  // Reconstitui credenciais com segredos decifrados
-  const remoteCredentials: Credential[] = (file.credentials ?? []).map((meta) => {
-    const secrets = secretsMap[meta.id] ?? {};
-    return { ...meta, ...secrets } as Credential;
-  });
+  const remoteHosts = hydrateHosts(file.hosts ?? [], secretsPayload.hosts, currentHosts);
+  const remoteCredentials = hydrateCredentials(file.credentials ?? [], secretsPayload.credentials, currentCredentials);
+  const remoteSshKeys = hydrateSshKeys(file.sshKeys ?? [], secretsPayload.sshKeys, currentSshKeys);
 
   let finalHosts: SshHost[];
   let finalCredentials: Credential[];
+  let finalSshKeys: SshKey[];
   let hostsAdded = 0;
   let hostsUpdated = 0;
   let credentialsAdded = 0;
   let credentialsUpdated = 0;
+  let sshKeysAdded = 0;
+  let sshKeysUpdated = 0;
 
   if (mode === "replace") {
-    finalHosts = file.hosts;
-    // No replace, ainda preserva segredos locais se o remoto não os trouxe
-    const localCredsMapReplace = new Map(currentCredentials.map((c) => [c.id, c]));
-    finalCredentials = remoteCredentials.map((rc) => {
-      const local = localCredsMapReplace.get(rc.id);
-      if (!local) return rc;
-      return {
-        ...rc,
-        password: rc.password ?? local.password,
-      };
-    });
-    hostsAdded = file.hosts.length;
+    finalHosts = remoteHosts;
+    finalCredentials = remoteCredentials;
+    finalSshKeys = remoteSshKeys;
+    hostsAdded = remoteHosts.length;
     credentialsAdded = remoteCredentials.length;
+    sshKeysAdded = remoteSshKeys.length;
   } else {
-    // Merge: remote sobrescreve local por ID, novos são adicionados
     const localHostsById = new Map(currentHosts.map((h) => [h.id, h]));
-    for (const remoteHost of file.hosts) {
+    for (const remoteHost of remoteHosts) {
       if (localHostsById.has(remoteHost.id)) {
         hostsUpdated++;
       } else {
@@ -206,24 +191,38 @@ export async function applySyncPayload(
 
     const localCredsById = new Map(currentCredentials.map((c) => [c.id, c]));
     for (const remoteCred of remoteCredentials) {
-      const localCred = localCredsById.get(remoteCred.id);
-      if (localCred) {
+      if (localCredsById.has(remoteCred.id)) {
         credentialsUpdated++;
-        // Preserva os segredos locais se o remoto não os trouxe (sync sem senha mestra)
-        localCredsById.set(remoteCred.id, {
-          ...remoteCred,
-          password: remoteCred.password ?? localCred.password,
-        });
       } else {
         credentialsAdded++;
-        localCredsById.set(remoteCred.id, remoteCred);
       }
+      localCredsById.set(remoteCred.id, remoteCred);
     }
     finalCredentials = Array.from(localCredsById.values());
+
+    const localKeysById = new Map(currentSshKeys.map((sshKey) => [sshKey.id, sshKey]));
+    for (const remoteSshKey of remoteSshKeys) {
+      if (localKeysById.has(remoteSshKey.id)) {
+        sshKeysUpdated++;
+      } else {
+        sshKeysAdded++;
+      }
+      localKeysById.set(remoteSshKey.id, remoteSshKey);
+    }
+    finalSshKeys = Array.from(localKeysById.values());
   }
 
   replaceHosts(finalHosts);
   replaceCredentials(finalCredentials);
+  replaceSshKeys(finalSshKeys);
+  replaceSettings(mergePortableSettings(currentSettings, file.settings, secretsPayload.settings));
 
-  return { hostsAdded, hostsUpdated, credentialsAdded, credentialsUpdated };
+  return {
+    hostsAdded,
+    hostsUpdated,
+    credentialsAdded,
+    credentialsUpdated,
+    sshKeysAdded,
+    sshKeysUpdated,
+  };
 }

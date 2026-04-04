@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { SessionTab, SplitDirection } from "@/types";
+import { SessionConnection, SessionTab, SplitDirection } from "@/types";
 import { v4 as uuidv4 } from "uuid";
 
 interface SessionsStore {
@@ -7,8 +7,12 @@ interface SessionsStore {
   activeTabId: string | null;
   /** Abre uma aba de terminal. O primeiro pane.id === tab.id (compat. retroativa). */
   openSession: (hostId: string, hostLabel: string, hostAddress: string) => string;
+  /** Abre uma aba de terminal temporária sem host salvo. */
+  openQuickConnectSession: (connection: SessionConnection, hostLabel: string, hostAddress: string) => string;
   /** Abre uma aba de SFTP. */
   openSftpTab: (hostId: string, hostLabel: string, hostAddress: string) => string;
+  /** Garante que um tab exista na store atual. Útil para janelas dedicadas. */
+  ensureSession: (tab: SessionTab) => void;
   closeSession: (tabId: string) => void;
   setActiveTab: (tabId: string) => void;
   /** Atualiza status do pane pelo paneId (busca em todos os tabs). */
@@ -42,6 +46,24 @@ export const useSessionsStore = create<SessionsStore>()((set, get) => ({
     return id;
   },
 
+  openQuickConnectSession: (connection, hostLabel, hostAddress) => {
+    const id = uuidv4();
+    const tab: SessionTab = {
+      id,
+      type: "terminal",
+      hostId: `quick-connect:${id}`,
+      hostLabel,
+      hostAddress,
+      connection,
+      status: "connecting",
+      panes: [{ id, status: "connecting" }],
+      splitDirection: "horizontal",
+      createdAt: new Date().toISOString(),
+    };
+    set((s) => ({ tabs: [...s.tabs, tab], activeTabId: id }));
+    return id;
+  },
+
   openSftpTab: (hostId, hostLabel, hostAddress) => {
     const id = uuidv4();
     const tab: SessionTab = {
@@ -58,6 +80,14 @@ export const useSessionsStore = create<SessionsStore>()((set, get) => ({
     set((s) => ({ tabs: [...s.tabs, tab], activeTabId: id }));
     return id;
   },
+
+  ensureSession: (tab) =>
+    set((s) => {
+      if (s.tabs.some((entry) => entry.id === tab.id)) {
+        return { activeTabId: tab.id };
+      }
+      return { tabs: [...s.tabs, tab], activeTabId: tab.id };
+    }),
 
   closeSession: (tabId) => {
     const { tabs, activeTabId } = get();

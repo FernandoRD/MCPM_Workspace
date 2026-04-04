@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { v4 as uuidv4 } from "uuid";
 import {
   FolderKanban,
@@ -29,6 +29,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { TagBadge } from "@/components/ui/TagBadge";
 import { Textarea } from "@/components/ui/Textarea";
 import {
   CommandSnippet,
@@ -45,7 +46,9 @@ import {
   stopTunnel,
 } from "@/lib/productivity";
 import { matchesHostSearch } from "@/lib/hostSearch";
+import { launchTerminalSession } from "@/lib/sessionLauncher";
 import { cn, formatDate } from "@/lib/utils";
+import { buildSessionRoute, isStandaloneWindow } from "@/lib/windowMode";
 
 interface BatchResult {
   hostId: string;
@@ -68,6 +71,7 @@ function asNumber(value: string): number {
 
 export function Operations() {
   const navigate = useNavigate();
+  const location = useLocation();
   const hosts = useHostsStore((s) => s.hosts);
   const getCredential = useCredentialsStore((s) => s.getCredential);
   const getSshKey = useSshKeysStore((s) => s.getSshKey);
@@ -79,6 +83,8 @@ export function Operations() {
   const clearTunnelRuntime = useTunnelRuntimeStore((s) => s.clearTunnel);
 
   const locale = settings.locale;
+  const sessionOpenMode = settings.terminal.sessionOpenMode;
+  const standaloneWindow = isStandaloneWindow(location.search);
   const isPt = locale.startsWith("pt");
   const text = isPt
     ? {
@@ -362,7 +368,7 @@ export function Operations() {
   );
 
   const activeSessionsSnapshot = tabs
-    .filter((tab) => tab.type === "terminal" || tab.type === "sftp")
+    .filter((tab) => (tab.type === "terminal" || tab.type === "sftp") && tab.connection?.source !== "quick-connect")
     .map((tab) => ({ hostId: tab.hostId, type: tab.type }));
 
   const setProductivity = (next: Partial<typeof settings.productivity>) => {
@@ -415,7 +421,7 @@ export function Operations() {
     showFeedback("success", workspaceId ? text.workspace.updated : text.workspace.saved);
   };
 
-  const openWorkspace = (workspace: Workspace) => {
+  const openWorkspace = async (workspace: Workspace) => {
     const createdRoutes: string[] = [];
 
     for (const item of workspace.items) {
@@ -424,10 +430,29 @@ export function Operations() {
       const credential = host.credentialId ? getCredential(host.credentialId) : undefined;
       const username = credential?.username ?? host.username ?? "";
       const hostAddress = username ? `${username}@${host.host}` : host.host;
-      const id = item.type === "sftp"
-        ? openSftpTab(host.id, host.label, hostAddress)
-        : openSession(host.id, host.label, hostAddress);
-      createdRoutes.push(item.type === "sftp" ? `/sftp/${id}` : `/terminal/${id}`);
+
+      if (item.type === "terminal") {
+        const route = await launchTerminalSession({
+          hostId: host.id,
+          hostLabel: host.label,
+          hostAddress,
+          openMode: sessionOpenMode,
+          openSession,
+          standaloneWindow,
+        });
+        if (route) createdRoutes.push(route);
+        continue;
+      }
+
+      const id = openSftpTab(host.id, host.label, hostAddress);
+      createdRoutes.push(
+        buildSessionRoute("sftp", id, {
+          standalone: standaloneWindow,
+          hostId: standaloneWindow ? host.id : undefined,
+          hostLabel: standaloneWindow ? host.label : undefined,
+          hostAddress: standaloneWindow ? hostAddress : undefined,
+        })
+      );
     }
 
     if (createdRoutes[0]) {
@@ -903,7 +928,7 @@ export function Operations() {
                     </pre>
                     {snippet.tags.length > 0 && (
                       <div className="mt-3 flex flex-wrap gap-2">
-                        {snippet.tags.map((tag) => <Badge key={`${snippet.id}:${tag}`}>{tag}</Badge>)}
+                        {snippet.tags.map((tag) => <TagBadge key={`${snippet.id}:${tag}`} tag={tag} />)}
                       </div>
                     )}
                   </div>
@@ -1146,9 +1171,7 @@ export function Operations() {
                             {host.tags.length > 0 && (
                               <div className="mt-2 flex flex-wrap gap-2">
                                 {host.tags.map((tag) => (
-                                  <span key={`${host.id}:${tag}`} className="text-[10px] text-[var(--text-muted)] rounded-full border border-[var(--border)] px-2 py-0.5">
-                                    {tag}
-                                  </span>
+                                  <TagBadge key={`${host.id}:${tag}`} tag={tag} compact />
                                 ))}
                               </div>
                             )}

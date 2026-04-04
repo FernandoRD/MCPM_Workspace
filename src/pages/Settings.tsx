@@ -221,6 +221,25 @@ export function Settings() {
                     className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-focus)]"
                   />
                 </div>
+
+                <div className="col-span-2">
+                  <Select
+                    id="sessionOpenMode"
+                    label={t("settings.terminal.sessionOpenMode")}
+                    value={settings.terminal.sessionOpenMode}
+                    onChange={(e) =>
+                      updateTerminal({
+                        sessionOpenMode: e.target.value as "tab" | "window",
+                      })
+                    }
+                  >
+                    <option value="tab">{t("settings.terminal.sessionOpenModes.tab")}</option>
+                    <option value="window">{t("settings.terminal.sessionOpenModes.window")}</option>
+                  </Select>
+                  <p className="mt-1 text-xs text-[var(--text-muted)]">
+                    {t("settings.terminal.sessionOpenModeHint")}
+                  </p>
+                </div>
               </div>
             </div>
           </Section>

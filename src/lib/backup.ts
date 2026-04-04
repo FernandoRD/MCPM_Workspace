@@ -7,8 +7,10 @@
  *   "version": 1,
  *   "exportedAt": "ISO 8601",
  *   "hosts": [...],           // metadados em claro
- *   "settings": {...},        // tema, idioma, terminal (sem secrets de sync)
- *   "encryptedCredentials": { // presente só se syncCredentials=true + senha mestra
+ *   "credentials": [...],     // credenciais sem senha
+ *   "sshKeys": [...],         // chaves SSH sem material privado
+ *   "settings": {...},        // configurações portáveis da aplicação
+ *   "encryptedCredentials": { // presente quando dados sensíveis são exportados com senha mestra
  *     "version": 1,
  *     "salt": "<base64>",
  *     "nonce": "<base64>",
@@ -20,7 +22,20 @@
 import { invoke } from "@tauri-apps/api/core";
 import { save, open } from "@tauri-apps/plugin-dialog";
 import { writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
-import { SshHost, AppSettings, EncryptedCredentials } from "@/types";
+import { SshHost, AppSettings, EncryptedCredentials, Credential, SshKey } from "@/types";
+import {
+  buildPortableSettings,
+  buildTransferSecretsPayload,
+  hydrateCredentials,
+  hydrateHosts,
+  hydrateSshKeys,
+  mergePortableSettings,
+  PortableSyncSettings,
+  sanitizeCredentials,
+  sanitizeHosts,
+  sanitizeSshKeys,
+  TransferSecretsPayload,
+} from "@/lib/portableState";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -29,30 +44,17 @@ export interface BackupFile {
   version: 1;
   exportedAt: string;
   hosts: SshHost[];
+  credentials: Credential[];
+  sshKeys: SshKey[];
   settings: BackupSettings;
   encryptedCredentials?: EncryptedCredentials;
 }
 
-/** Subconjunto seguro de settings para incluir no backup */
-export interface BackupSettings {
-  themeId: string;
-  locale: string;
-  terminal: AppSettings["terminal"];
-}
-
-/** Mapa de credenciais plaintext — nunca sai sem cifrar */
-export interface CredentialsMap {
-  [hostId: string]: {
-    password?: string;
-    passphrase?: string;
-    privateKeyPath?: string;
-    totpSecret?: string;
-  };
-}
+export type BackupSettings = PortableSyncSettings;
 
 export interface ImportResult {
   backup: BackupFile;
-  credentials: CredentialsMap | null;
+  secrets: TransferSecretsPayload | null;
   hasEncryptedCredentials: boolean;
 }
 
@@ -64,34 +66,23 @@ export interface ImportResult {
  */
 export async function exportBackup(
   hosts: SshHost[],
+  credentials: Credential[],
+  sshKeys: SshKey[],
   settings: AppSettings,
   masterPassword: string | null
 ): Promise<void> {
-  // Montar as settings sem dados sensíveis de sync
-  const backupSettings: BackupSettings = {
-    themeId: settings.themeId,
-    locale: settings.locale,
-    terminal: settings.terminal,
-  };
-
-  // Limpar campos de senha dos hosts para o JSON em claro
-  const cleanHosts = hosts.map(({ passwordRef: _p, ...rest }) => rest as SshHost);
+  const backupSettings = buildPortableSettings(settings);
+  const cleanHosts = sanitizeHosts(hosts);
+  const exportedCredentials = sanitizeCredentials(credentials);
+  const exportedSshKeys = sanitizeSshKeys(sshKeys);
 
   let encryptedCredentials: EncryptedCredentials | undefined;
 
   if (masterPassword) {
-    // Construir mapa de credenciais plaintext
-    const credMap: CredentialsMap = {};
-    for (const host of hosts) {
-      const entry: CredentialsMap[string] = {};
-      if (host.passwordRef) entry.password = host.passwordRef;
-      if (host.totpSecret) entry.totpSecret = host.totpSecret;
-      if (Object.keys(entry).length > 0) credMap[host.id] = entry;
-    }
-
-    if (Object.keys(credMap).length > 0) {
+    const secretsPayload = buildTransferSecretsPayload(hosts, credentials, sshKeys, settings);
+    if (secretsPayload) {
       const payloadJson = await invoke<string>("encrypt_credentials", {
-        credentialsJson: JSON.stringify(credMap),
+        credentialsJson: JSON.stringify(secretsPayload),
         masterPassword,
       });
       encryptedCredentials = JSON.parse(payloadJson) as EncryptedCredentials;
@@ -103,6 +94,8 @@ export async function exportBackup(
     version: 1,
     exportedAt: new Date().toISOString(),
     hosts: cleanHosts,
+    credentials: exportedCredentials,
+    sshKeys: exportedSshKeys,
     settings: backupSettings,
     ...(encryptedCredentials ? { encryptedCredentials } : {}),
   };
@@ -151,13 +144,13 @@ export async function importBackup(
       encryptedPayloadJson: JSON.stringify(backup.encryptedCredentials),
       masterPassword,
     });
-    const credentials = JSON.parse(credJson) as CredentialsMap;
-    return { backup, credentials, hasEncryptedCredentials: true };
+    const secrets = JSON.parse(credJson) as TransferSecretsPayload;
+    return { backup, secrets, hasEncryptedCredentials: true };
   }
 
   return {
     backup,
-    credentials: null,
+    secrets: null,
     hasEncryptedCredentials: !!backup.encryptedCredentials,
   };
 }
@@ -191,18 +184,41 @@ function parseBackupFile(raw: string): BackupFile {
   return obj as unknown as BackupFile;
 }
 
-/** Aplica as credenciais decifradas de volta nos hosts */
-export function mergeCredentials(
-  hosts: SshHost[],
-  credentials: CredentialsMap
-): SshHost[] {
-  return hosts.map((host) => {
-    const cred = credentials[host.id];
-    if (!cred) return host;
-    return {
-      ...host,
-      ...(cred.password ? { passwordRef: cred.password } : {}),
-      ...(cred.totpSecret ? { totpSecret: cred.totpSecret } : {}),
-    };
-  });
+export function hydrateBackupData(
+  backup: BackupFile,
+  secrets: TransferSecretsPayload | null
+): {
+  hosts: SshHost[];
+  credentials: Credential[];
+  sshKeys: SshKey[];
+  settings: AppSettings | null;
+} {
+  return {
+    hosts: hydrateHosts(backup.hosts ?? [], secrets?.hosts),
+    credentials: hydrateCredentials(backup.credentials ?? [], secrets?.credentials),
+    sshKeys: hydrateSshKeys(backup.sshKeys ?? [], secrets?.sshKeys),
+    settings: backup.settings
+      ? mergePortableSettings(
+          {
+            themeId: backup.settings.themeId,
+            locale: backup.settings.locale,
+            terminal: backup.settings.terminal,
+            ssh: backup.settings.ssh,
+            security: {
+              masterPasswordSet: false,
+              syncCredentials: backup.settings.security.syncCredentials,
+            },
+            sync: {
+              provider: null,
+              autoSync: false,
+              autoSyncIntervalMinutes: 30,
+            },
+            groups: backup.settings.groups,
+            productivity: backup.settings.productivity,
+          } as AppSettings,
+          backup.settings,
+          secrets?.settings
+        )
+      : null,
+  };
 }

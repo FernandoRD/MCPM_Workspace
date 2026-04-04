@@ -1,30 +1,50 @@
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useLocation, useNavigate } from "react-router-dom";
 import { X, Plus, Wifi, WifiOff, Loader2, FolderOpen } from "lucide-react";
 import { useSessionsStore } from "@/store/sessions";
 import { cn } from "@/lib/utils";
 import { SessionTab } from "@/types";
+import { buildSessionRoute, isStandaloneWindow, withStandaloneQuery } from "@/lib/windowMode";
 
 export function TabBar() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const { tabs, activeTabId, closeSession, setActiveTab } = useSessionsStore();
+  const standalone = isStandaloneWindow(location.search);
 
   if (tabs.length === 0) return null;
 
   const tabRoute = (tab: SessionTab) =>
-    tab.type === "sftp" ? `/sftp/${tab.id}` : `/terminal/${tab.id}`;
+    buildSessionRoute(tab.type, tab.id, {
+      standalone,
+      hostId: standalone ? tab.hostId : undefined,
+      hostLabel: standalone ? tab.hostLabel : undefined,
+      hostAddress: standalone ? tab.hostAddress : undefined,
+      quickConnect: standalone && tab.connection?.source === "quick-connect",
+      connectionHost: standalone ? tab.connection?.host : undefined,
+      connectionPort: standalone ? tab.connection?.port : undefined,
+      connectionUsername: standalone ? tab.connection?.username : undefined,
+      connectionAuthMethod: standalone ? tab.connection?.authMethod : undefined,
+    });
 
   const handleTabClick = (tab: SessionTab) => {
     setActiveTab(tab.id);
     navigate(tabRoute(tab));
   };
 
-  const handleClose = (e: React.MouseEvent, tabId: string) => {
+  const handleClose = async (e: React.MouseEvent, tabId: string) => {
     e.stopPropagation();
     const remaining = tabs.filter((t) => t.id !== tabId);
     closeSession(tabId);
     if (remaining.length === 0) {
+      if (standalone) {
+        await getCurrentWindow().close().catch(() => {
+          navigate(withStandaloneQuery("/", true));
+        });
+        return;
+      }
       navigate("/");
     } else if (tabId === activeTabId) {
       const idx = tabs.findIndex((t) => t.id === tabId);
@@ -60,7 +80,7 @@ export function TabBar() {
       ))}
 
       <button
-        onClick={() => navigate("/")}
+        onClick={() => navigate(withStandaloneQuery("/", standalone))}
         className="flex h-full items-center justify-center px-3 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-hover)] transition-colors"
         title={t("terminal.newTab")}
       >

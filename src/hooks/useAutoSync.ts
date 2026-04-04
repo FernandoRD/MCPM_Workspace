@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useHostsStore } from "@/store/hosts";
 import { useCredentialsStore } from "@/store/credentials";
+import { useSshKeysStore } from "@/store/sshKeys";
 import { useSettingsStore } from "@/store/settings";
 import { buildSyncPayload } from "@/lib/sync";
 import { pushToProvider } from "@/lib/syncProviders";
@@ -15,8 +16,8 @@ import { notify } from "@/lib/notifications";
  *   dispara um sync imediato antes de iniciar o timer periódico.
  * - Usa setInterval para os disparos periódicos subsequentes.
  * - Só faz push (dados locais → provider). Não pede senha mestra em background;
- *   credenciais são incluídas sem criptografia extra se syncCredentials estiver
- *   ativo — o aviso fica visível na UI.
+ *   por isso, o sync automático envia apenas a parte portátil do estado sem
+ *   segredos cifrados dependentes da senha mestra.
  * - Notifica apenas em caso de erro (sucesso é silencioso).
  * - O intervalo reinicia automaticamente se as configurações mudarem.
  */
@@ -26,11 +27,13 @@ export function useAutoSync() {
 
   const hostsRef = useRef(useHostsStore.getState().hosts);
   const credentialsRef = useRef(useCredentialsStore.getState().credentials);
+  const sshKeysRef = useRef(useSshKeysStore.getState().sshKeys);
   const settingsRef = useRef(useSettingsStore.getState().settings);
   const updateSyncRef = useRef(updateSync);
 
   useEffect(() => useHostsStore.subscribe((s) => { hostsRef.current = s.hosts; }), []);
   useEffect(() => useCredentialsStore.subscribe((s) => { credentialsRef.current = s.credentials; }), []);
+  useEffect(() => useSshKeysStore.subscribe((s) => { sshKeysRef.current = s.sshKeys; }), []);
   useEffect(() => useSettingsStore.subscribe((s) => {
     settingsRef.current = s.settings;
     updateSyncRef.current = s.updateSync;
@@ -49,6 +52,7 @@ export function useAutoSync() {
         const payload = await buildSyncPayload(
           hostsRef.current,
           credentialsRef.current,
+          sshKeysRef.current,
           currentSettings,
           null
         );

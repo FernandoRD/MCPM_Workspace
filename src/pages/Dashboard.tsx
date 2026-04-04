@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Plus,
   Search,
@@ -29,20 +29,26 @@ import { useSettingsStore } from "@/store/settings";
 import { SshHost } from "@/types";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { TagBadge } from "@/components/ui/TagBadge";
 import { SshConfigImportModal } from "@/components/SshConfigImportModal";
+import { launchTerminalSession } from "@/lib/sessionLauncher";
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { buildSessionRoute, isStandaloneWindow } from "@/lib/windowMode";
 
 export function Dashboard() {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const hosts = useHostsStore((s) => s.hosts);
   const { deleteHost, duplicateHost } = useHostsStore();
   const openSession = useSessionsStore((s) => s.openSession);
   const openSftpTab = useSessionsStore((s) => s.openSftpTab);
   const getCredential = useCredentialsStore((s) => s.getCredential);
   const locale = useSettingsStore((s) => s.settings.locale);
+  const sessionOpenMode = useSettingsStore((s) => s.settings.terminal.sessionOpenMode);
   const savedGroups = useSettingsStore((s) => s.settings.groups);
+  const standaloneWindow = isStandaloneWindow(location.search);
 
   const [showImportModal, setShowImportModal] = useState(false);
 
@@ -106,18 +112,34 @@ export function Dashboard() {
       return 0;
     });
 
-  const handleConnect = (host: SshHost) => {
+  const handleConnect = async (host: SshHost) => {
     const cred = host.credentialId ? getCredential(host.credentialId) : undefined;
     const username = cred?.username ?? host.username ?? "";
-    const tabId = openSession(host.id, host.label, username ? `${username}@${host.host}` : host.host);
-    navigate(`/terminal/${tabId}`);
+    const hostAddress = username ? `${username}@${host.host}` : host.host;
+    const route = await launchTerminalSession({
+      hostId: host.id,
+      hostLabel: host.label,
+      hostAddress,
+      openMode: sessionOpenMode,
+      openSession,
+      standaloneWindow,
+    });
+    if (route) navigate(route);
   };
 
   const handleOpenSftp = (host: SshHost) => {
     const cred = host.credentialId ? getCredential(host.credentialId) : undefined;
     const username = cred?.username ?? host.username ?? "";
-    const tabId = openSftpTab(host.id, host.label, username ? `${username}@${host.host}` : host.host);
-    navigate(`/sftp/${tabId}`);
+    const hostAddress = username ? `${username}@${host.host}` : host.host;
+    const tabId = openSftpTab(host.id, host.label, hostAddress);
+    navigate(
+      buildSessionRoute("sftp", tabId, {
+        standalone: standaloneWindow,
+        hostId: standaloneWindow ? host.id : undefined,
+        hostLabel: standaloneWindow ? host.label : undefined,
+        hostAddress: standaloneWindow ? hostAddress : undefined,
+      })
+    );
   };
 
   return (
@@ -213,18 +235,15 @@ export function Dashboard() {
                   {t("dashboard.tags.label")}:
                 </span>
                 {allTags.map((tag) => (
-                  <button
+                  <TagBadge
                     key={tag}
+                    tag={tag}
                     onClick={() => toggleTag(tag)}
-                    className={cn(
-                      "flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs transition-colors",
-                      selectedTags.includes(tag)
-                        ? "border-[var(--accent)] bg-[var(--accent-subtle)] text-[var(--accent)] font-medium"
-                        : "border-[var(--border)] bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:border-[var(--text-muted)]"
-                    )}
+                    selected={selectedTags.includes(tag)}
+                    className="hover:brightness-95"
                   >
                     {tag}
-                  </button>
+                  </TagBadge>
                 ))}
                 {selectedTags.length > 0 && (
                   <button
@@ -383,7 +402,7 @@ function HostCard({
             </Badge>
           )}
           {host.tags.slice(0, 3).map((tag) => (
-            <Badge key={tag}>{tag}</Badge>
+            <TagBadge key={tag} tag={tag} />
           ))}
           {host.tags.length > 3 && (
             <Badge>+{host.tags.length - 3}</Badge>

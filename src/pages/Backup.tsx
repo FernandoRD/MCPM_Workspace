@@ -7,17 +7,17 @@ import {
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { useHostsStore } from "@/store/hosts";
+import { useCredentialsStore } from "@/store/credentials";
+import { useSshKeysStore } from "@/store/sshKeys";
 import { useSettingsStore } from "@/store/settings";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import {
-  exportBackup, importBackup, mergeCredentials,
-  BackupFile, CredentialsMap,
+  exportBackup, importBackup, hydrateBackupData,
+  BackupFile,
 } from "@/lib/backup";
 import { formatDate } from "@/lib/utils";
-import { ThemeId } from "@/themes";
-import { applyTheme } from "@/themes";
-import i18n from "@/lib/i18n";
+import { TransferSecretsPayload } from "@/lib/portableState";
 
 interface ToastState { type: "success" | "error" | "info"; message: string }
 type Toast = ToastState | null;
@@ -25,8 +25,12 @@ type Toast = ToastState | null;
 export function Backup() {
   const { t } = useTranslation();
   const hosts = useHostsStore((s) => s.hosts);
-  const { addHost, deleteHost } = useHostsStore();
-  const { settings, setTheme, setLocale, updateTerminal } = useSettingsStore();
+  const replaceHosts = useHostsStore((s) => s.replaceHosts);
+  const credentials = useCredentialsStore((s) => s.credentials);
+  const replaceCredentials = useCredentialsStore((s) => s.replaceCredentials);
+  const sshKeys = useSshKeysStore((s) => s.sshKeys);
+  const replaceSshKeys = useSshKeysStore((s) => s.replaceSshKeys);
+  const { settings, replaceSettings } = useSettingsStore();
 
   // ── Estado geral ────────────────────────────────────────────────────────────
   const [toast, setToast] = useState<Toast>(null);
@@ -46,7 +50,7 @@ export function Backup() {
   const handleExport = async (masterPassword: string | null) => {
     setLoading("export");
     try {
-      await exportBackup(hosts, settings, masterPassword);
+      await exportBackup(hosts, credentials, sshKeys, settings, masterPassword);
       showToast("success", t("backup.export.success"));
     } catch (e) {
       const msg = String(e);
@@ -69,7 +73,7 @@ export function Backup() {
   // ── Import ──────────────────────────────────────────────────────────────────
   const [importPreview, setImportPreview] = useState<{
     backup: BackupFile;
-    credentials: CredentialsMap | null;
+    secrets: TransferSecretsPayload | null;
     hasEncryptedCredentials: boolean;
   } | null>(null);
   const [importMode, setImportMode] = useState<"add" | "replace">("add");
@@ -108,8 +112,8 @@ export function Backup() {
         encryptedPayloadJson: JSON.stringify(pendingImport.encryptedCredentials),
         masterPassword,
       });
-      const credentials = JSON.parse(credJson) as CredentialsMap;
-      setImportPreview({ backup: pendingImport, credentials, hasEncryptedCredentials: true });
+      const secrets = JSON.parse(credJson) as TransferSecretsPayload;
+      setImportPreview({ backup: pendingImport, secrets, hasEncryptedCredentials: true });
       setImportPasswordModal(false);
     } catch {
       showToast("error", t("backup.import.wrongPassword"));
@@ -120,43 +124,47 @@ export function Backup() {
 
   const handleConfirmImport = () => {
     if (!importPreview) return;
-    const { backup, credentials } = importPreview;
+    const { backup, secrets } = importPreview;
+    const hydrated = hydrateBackupData(backup, secrets);
 
-    // Aplicar hosts
-    let hostsToImport = backup.hosts;
-    if (credentials) {
-      hostsToImport = mergeCredentials(hostsToImport, credentials);
-    }
+    const finalHosts =
+      importMode === "replace"
+        ? hydrated.hosts
+        : [
+            ...hosts,
+            ...hydrated.hosts.filter((host) => !hosts.some((existing) => existing.id === host.id)),
+          ];
 
-    if (importMode === "replace") {
-      hosts.forEach((h) => deleteHost(h.id));
-    }
+    const finalCredentials =
+      importMode === "replace"
+        ? hydrated.credentials
+        : [
+            ...credentials,
+            ...hydrated.credentials.filter(
+              (credential) => !credentials.some((existing) => existing.id === credential.id)
+            ),
+          ];
 
-    const existingIds = new Set(hosts.map((h) => h.id));
-    hostsToImport.forEach((host) => {
-      if (importMode === "add" && existingIds.has(host.id)) return;
-      addHost(host);
-    });
+    const finalSshKeys =
+      importMode === "replace"
+        ? hydrated.sshKeys
+        : [
+            ...sshKeys,
+            ...hydrated.sshKeys.filter((sshKey) => !sshKeys.some((existing) => existing.id === sshKey.id)),
+          ];
+
+    replaceHosts(finalHosts);
+    replaceCredentials(finalCredentials);
+    replaceSshKeys(finalSshKeys);
 
     // Aplicar settings se solicitado
-    if (importSettings && backup.settings) {
-      const s = backup.settings;
-      if (s.themeId) {
-        applyTheme(s.themeId as ThemeId);
-        setTheme(s.themeId as ThemeId);
-      }
-      if (s.locale) {
-        i18n.changeLanguage(s.locale);
-        setLocale(s.locale);
-      }
-      if (s.terminal) {
-        updateTerminal(s.terminal);
-      }
+    if (importSettings && hydrated.settings) {
+      replaceSettings(hydrated.settings);
     }
 
-    const msg = credentials
+    const msg = secrets
       ? t("backup.import.successWithCreds")
-      : credentials === null && importPreview.hasEncryptedCredentials
+      : secrets === null && importPreview.hasEncryptedCredentials
       ? `${t("backup.import.success")} (${t("backup.import.credentialsSkipped")})`
       : t("backup.import.success");
 
@@ -314,7 +322,7 @@ function ImportPreviewPanel({
   preview, importMode, importSettings,
   onModeChange, onSettingsChange, onConfirm, onCancel,
 }: {
-  preview: { backup: BackupFile; credentials: CredentialsMap | null; hasEncryptedCredentials: boolean };
+  preview: { backup: BackupFile; secrets: TransferSecretsPayload | null; hasEncryptedCredentials: boolean };
   importMode: "add" | "replace";
   importSettings: boolean;
   onModeChange: (m: "add" | "replace") => void;
@@ -323,7 +331,7 @@ function ImportPreviewPanel({
   onCancel: () => void;
 }) {
   const { t } = useTranslation();
-  const { backup, credentials, hasEncryptedCredentials } = preview;
+  const { backup, secrets, hasEncryptedCredentials } = preview;
   const [confirmReplace, setConfirmReplace] = useState(false);
 
   const handleConfirm = () => {
@@ -349,11 +357,11 @@ function ImportPreviewPanel({
               ? <ShieldCheck size={13} className="text-[var(--success)]" />
               : <ShieldOff size={13} className="text-[var(--text-muted)]" />}
             label={hasEncryptedCredentials
-              ? credentials
+              ? secrets
                 ? `${t("backup.import.hasCredentials")} ✓ decifradas`
                 : `${t("backup.import.hasCredentials")} — não decifradas`
               : t("backup.import.noCredentials")}
-            accent={hasEncryptedCredentials && !!credentials}
+            accent={hasEncryptedCredentials && !!secrets}
           />
         </div>
       </div>

@@ -13,7 +13,8 @@
     "settings": "Settings",
     "sync": "Sync",
     "newConnection": "New Connection",
-    "backup": "Backup"
+    "backup": "Backup",
+    "quickConnect": "Quick Connect"
   },
   "dashboard": {
     "title": "Hosts",
@@ -201,6 +202,12 @@
       "cursorStyle": "Cursor Style",
       "cursorBlink": "Blinking cursor",
       "scrollback": "Scrollback lines",
+      "sessionOpenMode": "Open SSH sessions in",
+      "sessionOpenModeHint": "Choose whether new terminal sessions open as tabs in the current window or in a dedicated window.",
+      "sessionOpenModes": {
+        "tab": "Current window",
+        "window": "Separate windows"
+      },
       "cursorStyles": {
         "block": "Block",
         "underline": "Underline",
@@ -256,7 +263,7 @@
       "error": "Sync error",
       "notConfigured": "Not configured",
       "lastSync": "Last sync: {{date}}",
-      "importResult": "Imported: {{hostsAdded}} new hosts, {{hostsUpdated}} updated, {{credentialsAdded}} new credentials, {{credentialsUpdated}} updated"
+      "importResult": "Imported: {{hostsAdded}} new hosts, {{hostsUpdated}} updated, {{credentialsAdded}} new credentials, {{credentialsUpdated}} updated, {{sshKeysAdded}} new keys, {{sshKeysUpdated}} updated"
     },
     "providers": {
       "title": "Sync Provider",
@@ -527,6 +534,24 @@
       "agent": "SSH agent"
     },
     "importToVault": "Import to Vault"
+  },
+  "commandPalette": {
+    "searchPlaceholder": "Search hosts, screens, or use user@host:port",
+    "quickActions": "Quick actions",
+    "quickConnect": "Hosts",
+    "directConnect": "Quick Connect",
+    "directConnectHint": "Connects without saving the host, using the machine SSH agent.",
+    "directConnectAction": "Connect",
+    "results": "{{count}} result(s)",
+    "noHosts": "No hosts found",
+    "terminal": "Terminal",
+    "sftp": "SFTP",
+    "actions": {
+      "newHost": "New host",
+      "openBackup": "Open backup",
+      "openSettings": "Open settings",
+      "openOperations": "Open operations"
+    }
   },
   "common": {
     "loading": "Loading...",
