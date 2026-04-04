@@ -318,7 +318,9 @@
       "interval30": "30 min",
       "interval60": "1 hora",
       "interval120": "2 horas",
-      "noMasterPasswordWarning": "O sync automático não usa senha mestra. As credenciais serão sincronizadas sem criptografia adicional."
+      "noMasterPasswordWarning": "O sync automático não usa senha mestra. As credenciais serão sincronizadas sem criptografia adicional.",
+      "nextSyncIn": "Próximo sync em {{minutes}} min",
+      "nextSyncNow": "Sincronizando em breve..."
     }
   },
   "backup": {

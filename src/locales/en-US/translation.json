@@ -318,7 +318,9 @@
       "interval30": "30 min",
       "interval60": "1 hour",
       "interval120": "2 hours",
-      "noMasterPasswordWarning": "Auto-sync does not use the master password. Credentials will be synced without additional encryption."
+      "noMasterPasswordWarning": "Auto-sync does not use the master password. Credentials will be synced without additional encryption.",
+      "nextSyncIn": "Next sync in {{minutes}} min",
+      "nextSyncNow": "Syncing soon..."
     }
   },
   "backup": {

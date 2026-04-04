@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import {
   CloudUpload, CloudDownload, Check, AlertCircle, Loader2,
   GitBranch, Database, Globe, Plug, ShieldOff,
-  Eye, EyeOff, KeyRound, XCircle,
+  Eye, EyeOff, KeyRound, XCircle, Timer,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { notify } from "@/lib/notifications";
@@ -509,6 +509,31 @@ function AutoSyncConfig({
 }) {
   const { t } = useTranslation();
   const interval = sync.autoSyncIntervalMinutes ?? 30;
+  const [remainingMin, setRemainingMin] = useState<number | null>(null);
+
+  // Atualiza o countdown a cada 30 s com base em lastSyncAt + intervalo
+  useEffect(() => {
+    if (!sync.autoSync) {
+      setRemainingMin(null);
+      return;
+    }
+
+    const update = () => {
+      const intervalMs = (sync.autoSyncIntervalMinutes ?? 30) * 60_000;
+      if (sync.lastSyncAt) {
+        const nextAt = new Date(sync.lastSyncAt).getTime() + intervalMs;
+        const diffMs = nextAt - Date.now();
+        setRemainingMin(diffMs > 0 ? Math.ceil(diffMs / 60_000) : 0);
+      } else {
+        // Nunca sincronizou — mostra o intervalo completo como estimativa
+        setRemainingMin(sync.autoSyncIntervalMinutes ?? 30);
+      }
+    };
+
+    update();
+    const id = setInterval(update, 30_000);
+    return () => clearInterval(id);
+  }, [sync.autoSync, sync.lastSyncAt, sync.autoSyncIntervalMinutes]);
 
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] p-5 flex flex-col gap-4">
@@ -541,7 +566,7 @@ function AutoSyncConfig({
         </button>
       </div>
 
-      {/* Intervalo — só mostra quando ativado */}
+      {/* Intervalo + countdown — só mostra quando ativado */}
       {sync.autoSync && (
         <>
           <div className="flex flex-col gap-2">
@@ -565,6 +590,18 @@ function AutoSyncConfig({
               ))}
             </div>
           </div>
+
+          {/* Próximo sync */}
+          {remainingMin !== null && (
+            <div className="flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-primary)] px-3 py-2">
+              <Timer size={13} className="text-[var(--accent)] shrink-0" />
+              <p className="text-xs text-[var(--text-secondary)]">
+                {remainingMin === 0
+                  ? t("sync.autoSync.nextSyncNow")
+                  : t("sync.autoSync.nextSyncIn", { minutes: remainingMin })}
+              </p>
+            </div>
+          )}
 
           {/* Aviso sobre credenciais */}
           {security?.syncCredentials && security.masterPasswordSet && (
