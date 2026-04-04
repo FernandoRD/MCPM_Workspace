@@ -58,6 +58,8 @@ pub fn run() {
             ssh::ssh_exec,
             ssh::ssh_start_tunnel,
             ssh::ssh_stop_tunnel,
+            ssh::ssh_list_known_hosts,
+            ssh::ssh_health_check,
             ssh_config::ssh_import_config,
             ssh_config::ssh_probe_host,
             sftp::sftp_connect,

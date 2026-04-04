@@ -19,6 +19,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::mpsc;
+use tokio::time::timeout;
 
 // ─── Algoritmos legado (KEX + ciphers + MACs + host-key) ─────────────────────
 
@@ -167,6 +168,16 @@ impl ClientHandler {
     }
 }
 
+struct FingerprintProbeHandler {
+    fingerprint: Arc<std::sync::Mutex<Option<String>>>,
+}
+
+impl FingerprintProbeHandler {
+    fn new(fingerprint: Arc<std::sync::Mutex<Option<String>>>) -> Self {
+        Self { fingerprint }
+    }
+}
+
 #[async_trait]
 impl client::Handler for ClientHandler {
     type Error = russh::Error;
@@ -189,6 +200,153 @@ impl client::Handler for ClientHandler {
                 Err(russh::Error::WrongServerSig)
             }
         }
+    }
+}
+
+#[async_trait]
+impl client::Handler for FingerprintProbeHandler {
+    type Error = russh::Error;
+
+    async fn check_server_key(
+        &mut self,
+        server_public_key: &PublicKey,
+    ) -> Result<bool, Self::Error> {
+        *self.fingerprint.lock().unwrap() = Some(server_public_key.fingerprint());
+        Ok(true)
+    }
+}
+
+#[derive(Clone, Serialize)]
+pub struct KnownHostEntry {
+    pub host_key: String,
+    pub fingerprint: String,
+}
+
+#[derive(Clone, Serialize)]
+pub struct SshHealthCheckResult {
+    pub reachable: bool,
+    pub latency_ms: Option<u64>,
+    pub error: Option<String>,
+    pub host_key: String,
+    pub fingerprint: Option<String>,
+    pub stored_fingerprint: Option<String>,
+    pub fingerprint_status: String,
+}
+
+fn format_host_key(host: &str, port: u16) -> String {
+    format!("[{}]:{}", host, port)
+}
+
+async fn fetch_server_fingerprint(
+    host: &str,
+    port: u16,
+    ssh_compat_preset: Option<&str>,
+    timeout_duration: Duration,
+) -> Result<String, String> {
+    let config = build_ssh_config(
+        ssh_compat_preset.unwrap_or("modern"),
+        0,
+        (timeout_duration.as_secs().max(1)) as u32,
+    );
+    let captured = Arc::new(std::sync::Mutex::new(None::<String>));
+    let handler = FingerprintProbeHandler::new(captured.clone());
+    let addr = format!("{}:{}", host, port);
+
+    let session = timeout(timeout_duration, client::connect(config, addr, handler))
+        .await
+        .map_err(|_| "Tempo esgotado ao negociar fingerprint SSH".to_string())?
+        .map_err(|e| e.to_string())?;
+
+    drop(session);
+
+    let fingerprint = captured
+        .lock()
+        .unwrap()
+        .clone()
+        .ok_or_else(|| "Servidor respondeu sem expor fingerprint".to_string())?;
+    Ok(fingerprint)
+}
+
+#[tauri::command]
+pub fn ssh_list_known_hosts(
+    state: tauri::State<'_, crate::AppState>,
+) -> Result<Vec<KnownHostEntry>, String> {
+    let data_dir = state.storage.lock().unwrap().data_dir.clone();
+    let mut entries = load_known_hosts(&data_dir)
+        .into_iter()
+        .map(|(host_key, fingerprint)| KnownHostEntry {
+            host_key,
+            fingerprint,
+        })
+        .collect::<Vec<_>>();
+    entries.sort_by(|a, b| a.host_key.cmp(&b.host_key));
+    Ok(entries)
+}
+
+#[tauri::command]
+pub async fn ssh_health_check(
+    state: tauri::State<'_, crate::AppState>,
+    host: String,
+    port: u16,
+    timeout_ms: Option<u64>,
+    ssh_compat_preset: Option<String>,
+) -> Result<SshHealthCheckResult, String> {
+    let timeout_duration = Duration::from_millis(timeout_ms.unwrap_or(4000));
+    let host_key = format_host_key(&host, port);
+    let data_dir = state.storage.lock().unwrap().data_dir.clone();
+    let known_hosts = load_known_hosts(&data_dir);
+    let stored_fingerprint = known_hosts.get(&host_key).cloned();
+
+    let started = std::time::Instant::now();
+    let tcp_result = timeout(timeout_duration, tokio::net::TcpStream::connect((host.as_str(), port))).await;
+    let (reachable, latency_ms, tcp_error) = match tcp_result {
+        Ok(Ok(_)) => (true, Some(started.elapsed().as_millis() as u64), None),
+        Ok(Err(err)) => (false, None, Some(err.to_string())),
+        Err(_) => (false, None, Some("Tempo esgotado ao conectar na porta SSH".to_string())),
+    };
+
+    if !reachable {
+        return Ok(SshHealthCheckResult {
+            reachable,
+            latency_ms,
+            error: tcp_error,
+            host_key,
+            fingerprint: None,
+            stored_fingerprint,
+            fingerprint_status: "unreachable".to_string(),
+        });
+    }
+
+    match fetch_server_fingerprint(&host, port, ssh_compat_preset.as_deref(), timeout_duration).await {
+        Ok(fingerprint) => {
+            let fingerprint_status = match stored_fingerprint.as_deref() {
+                Some(stored) if stored == fingerprint => "match",
+                Some(_) => "mismatch",
+                None => "new",
+            };
+            Ok(SshHealthCheckResult {
+                reachable,
+                latency_ms,
+                error: None,
+                host_key,
+                fingerprint: Some(fingerprint),
+                stored_fingerprint,
+                fingerprint_status: fingerprint_status.to_string(),
+            })
+        }
+        Err(err) => Ok(SshHealthCheckResult {
+            reachable,
+            latency_ms,
+            error: Some(err),
+            host_key,
+            fingerprint: None,
+            stored_fingerprint: stored_fingerprint.clone(),
+            fingerprint_status: if stored_fingerprint.is_some() {
+                "stored-only".to_string()
+            } else {
+                "unknown".to_string()
+            },
+        }),
     }
 }
 

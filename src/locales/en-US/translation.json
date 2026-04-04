@@ -14,7 +14,8 @@
     "sync": "Sync",
     "newConnection": "New Connection",
     "backup": "Backup",
-    "quickConnect": "Quick Connect"
+    "quickConnect": "Quick Connect",
+    "health": "Health"
   },
   "dashboard": {
     "title": "Hosts",
@@ -42,6 +43,47 @@
       "lastConnected": "Last connected: {{date}}",
       "neverConnected": "Never connected",
       "mfaBadge": "MFA"
+    }
+  },
+  "health": {
+    "title": "Health Check and Fingerprints",
+    "description": "Check reachability, latency, and compare the current fingerprint against the stored inventory.",
+    "searchPlaceholder": "Filter hosts...",
+    "empty": "No hosts match the current filters.",
+    "actions": {
+      "loadInventory": "Load inventory",
+      "runAll": "Run all",
+      "check": "Check"
+    },
+    "summary": {
+      "online": "Reachable hosts",
+      "inventory": "Inventoried fingerprints",
+      "issues": "Issues found"
+    },
+    "table": {
+      "host": "Host",
+      "status": "Status",
+      "latency": "Latency",
+      "fingerprint": "Key",
+      "liveFingerprint": "Live fingerprint",
+      "storedFingerprint": "Stored fingerprint",
+      "actions": "Actions"
+    },
+    "status": {
+      "match": "OK",
+      "mismatch": "Changed",
+      "new": "New",
+      "storedOnly": "Stored only",
+      "unknown": "Unknown",
+      "unreachable": "Unreachable"
+    },
+    "fingerprint": {
+      "notRead": "Not read",
+      "notStored": "Not stored"
+    },
+    "orphaned": {
+      "title": "Inventory has orphaned entries",
+      "description": "{{count}} stored fingerprint(s) no longer match hosts registered on this machine."
     }
   },
   "hostEditor": {

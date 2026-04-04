@@ -15,6 +15,7 @@ import { SshKeyEditor } from "@/pages/SshKeyEditor";
 import { Groups } from "@/pages/Groups";
 import { ConnectionLog } from "@/pages/ConnectionLog";
 import { Operations } from "@/pages/Operations";
+import { Health } from "@/pages/Health";
 import { useHostsStore } from "@/store/hosts";
 import { useSettingsStore } from "@/store/settings";
 import { useCredentialsStore } from "@/store/credentials";
@@ -76,6 +77,7 @@ export default function App() {
           <Route path="groups" element={<Groups />} />
           <Route path="connection-log" element={<ConnectionLog />} />
           <Route path="operations" element={<Operations />} />
+          <Route path="health" element={<Health />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

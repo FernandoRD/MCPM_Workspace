@@ -14,7 +14,8 @@
     "sync": "Sincronização",
     "newConnection": "Nova Conexão",
     "backup": "Backup",
-    "quickConnect": "Quick Connect"
+    "quickConnect": "Quick Connect",
+    "health": "Health"
   },
   "dashboard": {
     "title": "Hosts",
@@ -42,6 +43,47 @@
       "lastConnected": "Última conexão: {{date}}",
       "neverConnected": "Nunca conectado",
       "mfaBadge": "MFA"
+    }
+  },
+  "health": {
+    "title": "Health Check e Fingerprints",
+    "description": "Verifique alcance, latência e compare a fingerprint atual com o inventário salvo.",
+    "searchPlaceholder": "Filtrar hosts...",
+    "empty": "Nenhum host encontrado para os filtros atuais.",
+    "actions": {
+      "loadInventory": "Carregar inventário",
+      "runAll": "Verificar todos",
+      "check": "Verificar"
+    },
+    "summary": {
+      "online": "Hosts alcançáveis",
+      "inventory": "Fingerprints inventariadas",
+      "issues": "Problemas encontrados"
+    },
+    "table": {
+      "host": "Host",
+      "status": "Status",
+      "latency": "Latência",
+      "fingerprint": "Chave",
+      "liveFingerprint": "Fingerprint atual",
+      "storedFingerprint": "Fingerprint salva",
+      "actions": "Ações"
+    },
+    "status": {
+      "match": "OK",
+      "mismatch": "Mudou",
+      "new": "Nova",
+      "storedOnly": "Só inventário",
+      "unknown": "Desconhecido",
+      "unreachable": "Inacessível"
+    },
+    "fingerprint": {
+      "notRead": "Não lida",
+      "notStored": "Não inventariada"
+    },
+    "orphaned": {
+      "title": "Inventário com entradas órfãs",
+      "description": "{{count}} fingerprint(s) salvas não correspondem mais a hosts cadastrados nesta máquina."
     }
   },
   "hostEditor": {
