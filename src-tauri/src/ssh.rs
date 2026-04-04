@@ -10,13 +10,14 @@ use base64::Engine;
 use cfg_if::cfg_if;
 use russh::{cipher, compression, kex, mac};
 use russh::client;
+use russh::Channel;
 use russh::Preferred;
 use russh::ChannelMsg;
 use russh_keys::agent::client::AgentClient;
 use russh_keys::key::PublicKey;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
-use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::mpsc;
 
 // ─── Algoritmos legado (KEX + ciphers + MACs + host-key) ─────────────────────
@@ -107,16 +108,24 @@ struct LiveSession {
     tx: mpsc::Sender<SshCommand>,
 }
 
+// ─── Túnel ativo ──────────────────────────────────────────────────────────────
+
+struct LiveTunnel {
+    shutdown_tx: tokio::sync::oneshot::Sender<()>,
+}
+
 // ─── Gerenciador de sessões ───────────────────────────────────────────────────
 
 pub struct SshManager {
     sessions: HashMap<String, LiveSession>,
+    tunnels: HashMap<String, LiveTunnel>,
 }
 
 impl SshManager {
     pub fn new() -> Self {
         Self {
             sessions: HashMap::new(),
+            tunnels: HashMap::new(),
         }
     }
 }
@@ -590,6 +599,415 @@ pub async fn ssh_copy_id(
         }
     }
 
+    Ok(())
+}
+
+// ─── Helper: autenticação extraída ────────────────────────────────────────────
+
+async fn authenticate_session(
+    session: &mut client::Handle<ClientHandler>,
+    auth_method: &str,
+    username: &str,
+    password: Option<&str>,
+    private_key_content: Option<&str>,
+    private_key_passphrase: Option<&str>,
+) -> Result<bool, String> {
+    match auth_method {
+        "password" => {
+            let pwd = password.ok_or("Senha não informada")?;
+            session
+                .authenticate_password(username, pwd)
+                .await
+                .map_err(|e| e.to_string())
+        }
+        "privateKey" => {
+            let content = private_key_content.ok_or("Conteúdo da chave privada não informado")?;
+            let key = russh_keys::decode_secret_key(content, private_key_passphrase)
+                .map_err(|e| format!("Falha ao decodificar a chave privada: {e}"))?;
+            session
+                .authenticate_publickey(username, Arc::new(key))
+                .await
+                .map_err(|e| e.to_string())
+        }
+        "agent" => {
+            cfg_if! {
+                if #[cfg(unix)] {
+                    let agent = AgentClient::connect_env().await.map_err(|_| {
+                        "Não foi possível conectar ao agente SSH.\n\
+                         Verifique se o ssh-agent está rodando e SSH_AUTH_SOCK está definido."
+                            .to_string()
+                    })?;
+                    try_agent_auth(session, username, agent).await
+                } else if #[cfg(windows)] {
+                    use tokio::net::windows::named_pipe::ClientOptions;
+                    let stream = ClientOptions::new()
+                        .open(r"\\.\pipe\openssh-ssh-agent")
+                        .map_err(|_| "Agente OpenSSH não encontrado.".to_string())?;
+                    let agent = AgentClient::connect(stream);
+                    try_agent_auth(session, username, agent).await
+                } else {
+                    Err("Agente SSH não suportado nesta plataforma.".into())
+                }
+            }
+        }
+        _ => Err(format!("Método de autenticação desconhecido: {auth_method}")),
+    }
+}
+
+// ─── Proxy bidirecional: TCP <-> canal SSH ────────────────────────────────────
+
+async fn proxy_tcp_to_channel(stream: tokio::net::TcpStream, mut channel: Channel<client::Msg>) {
+    let (mut tcp_read, mut tcp_write) = stream.into_split();
+    let mut buf = vec![0u8; 32 * 1024];
+
+    loop {
+        tokio::select! {
+            n = tcp_read.read(&mut buf) => {
+                match n {
+                    Ok(0) | Err(_) => {
+                        let _ = channel.eof().await;
+                        break;
+                    }
+                    Ok(n) => {
+                        if channel.data(&buf[..n]).await.is_err() {
+                            break;
+                        }
+                    }
+                }
+            }
+            msg = channel.wait() => {
+                match msg {
+                    Some(ChannelMsg::Data { ref data }) => {
+                        if tcp_write.write_all(data.as_ref()).await.is_err() {
+                            break;
+                        }
+                    }
+                    Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => break,
+                    _ => {}
+                }
+            }
+        }
+    }
+}
+
+// ─── Handshake SOCKS5 para DynamicForward ────────────────────────────────────
+
+async fn socks5_handshake(
+    mut stream: tokio::net::TcpStream,
+) -> Result<(String, u16, tokio::net::TcpStream), String> {
+    // 1. Saudação do cliente
+    let mut header = [0u8; 2];
+    stream.read_exact(&mut header).await.map_err(|e| e.to_string())?;
+    if header[0] != 5 {
+        return Err("Protocolo não é SOCKS5".into());
+    }
+    let nmethods = header[1] as usize;
+    let mut methods = vec![0u8; nmethods];
+    stream.read_exact(&mut methods).await.map_err(|e| e.to_string())?;
+
+    // Aceita sem autenticação (método 0)
+    stream.write_all(&[5, 0]).await.map_err(|e| e.to_string())?;
+
+    // 2. Requisição de conexão
+    let mut req = [0u8; 4];
+    stream.read_exact(&mut req).await.map_err(|e| e.to_string())?;
+    if req[0] != 5 || req[1] != 1 {
+        return Err("Comando SOCKS5 não suportado (somente CONNECT)".into());
+    }
+
+    let target_host = match req[3] {
+        1 => {
+            // IPv4
+            let mut addr = [0u8; 4];
+            stream.read_exact(&mut addr).await.map_err(|e| e.to_string())?;
+            format!("{}.{}.{}.{}", addr[0], addr[1], addr[2], addr[3])
+        }
+        3 => {
+            // Nome de domínio
+            let len = stream.read_u8().await.map_err(|e| e.to_string())?;
+            let mut domain = vec![0u8; len as usize];
+            stream.read_exact(&mut domain).await.map_err(|e| e.to_string())?;
+            String::from_utf8_lossy(&domain).to_string()
+        }
+        4 => {
+            // IPv6
+            let mut addr = [0u8; 16];
+            stream.read_exact(&mut addr).await.map_err(|e| e.to_string())?;
+            let parts: Vec<String> = addr.chunks(2).map(|c| format!("{:02x}{:02x}", c[0], c[1])).collect();
+            parts.join(":")
+        }
+        t => return Err(format!("Tipo de endereço SOCKS5 não suportado: {t}")),
+    };
+
+    let target_port = stream.read_u16().await.map_err(|e| e.to_string())?;
+
+    // Resposta de sucesso (BND.ADDR = 0.0.0.0, BND.PORT = 0)
+    stream
+        .write_all(&[5, 0, 0, 1, 0, 0, 0, 0, 0, 0])
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok((target_host, target_port, stream))
+}
+
+// ─── ssh_exec ─────────────────────────────────────────────────────────────────
+
+#[derive(serde::Serialize)]
+pub struct RemoteExecResult {
+    pub stdout: String,
+    pub stderr: String,
+    pub exit_status: u32,
+    pub duration_ms: u64,
+}
+
+#[tauri::command]
+pub async fn ssh_exec(
+    state: tauri::State<'_, crate::AppState>,
+    host: String,
+    port: u16,
+    username: String,
+    auth_method: String,
+    password: Option<String>,
+    private_key_content: Option<String>,
+    private_key_passphrase: Option<String>,
+    ssh_compat_preset: Option<String>,
+    keepalive_interval: Option<u32>,
+    connection_timeout: Option<u32>,
+    command: String,
+) -> Result<RemoteExecResult, String> {
+    let preset = ssh_compat_preset.as_deref().unwrap_or("modern");
+    let config = build_ssh_config(preset, keepalive_interval.unwrap_or(0), connection_timeout.unwrap_or(30));
+
+    let data_dir = state.storage.lock().unwrap().data_dir.clone();
+    let known_hosts_map = load_known_hosts(&data_dir);
+    let known_hosts = Arc::new(std::sync::Mutex::new(known_hosts_map));
+
+    let addr = format!("{}:{}", host, port);
+    let mut session = client::connect(config, addr, ClientHandler::new(&host, port, known_hosts.clone()))
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let ok = authenticate_session(
+        &mut session,
+        &auth_method,
+        &username,
+        password.as_deref(),
+        private_key_content.as_deref(),
+        private_key_passphrase.as_deref(),
+    )
+    .await?;
+
+    if !ok {
+        return Err("Autenticação falhou. Verifique as credenciais.".into());
+    }
+    save_known_hosts(&data_dir, &known_hosts.lock().unwrap());
+
+    let mut channel = session.channel_open_session().await.map_err(|e| e.to_string())?;
+    let start = std::time::Instant::now();
+    channel.exec(true, command.as_str()).await.map_err(|e| e.to_string())?;
+
+    let mut stdout_buf = Vec::new();
+    let mut stderr_buf = Vec::new();
+    let mut exit_status = 0u32;
+
+    loop {
+        match channel.wait().await {
+            Some(ChannelMsg::Data { ref data }) => stdout_buf.extend_from_slice(data.as_ref()),
+            Some(ChannelMsg::ExtendedData { ref data, .. }) => stderr_buf.extend_from_slice(data.as_ref()),
+            Some(ChannelMsg::ExitStatus { exit_status: s }) => exit_status = s,
+            Some(ChannelMsg::Close) | None => break,
+            _ => {}
+        }
+    }
+
+    Ok(RemoteExecResult {
+        stdout: String::from_utf8_lossy(&stdout_buf).to_string(),
+        stderr: String::from_utf8_lossy(&stderr_buf).to_string(),
+        exit_status,
+        duration_ms: start.elapsed().as_millis() as u64,
+    })
+}
+
+// ─── TunnelSpec ───────────────────────────────────────────────────────────────
+
+#[derive(serde::Deserialize, Clone)]
+pub struct TunnelSpec {
+    pub kind: String,
+    pub bind_address: String,
+    pub bind_port: u16,
+    pub destination_host: String,
+    pub destination_port: u16,
+    pub local_host: Option<String>,
+    pub local_port: Option<u16>,
+}
+
+// ─── ssh_start_tunnel ─────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn ssh_start_tunnel(
+    state: tauri::State<'_, crate::AppState>,
+    tunnel_id: String,
+    host: String,
+    port: u16,
+    username: String,
+    auth_method: String,
+    password: Option<String>,
+    private_key_content: Option<String>,
+    private_key_passphrase: Option<String>,
+    ssh_compat_preset: Option<String>,
+    keepalive_interval: Option<u32>,
+    connection_timeout: Option<u32>,
+    spec: TunnelSpec,
+) -> Result<(), String> {
+    // Verifica se túnel já está ativo
+    {
+        let mgr = state.ssh.lock().await;
+        if mgr.tunnels.contains_key(&tunnel_id) {
+            return Err(format!("Túnel {tunnel_id} já está ativo"));
+        }
+    }
+
+    let preset = ssh_compat_preset.as_deref().unwrap_or("modern");
+    let config = build_ssh_config(preset, keepalive_interval.unwrap_or(0), connection_timeout.unwrap_or(30));
+
+    let data_dir = state.storage.lock().unwrap().data_dir.clone();
+    let known_hosts_map = load_known_hosts(&data_dir);
+    let known_hosts = Arc::new(std::sync::Mutex::new(known_hosts_map));
+
+    let addr = format!("{}:{}", host, port);
+    let mut session = client::connect(config, addr, ClientHandler::new(&host, port, known_hosts.clone()))
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let ok = authenticate_session(
+        &mut session,
+        &auth_method,
+        &username,
+        password.as_deref(),
+        private_key_content.as_deref(),
+        private_key_passphrase.as_deref(),
+    )
+    .await?;
+
+    if !ok {
+        return Err("Autenticação falhou. Verifique as credenciais.".into());
+    }
+    save_known_hosts(&data_dir, &known_hosts.lock().unwrap());
+
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+
+    {
+        let mut mgr = state.ssh.lock().await;
+        mgr.tunnels.insert(tunnel_id.clone(), LiveTunnel { shutdown_tx });
+    }
+
+    let session_arc = Arc::new(tokio::sync::Mutex::new(session));
+    let ssh_mgr = Arc::clone(&state.ssh);
+    let tunnel_id_task = tunnel_id.clone();
+
+    match spec.kind.as_str() {
+        "local" => {
+            let bind_addr = format!("{}:{}", spec.bind_address, spec.bind_port);
+            let listener = tokio::net::TcpListener::bind(&bind_addr)
+                .await
+                .map_err(|e| format!("Falha ao fazer bind em {bind_addr}: {e}"))?;
+
+            let dest_host = spec.destination_host.clone();
+            let dest_port = spec.destination_port;
+
+            tokio::spawn(async move {
+                let mut shutdown_rx = shutdown_rx;
+                loop {
+                    tokio::select! {
+                        result = listener.accept() => {
+                            match result {
+                                Ok((tcp_stream, _)) => {
+                                    let sess = Arc::clone(&session_arc);
+                                    let dh = dest_host.clone();
+                                    let dp = dest_port;
+                                    tokio::spawn(async move {
+                                        let channel = {
+                                            let s = sess.lock().await;
+                                            s.channel_open_direct_tcpip(&dh, dp as u32, "127.0.0.1", 0).await
+                                        };
+                                        if let Ok(ch) = channel {
+                                            proxy_tcp_to_channel(tcp_stream, ch).await;
+                                        }
+                                    });
+                                }
+                                Err(_) => break,
+                            }
+                        }
+                        _ = &mut shutdown_rx => break,
+                    }
+                }
+                ssh_mgr.lock().await.tunnels.remove(&tunnel_id_task);
+            });
+        }
+
+        "dynamic" => {
+            // Proxy SOCKS5
+            let bind_addr = format!("{}:{}", spec.bind_address, spec.bind_port);
+            let listener = tokio::net::TcpListener::bind(&bind_addr)
+                .await
+                .map_err(|e| format!("Falha ao fazer bind em {bind_addr}: {e}"))?;
+
+            tokio::spawn(async move {
+                let mut shutdown_rx = shutdown_rx;
+                loop {
+                    tokio::select! {
+                        result = listener.accept() => {
+                            match result {
+                                Ok((tcp_stream, _)) => {
+                                    let sess = Arc::clone(&session_arc);
+                                    tokio::spawn(async move {
+                                        if let Ok((target_host, target_port, stream)) = socks5_handshake(tcp_stream).await {
+                                            let channel = {
+                                                let s = sess.lock().await;
+                                                s.channel_open_direct_tcpip(&target_host, target_port as u32, "127.0.0.1", 0).await
+                                            };
+                                            if let Ok(ch) = channel {
+                                                proxy_tcp_to_channel(stream, ch).await;
+                                            }
+                                        }
+                                    });
+                                }
+                                Err(_) => break,
+                            }
+                        }
+                        _ = &mut shutdown_rx => break,
+                    }
+                }
+                ssh_mgr.lock().await.tunnels.remove(&tunnel_id_task);
+            });
+        }
+
+        "remote" => {
+            // RemoteForward: limpa estado antes de retornar erro
+            ssh_mgr.lock().await.tunnels.remove(&tunnel_id_task);
+            return Err("RemoteForward ainda não é suportado nesta versão.".into());
+        }
+
+        kind => {
+            ssh_mgr.lock().await.tunnels.remove(&tunnel_id_task);
+            return Err(format!("Tipo de túnel desconhecido: {kind}"));
+        }
+    }
+
+    Ok(())
+}
+
+// ─── ssh_stop_tunnel ──────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub async fn ssh_stop_tunnel(
+    state: tauri::State<'_, crate::AppState>,
+    tunnel_id: String,
+) -> Result<(), String> {
+    let mut mgr = state.ssh.lock().await;
+    if let Some(tunnel) = mgr.tunnels.remove(&tunnel_id) {
+        let _ = tunnel.shutdown_tx.send(());
+    }
     Ok(())
 }
 

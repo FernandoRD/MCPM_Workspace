@@ -49,6 +49,8 @@ export interface SshHost {
   updatedAt: string;
   color?: string;
   sshCompat?: SshCompatOptions;
+  keepAliveInterval?: number;
+  connectionTimeout?: number;
 }
 
 export type TabType = "terminal" | "sftp";
@@ -124,6 +126,7 @@ export interface AppSettings {
   sync: {
     provider: SyncProvider;
     autoSync: boolean;
+    autoSyncIntervalMinutes?: number;
     lastSyncAt?: string;
     gist?: GistSyncConfig;
     s3?: S3SyncConfig;
@@ -132,6 +135,11 @@ export interface AppSettings {
   };
   /** Lista de grupos criados manualmente (persiste grupos sem hosts associados) */
   groups: string[];
+  productivity: {
+    snippets: CommandSnippet[];
+    tunnels: TunnelProfile[];
+    workspaces: Workspace[];
+  };
 }
 
 /** Payload cifrado que viaja no sync */
@@ -151,3 +159,46 @@ export interface SyncPackage {
 }
 
 export type SyncStatus = "idle" | "syncing" | "synced" | "error" | "notConfigured";
+
+// ─── Productivity types ────────────────────────────────────────────────────────
+
+export interface CommandSnippet {
+  id: string;
+  label: string;
+  command: string;
+  description?: string;
+  scopeType: "global" | "host" | "group";
+  scopeValue?: string;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TunnelProfile {
+  id: string;
+  label: string;
+  hostId: string;
+  kind: "local" | "remote" | "dynamic";
+  bindAddress: string;
+  bindPort: number;
+  destinationHost: string;
+  destinationPort: number;
+  localHost?: string;
+  localPort?: number;
+  autoStart: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkspaceItem {
+  hostId: string;
+  type: TabType;
+}
+
+export interface Workspace {
+  id: string;
+  name: string;
+  items: WorkspaceItem[];
+  createdAt: string;
+  updatedAt: string;
+}

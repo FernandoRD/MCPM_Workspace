@@ -6,6 +6,7 @@ import {
   Eye, EyeOff, KeyRound, XCircle,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
+import { notify } from "@/lib/notifications";
 import { useHostsStore } from "@/store/hosts";
 import { useSettingsStore } from "@/store/settings";
 import { useCredentialsStore } from "@/store/credentials";
@@ -21,6 +22,7 @@ import {
   applySyncPayload,
   SyncResult,
 } from "@/lib/sync";
+import { pushToProvider, pullFromProvider } from "@/lib/syncProviders";
 
 // ─── Página principal ─────────────────────────────────────────────────────────
 
@@ -74,10 +76,13 @@ export function Sync() {
     setLastResult(null);
     try {
       const payload = await buildSyncPayload(hosts, credentials, settings, masterPassword);
-      await pushToProvider(sync, payload, updateSync);
+      const newGistId = await pushToProvider(sync, payload);
+      if (newGistId) updateSync({ gist: { ...sync.gist!, gistId: newGistId } });
       updateSync({ lastSyncAt: new Date().toISOString() });
+      notify("SSH Vault", t("notifications.syncPushSuccess"));
     } catch (e) {
       setError(String(e));
+      notify("SSH Vault", t("notifications.syncError"));
     } finally {
       setSyncStatus("idle");
     }
@@ -101,8 +106,10 @@ export function Sync() {
       );
       updateSync({ lastSyncAt: new Date().toISOString() });
       setLastResult(result);
+      notify("SSH Vault", t("notifications.syncPullSuccess"));
     } catch (e) {
       setError(String(e));
+      notify("SSH Vault", t("notifications.syncError"));
     } finally {
       setSyncStatus("idle");
     }
@@ -207,6 +214,11 @@ export function Sync() {
           {sync.provider === "custom" && (
             <CustomConfigForm sync={sync} updateSync={updateSync} />
           )}
+
+          {/* Sync automático */}
+          {sync.provider && (
+            <AutoSyncConfig sync={sync} updateSync={updateSync} security={security} />
+          )}
         </div>
       </div>
 
@@ -225,105 +237,6 @@ export function Sync() {
       />
     </div>
   );
-}
-
-// ─── Helpers de provider ──────────────────────────────────────────────────────
-
-async function pushToProvider(
-  sync: AppSettings["sync"],
-  payload: string,
-  updateSync: (s: Partial<AppSettings["sync"]>) => void
-): Promise<void> {
-  switch (sync.provider) {
-    case "githubGist": {
-      if (!sync.gist?.token) throw new Error("Token do GitHub não configurado.");
-      const newId = await invoke<string>("sync_gist_push", {
-        token: sync.gist.token,
-        gistId: sync.gist.gistId ?? null,
-        payloadJson: payload,
-      });
-      // Salva o Gist ID retornado pelo GitHub
-      if (!sync.gist.gistId) {
-        updateSync({ gist: { ...sync.gist, gistId: newId } });
-      }
-      break;
-    }
-    case "s3": {
-      const s3 = sync.s3;
-      if (!s3) throw new Error("S3 não configurado.");
-      await invoke("sync_s3_push", {
-        endpoint: s3.endpoint ?? "",
-        bucket: s3.bucket,
-        region: s3.region,
-        accessKey: s3.accessKey,
-        secretKey: s3.secretKey,
-        payloadJson: payload,
-      });
-      break;
-    }
-    case "webdav": {
-      const wdav = sync.webdav;
-      if (!wdav) throw new Error("WebDAV não configurado.");
-      await invoke("sync_webdav_push", {
-        url: wdav.url,
-        username: wdav.username,
-        password: wdav.password,
-        path: wdav.path || "vault.json",
-        payloadJson: payload,
-      });
-      break;
-    }
-    case "custom": {
-      if (!sync.custom?.url) throw new Error("URL do endpoint customizado não configurada.");
-      await invoke("sync_custom_push", {
-        url: sync.custom.url,
-        payloadJson: payload,
-      });
-      break;
-    }
-    default:
-      throw new Error("Nenhum provider de sync configurado.");
-  }
-}
-
-async function pullFromProvider(sync: AppSettings["sync"]): Promise<string> {
-  switch (sync.provider) {
-    case "githubGist": {
-      if (!sync.gist?.token) throw new Error("Token do GitHub não configurado.");
-      if (!sync.gist?.gistId) throw new Error("Gist ID não configurado. Sincronize de outro dispositivo primeiro.");
-      return invoke<string>("sync_gist_pull", {
-        token: sync.gist.token,
-        gistId: sync.gist.gistId,
-      });
-    }
-    case "s3": {
-      const s3 = sync.s3;
-      if (!s3) throw new Error("S3 não configurado.");
-      return invoke<string>("sync_s3_pull", {
-        endpoint: s3.endpoint ?? "",
-        bucket: s3.bucket,
-        region: s3.region,
-        accessKey: s3.accessKey,
-        secretKey: s3.secretKey,
-      });
-    }
-    case "webdav": {
-      const wdav = sync.webdav;
-      if (!wdav) throw new Error("WebDAV não configurado.");
-      return invoke<string>("sync_webdav_pull", {
-        url: wdav.url,
-        username: wdav.username,
-        password: wdav.password,
-        path: wdav.path || "vault.json",
-      });
-    }
-    case "custom": {
-      if (!sync.custom?.url) throw new Error("URL do endpoint customizado não configurada.");
-      return invoke<string>("sync_custom_pull", { url: sync.custom.url });
-    }
-    default:
-      throw new Error("Nenhum provider de sync configurado.");
-  }
 }
 
 // ─── Formulários de configuração ──────────────────────────────────────────────
@@ -573,6 +486,95 @@ function CustomConfigForm({
         hint={t("sync.custom.urlHint")}
       />
     </ProviderForm>
+  );
+}
+
+// ─── Auto-sync ────────────────────────────────────────────────────────────────
+
+const INTERVAL_OPTIONS = [
+  { minutes: 15,  labelKey: "sync.autoSync.interval15" },
+  { minutes: 30,  labelKey: "sync.autoSync.interval30" },
+  { minutes: 60,  labelKey: "sync.autoSync.interval60" },
+  { minutes: 120, labelKey: "sync.autoSync.interval120" },
+];
+
+function AutoSyncConfig({
+  sync,
+  updateSync,
+  security,
+}: {
+  sync: AppSettings["sync"];
+  updateSync: (s: Partial<AppSettings["sync"]>) => void;
+  security: AppSettings["security"];
+}) {
+  const { t } = useTranslation();
+  const interval = sync.autoSyncIntervalMinutes ?? 30;
+
+  return (
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] p-5 flex flex-col gap-4">
+      {/* Header com toggle */}
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold text-[var(--text-primary)]">
+            {t("sync.autoSync.title")}
+          </p>
+          <p className="text-xs text-[var(--text-muted)] mt-0.5">
+            {t("sync.autoSync.description")}
+          </p>
+        </div>
+        {/* Toggle switch */}
+        <button
+          role="switch"
+          aria-checked={sync.autoSync}
+          onClick={() => updateSync({ autoSync: !sync.autoSync })}
+          className={cn(
+            "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
+            sync.autoSync ? "bg-[var(--accent)]" : "bg-[var(--border)]"
+          )}
+        >
+          <span
+            className={cn(
+              "pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform",
+              sync.autoSync ? "translate-x-5" : "translate-x-0"
+            )}
+          />
+        </button>
+      </div>
+
+      {/* Intervalo — só mostra quando ativado */}
+      {sync.autoSync && (
+        <>
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-medium text-[var(--text-secondary)]">
+              {t("sync.autoSync.intervalLabel")}
+            </p>
+            <div className="flex gap-2">
+              {INTERVAL_OPTIONS.map(({ minutes, labelKey }) => (
+                <button
+                  key={minutes}
+                  onClick={() => updateSync({ autoSyncIntervalMinutes: minutes })}
+                  className={cn(
+                    "flex-1 rounded-lg border px-3 py-2 text-xs transition-colors",
+                    interval === minutes
+                      ? "border-[var(--accent)] bg-[var(--accent-subtle)] text-[var(--accent)] font-medium"
+                      : "border-[var(--border)] bg-[var(--bg-primary)] text-[var(--text-secondary)] hover:border-[var(--text-muted)]"
+                  )}
+                >
+                  {t(labelKey)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Aviso sobre credenciais */}
+          {security?.syncCredentials && security.masterPasswordSet && (
+            <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+              ⚠ {t("sync.autoSync.noMasterPasswordWarning")}
+            </p>
+          )}
+        </>
+      )}
+    </div>
   );
 }
 

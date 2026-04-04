@@ -15,6 +15,7 @@ interface SettingsStore {
   updateSsh: (ssh: Partial<AppSettings["ssh"]>) => void;
   updateSync: (sync: Partial<AppSettings["sync"]>) => void;
   updateGroups: (groups: string[]) => void;
+  updateProductivity: (productivity: Partial<AppSettings["productivity"]>) => void;
   resetSettings: () => void;
 }
 
@@ -39,8 +40,14 @@ const DEFAULT_SETTINGS: AppSettings = {
   sync: {
     provider: null,
     autoSync: false,
+    autoSyncIntervalMinutes: 30,
   },
   groups: [],
+  productivity: {
+    snippets: [],
+    tunnels: [],
+    workspaces: [],
+  },
 };
 
 function persistSettings(settings: AppSettings) {
@@ -151,6 +158,16 @@ export const useSettingsStore = create<SettingsStore>()((set, _get) => ({
   updateGroups: (groups) =>
     set((s) => {
       const settings = { ...s.settings, groups };
+      persistSettings(settings);
+      return { settings };
+    }),
+
+  updateProductivity: (productivity) =>
+    set((s) => {
+      const settings = {
+        ...s.settings,
+        productivity: { ...DEFAULT_SETTINGS.productivity, ...s.settings.productivity, ...productivity },
+      };
       persistSettings(settings);
       return { settings };
     }),

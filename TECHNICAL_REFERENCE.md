@@ -13,20 +13,22 @@
 5. [Comandos Tauri (Rust)](#5-comandos-tauri-rust)
 6. [Páginas React](#6-páginas-react)
 7. [Componentes reutilizáveis](#7-componentes-reutilizáveis)
-8. [Roteamento](#8-roteamento)
-9. [Internacionalização (i18n)](#9-internacionalização-i18n)
-10. [Módulo de backup](#10-módulo-de-backup)
-11. [Temas](#11-temas)
-12. [Configuração do Tauri](#12-configuração-do-tauri)
-13. [Dependências Rust](#13-dependências-rust)
-14. [Segurança — fluxo de dados sensíveis](#14-segurança--fluxo-de-dados-sensíveis)
-15. [Build e empacotamento](#15-build-e-empacotamento)
+8. [Hooks](#8-hooks)
+9. [Módulo de notificações](#9-módulo-de-notificações)
+10. [Roteamento](#10-roteamento)
+11. [Internacionalização (i18n)](#11-internacionalização-i18n)
+12. [Módulo de backup](#12-módulo-de-backup)
+13. [Temas](#13-temas)
+14. [Configuração do Tauri](#14-configuração-do-tauri)
+15. [Dependências Rust](#15-dependências-rust)
+16. [Segurança — fluxo de dados sensíveis](#16-segurança--fluxo-de-dados-sensíveis)
+17. [Build e empacotamento](#17-build-e-empacotamento)
 
 ---
 
 ## 1. Visão geral da arquitetura
 
-```
+```text
 ┌─────────────────────────────────────────────┐
 │                  Frontend                   │
 │   React 19 + TypeScript + Tailwind CSS      │
@@ -67,7 +69,7 @@
 
 ## 2. Estrutura de diretórios
 
-```
+```text
 ssh_client_dev/
 ├── .github/
 │   └── workflows/
@@ -224,6 +226,7 @@ interface AppSettings {
   sync: {
     provider: SyncProvider;
     autoSync: boolean;
+    autoSyncIntervalMinutes?: number; // 15 | 30 | 60 | 120 — padrão 30
     lastSyncAt?: string;
     gist?: GistSyncConfig;
     s3?: S3SyncConfig;
@@ -407,6 +410,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   sync: {
     provider: null,
     autoSync: false,
+    autoSyncIntervalMinutes: 30,
   },
 };
 ```
@@ -435,6 +439,41 @@ interface CredentialsStore {
 
 ---
 
+### `useUIStore`
+
+**Arquivo:** `src/store/uiStore.ts` | **Persistência:** nenhuma (volátil, em memória)
+
+Estado da UI do Dashboard — busca, filtros e ordenação. Separado dos demais stores pois não é persistido.
+
+```typescript
+type DashboardSortBy = "label-asc" | "label-desc" | "recent" | "oldest";
+
+interface UIStore {
+  dashboardSearch: string;
+  dashboardSelectedGroup: string | null;
+  dashboardSortBy: DashboardSortBy;
+  dashboardSelectedTags: string[];
+  setDashboardSearch      (v: string): void;
+  setDashboardSelectedGroup(v: string | null): void;
+  setDashboardSortBy      (v: DashboardSortBy): void;
+  toggleDashboardTag      (tag: string): void; // adiciona ou remove da seleção
+  clearDashboardTags      (): void;
+}
+```
+
+**Semântica de ordenação:**
+
+| Valor | Comportamento |
+| --- | --- |
+| `"label-asc"` | Alfabético A → Z (padrão) |
+| `"label-desc"` | Alfabético Z → A |
+| `"recent"` | `lastConnectedAt` decrescente; sem conexão = último |
+| `"oldest"` | `lastConnectedAt` crescente; sem conexão = último |
+
+**Semântica do filtro de tags:** OR — um host é exibido se possuir **qualquer** das tags selecionadas. Combinado com AND ao filtro de grupo e de busca textual.
+
+---
+
 ## 5. Comandos Tauri (Rust)
 
 Todos são invocados via `invoke()` do `@tauri-apps/api/core`.
@@ -443,7 +482,7 @@ Todos são invocados via `invoke()` do `@tauri-apps/api/core`.
 
 #### `encrypt_credentials`
 
-```
+```typescript
 invoke("encrypt_credentials", {
   credentialsJson: string,   // JSON serializado do CredentialsMap
   masterPassword: string,
@@ -451,6 +490,7 @@ invoke("encrypt_credentials", {
 ```
 
 Fluxo interno:
+
 1. Gera salt aleatório (16 bytes) e nonce (12 bytes)
 2. Deriva chave AES-256 via Argon2id (`m=65536`, `t=3`, `p=1`)
 3. Cifra com AES-256-GCM (autenticado)
@@ -461,7 +501,7 @@ Fluxo interno:
 
 #### `decrypt_credentials`
 
-```
+```typescript
 invoke("decrypt_credentials", {
   encryptedPayloadJson: string,  // JSON de EncryptedCredentials
   masterPassword: string,
@@ -475,7 +515,7 @@ O erro é propositalmente genérico ("decryption failed") para evitar timing att
 
 #### `verify_master_password`
 
-```
+```typescript
 invoke("verify_master_password", {
   encryptedPayloadJson: string,  // verificationPayload das settings
   masterPassword: string,
@@ -490,7 +530,7 @@ Usado para validar a senha antes de operações de sync/backup sem expor o conte
 
 #### `generate_totp_code`
 
-```
+```typescript
 invoke("generate_totp_code", {
   secretBase32: string,   // Segredo em Base32 (case-insensitive)
 }) → Promise<{
@@ -506,7 +546,7 @@ Algoritmo: SHA-1, step=30s, digits=6 (RFC 6238 padrão).
 
 #### `verify_totp_code`
 
-```
+```typescript
 invoke("verify_totp_code", {
   secretBase32: string,
   code: string,           // 6 dígitos
@@ -519,7 +559,7 @@ Aceita janela atual ± 1 para tolerância de clock skew (±30s).
 
 #### `generate_totp_secret`
 
-```
+```typescript
 invoke("generate_totp_secret", {
   issuer: string,         // Ex: "SSH Vault"
   accountName: string,    // Ex: "user@servidor.com"
@@ -535,13 +575,14 @@ A `otpauth_url` é usada para gerar QR code compatível com Google Authenticator
 
 ### `credentials.rs` — Keychain do SO
 
-```
-invoke("save_credential",   { key: string, value: string }) → Promise<void>
-invoke("get_credential",    { key: string })                → Promise<string>
-invoke("delete_credential", { key: string })                → Promise<void>
+```typescript
+invoke("save_credential",   { key: string, value: string }) // → Promise<void>
+invoke("get_credential",    { key: string })                // → Promise<string>
+invoke("delete_credential", { key: string })                // → Promise<void>
 ```
 
 Usa a crate `keyring` (serviço: `"ssh-vault"`):
+
 - **Linux:** libsecret / GNOME Keyring / KWallet
 - **macOS:** Keychain
 - **Windows:** Credential Manager
@@ -550,8 +591,8 @@ Usa a crate `keyring` (serviço: `"ssh-vault"`):
 
 ### `storage.rs` — Diretório de dados
 
-```
-invoke("get_app_data_dir") → Promise<string>
+```typescript
+invoke("get_app_data_dir") // → Promise<string>
 ```
 
 Retorna o diretório de dados da aplicação (criado se não existir):
@@ -669,11 +710,16 @@ A URL deve aceitar `PUT` para upload e `GET` para download (resposta JSON).
 | --- | --- |
 | Listar hosts | Grid responsivo, agrupado por `group` |
 | Busca | Filtra por `label`, `host`, `tags` |
+| Filtro por grupo | Chips clicáveis com contagem por grupo |
+| Filtro por tag | Chips pill (rounded-full) com lógica OR; botão "Limpar" condicional |
+| Ordenação | Seletor de 4 botões de ícone: A→Z, Z→A, mais recente, mais antigo |
 | Ações por host | Conectar, editar, duplicar, excluir (menu contextual) |
 | Badge MFA | Exibido quando `host.mfaEnabled === true` |
 | Estado vazio | Placeholder com botão para criar primeiro host |
 
-**Componentes internos:** `HostCard`, `ContextItem`, `EmptyState`
+**Componentes internos:** `HostCard`, `SortSelector`, `ContextItem`, `EmptyState`
+
+**Estado de UI:** todo o estado de busca, filtros e ordenação é mantido em `useUIStore` (volátil — não persiste entre sessões).
 
 ---
 
@@ -710,6 +756,7 @@ O preview ao vivo usa `<TotpDisplay secretBase32={form.totpSecret} />`.
 | Segurança | Definir / alterar / remover senha mestra; toggle syncCredentials |
 
 **Fluxo de senha mestra:**
+
 1. Primeira definição: hash via `encrypt_credentials` de payload de verificação → salvo em `settings.security.verificationPayload`
 2. Alteração: valida senha atual com `verify_master_password` antes de aceitar a nova
 3. Remoção: limpa `verificationPayload` e seta `masterPasswordSet = false`
@@ -734,17 +781,25 @@ Provedores suportados (configuração na UI):
 
 1. Se `syncCredentials = true`, exibe modal de senha mestra
 2. Chama `buildSyncPayload(hosts, credentials, settings, masterPassword?)` → JSON
-3. Invoca o comando de push do provedor selecionado
-4. Para Gist: salva o `gistId` retornado em `settings.sync.gist.gistId`
-5. Atualiza `settings.sync.lastSyncAt`
+3. Chama `pushToProvider(sync, payload)` de `src/lib/syncProviders.ts`
+4. Para Gist: salva o `gistId` retornado em `settings.sync.gist.gistId` (apenas quando criado)
+5. Atualiza `settings.sync.lastSyncAt`; dispara notificação nativa de sucesso ou erro
 
 **Fluxo pull (Importar do Remoto):**
 
-1. Invoca o comando de pull do provedor → JSON
+1. Chama `pullFromProvider(sync)` de `src/lib/syncProviders.ts` → JSON
 2. Chama `parseSyncFile(json)` para validar
 3. Se `syncCredentials = true`, exibe modal de senha mestra
 4. Chama `applySyncPayload(file, masterPassword?, mode, ...)` que chama `replaceHosts`/`replaceCredentials`
-5. Exibe resumo: hosts adicionados/atualizados, credenciais adicionadas/atualizadas
+5. Exibe resumo: hosts adicionados/atualizados, credenciais adicionadas/atualizadas; dispara notificação
+
+**Sync automático (`AutoSyncConfig`):**
+
+Seção exibida quando um provedor está configurado. Contém toggle on/off e seletor de intervalo (15 min / 30 min / 1 hora / 2 horas). A lógica do timer vive em `src/hooks/useAutoSync.ts`, não na página.
+
+**Separação de responsabilidades — `src/lib/syncProviders.ts`:**
+
+`pushToProvider` e `pullFromProvider` foram extraídas de `Sync.tsx` para este módulo a fim de serem reutilizadas pelo hook de sync automático sem criar dependência circular entre página e hook.
 
 ---
 
@@ -786,11 +841,13 @@ Formulário para criar/editar uma credencial reutilizável.
 **Arquivo:** `src/pages/Backup.tsx`
 
 **Exportação:**
+
 - Abre diálogo nativo de salvar (`.sshvault` / `.json`)
 - Opção "Incluir credenciais cifradas" → requer senha mestra
 - Hosts no JSON sempre sem campos sensíveis em claro
 
 **Importação:**
+
 - Abre diálogo nativo de abrir
 - Prévia: quantidade de hosts, data de exportação, presença de credenciais
 - Modos: **Adicionar aos existentes** (ignora duplicatas por ID) ou **Substituir tudo**
@@ -803,11 +860,23 @@ Formulário para criar/editar uma credencial reutilizável.
 **Rota:** `/terminal/:tabId`
 **Arquivo:** `src/pages/TerminalPage.tsx`
 
-Renderiza xterm.js com as configurações do store (`terminal.*`). Fase 1: demo com conexão simulada. Fase 2: SSH real via `russh`.
+Renderiza um ou mais `SshPane` (split horizontal/vertical) com as configurações do store (`terminal.*`).
 
 **Addons xterm.js:**
+
 - `FitAddon` — redimensionamento responsivo
 - `WebLinksAddon` — links clicáveis no terminal
+
+**Callbacks de ciclo de vida e notificações:**
+
+| Callback | Disparado quando | Efeito |
+| --- | --- | --- |
+| `handleConnected` | SSH estabelecido (`status = "connected"`) | `setLastConnected`, `openLog`, notificação "Conectado: {label}" |
+| `handleDisconnected(error)` | Falha antes de conectar | Notificação "Falha ao conectar: {label}" |
+| `handleDisconnected(error)` | Queda após conectar | Notificação "Sessão encerrada inesperadamente: {label}", fecha aba |
+| `handleDisconnected(disconnected)` | Desconexão normal | Fecha aba (sem notificação) |
+
+`hostLabelRef` é um ref atualizado a cada render para evitar stale closure nos callbacks de `useCallback` sem adicionar `tab` nas dependências de `handleDisconnected`.
 
 ---
 
@@ -923,11 +992,76 @@ Shell principal: `<Sidebar>` + `<TabBar>` (quando há sessões abertas) + `<Outl
 
 ---
 
-## 8. Roteamento
+## 8. Hooks
+
+### `useAutoSync`
+
+**Arquivo:** `src/hooks/useAutoSync.ts`
+
+Gerencia o ciclo de vida do sync automático periódico. Chamado uma única vez em `App.tsx` (componente raiz), antes do roteador.
+
+**Comportamento:**
+
+- Lê `sync.autoSync`, `sync.provider` e `sync.autoSyncIntervalMinutes` do `useSettingsStore`
+- Quando `autoSync = true` e um provedor está configurado, cria um `setInterval` com o intervalo configurado
+- O `setInterval` é destruído e recriado automaticamente via array de dependências do `useEffect` ao mudar qualquer uma das três configurações acima
+- No callback do interval, lê os dados mais recentes dos stores via **subscriptions Zustand** (não via closure, evitando stale data) e chama `buildSyncPayload` + `pushToProvider`
+- Em caso de erro dispara notificação nativa; em caso de sucesso atualiza `lastSyncAt` silenciosamente
+
+**Por que subscriptions em vez de deps no `useEffect`:**
+
+Incluir `hosts` e `credentials` no array de dependências causaria recriação do interval a cada mutação de host — dezenas de vezes por sessão. A solução usa `useHostsStore.subscribe` para manter refs sempre atualizadas sem recriar o timer.
+
+```typescript
+// Trecho simplificado
+useEffect(() => {
+  if (!sync.autoSync || !sync.provider) return;
+  const ms = (sync.autoSyncIntervalMinutes ?? 30) * 60_000;
+  const id = setInterval(runSync, ms);
+  return () => clearInterval(id);
+}, [sync.autoSync, sync.provider, sync.autoSyncIntervalMinutes]);
+```
+
+**Limitação intencional:** o sync automático não usa senha mestra. Se `syncCredentials = true`, as credenciais viajam sem a camada extra de criptografia AES-GCM (mas continuam protegidas pelo SQLCipher em disco). Para sync com credenciais cifradas, o usuário deve usar o botão "Sincronizar Agora".
+
+---
+
+## 9. Módulo de notificações
+
+**Arquivo:** `src/lib/notifications.ts`
+
+Wrapper sobre `@tauri-apps/plugin-notification` com cache de permissão e falha silenciosa.
+
+```typescript
+async function notify(title: string, body: string): Promise<void>
+```
+
+- Na primeira chamada, verifica a permissão via `isPermissionGranted()` e, se necessário, solicita via `requestPermission()`
+- O resultado da verificação é cacheado em memória para chamadas subsequentes (sem overhead de IPC)
+- Qualquer exceção é capturada e descartada — notificações nunca bloqueiam o fluxo principal
+
+**Pontos de integração:**
+
+| Local | Evento | Mensagem |
+| --- | --- | --- |
+| `TerminalPage.tsx` — `handleConnected` | Sessão SSH estabelecida | `"Conectado: {hostLabel}"` |
+| `TerminalPage.tsx` — `handleDisconnected` (falha inicial) | `status === "error"` antes de conectar | `"Falha ao conectar: {hostLabel}"` |
+| `TerminalPage.tsx` — `handleDisconnected` (queda) | `status === "error"` após conectar | `"Sessão encerrada inesperadamente: {hostLabel}"` |
+| `Sync.tsx` — `doPush` | Push concluído | `"Sincronização enviada com sucesso"` |
+| `Sync.tsx` — `doPush` | Push com erro | `"Erro na sincronização"` |
+| `Sync.tsx` — `doPull` | Pull concluído | `"Dados importados com sucesso"` |
+| `Sync.tsx` — `doPull` | Pull com erro | `"Erro na sincronização"` |
+| `useAutoSync` — interval | Erro no push automático | `"Erro no sync automático: {mensagem}"` |
+
+Desconexões normais (usuário fecha a aba) **não** disparam notificação.
+
+---
+
+## 10. Roteamento
 
 **Arquivo:** `src/App.tsx`
 
-```
+```text
 /                        → Dashboard
 /hosts/new               → HostEditor (modo criação)
 /hosts/:id               → HostEditor (modo edição)
@@ -946,7 +1080,7 @@ Baseado em `BrowserRouter` (hash routing não utilizado).
 
 ---
 
-## 9. Internacionalização (i18n)
+## 11. Internacionalização (i18n)
 
 **Arquivo:** `src/lib/i18n.ts`
 
@@ -965,16 +1099,17 @@ const LOCALES: { id: LocaleId; label: string; flag: string }[] = [
 
 **Namespace de tradução — estrutura de chaves:**
 
-```
+```text
 app.*              Nome e tagline
 nav.*              Itens de navegação
-dashboard.*        Tela principal e cards de host
+dashboard.*        Tela principal, cards de host, ordenação e filtros de tag
 hostEditor.*       Formulário de host (fields, sections, validation, mfa)
 terminal.*         Labels do terminal
 settings.*         Configurações (appearance, language, terminal, security)
-sync.*             Sincronização (providers, status, conflicts)
+sync.*             Sincronização (providers, status, conflicts, autoSync)
 backup.*           Backup e restauração
 credentials.*      Lista e formulário de credenciais reutilizáveis
+notifications.*    Mensagens de notificações nativas do SO
 common.*           Labels genéricos (save, cancel, delete, etc.)
 ```
 
@@ -987,7 +1122,7 @@ i18n.changeLanguage("en-US");
 
 ---
 
-## 10. Módulo de backup
+## 12. Módulo de backup
 
 **Arquivo:** `src/lib/backup.ts`
 
@@ -1069,7 +1204,7 @@ Aplica `passwordRef`, `passphrase`, `privateKeyPath` e `totpSecret` de volta nos
 
 ---
 
-## 11. Temas
+## 13. Temas
 
 **Arquivos:** `src/themes/index.ts`, `src/themes/themes.css`
 
@@ -1123,7 +1258,7 @@ function applyTheme(themeId: ThemeId): void
 
 ---
 
-## 12. Configuração do Tauri
+## 14. Configuração do Tauri
 
 **Arquivo:** `src-tauri/tauri.conf.json`
 
@@ -1171,10 +1306,11 @@ function applyTheme(themeId: ThemeId): void
 | `tauri-plugin-dialog` | Diálogos nativos de abrir/salvar arquivo |
 | `tauri-plugin-fs` | Leitura e escrita de arquivos |
 | `tauri-plugin-opener` | Abrir links externos no browser padrão |
+| `tauri-plugin-notification` | Notificações nativas do SO (permissão via `notification:default`) |
 
 ---
 
-## 13. Dependências Rust
+## 15. Dependências Rust
 
 **Arquivo:** `src-tauri/Cargo.toml`
 
@@ -1184,6 +1320,7 @@ function applyTheme(themeId: ThemeId): void
 | `tauri-plugin-dialog` | 2 | Diálogos de arquivo nativos |
 | `tauri-plugin-fs` | 2 | I/O de arquivos |
 | `tauri-plugin-opener` | 2 | Abrir URLs externas |
+| `tauri-plugin-notification` | 2 | Notificações nativas do SO |
 | `serde` + `serde_json` | 1 | Serialização JSON |
 | `uuid` | 1 (v4) | Geração de UUIDs |
 | `chrono` | 0.4 | Timestamps ISO 8601 |
@@ -1203,11 +1340,11 @@ function applyTheme(themeId: ThemeId): void
 
 ---
 
-## 14. Segurança — fluxo de dados sensíveis
+## 16. Segurança — fluxo de dados sensíveis
 
 ### Armazenamento local (fase 3+)
 
-```
+```text
 Hosts, credenciais (metadados) e settings
         │
         ▼ SQLCipher (AES-256-CBC)
@@ -1218,7 +1355,7 @@ Hosts, credenciais (metadados) e settings
   Serviço: "ssh-vault", entry: "db-key"
 ```
 
-```
+```text
 Credenciais sensíveis: password, passphrase
         │
         ▼ Armazenadas no banco SQLCipher (campo "data" JSON)
@@ -1227,7 +1364,7 @@ Credenciais sensíveis: password, passphrase
 
 ### Backup / Sync (quando syncCredentials = true)
 
-```
+```text
 { password, passphrase, privateKeyPath, totpSecret } por credencial
         │
         ▼ JSON serializado em memória (mapa credentialId → segredos)
@@ -1262,7 +1399,7 @@ Isso permite que o receptor importe metadados (label, username, tipo) sem a senh
 
 ---
 
-## 15. Build e empacotamento
+## 17. Build e empacotamento
 
 ### Scripts npm
 

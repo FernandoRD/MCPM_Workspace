@@ -2,6 +2,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { WifiOff, Columns2, Rows2, X, FolderOpen } from "lucide-react";
 import { useRef, useCallback } from "react";
+import { notify } from "@/lib/notifications";
 import { useSessionsStore } from "@/store/sessions";
 import { useHostsStore } from "@/store/hosts";
 import { useCredentialsStore } from "@/store/credentials";
@@ -35,12 +36,26 @@ export function TerminalPage() {
   // Navega de volta ao Dashboard quando a sessão (pane principal) desconecta
   const everConnectedRef = useRef(false);
   const logIdRef = useRef<string | null>(null);
+  // Ref para o label do host — evita stale closure nos callbacks
+  const hostLabelRef = useRef<string>(tab?.hostLabel ?? "");
+  hostLabelRef.current = tab?.hostLabel ?? "";
+
   const handleDisconnected = useCallback((status: "disconnected" | "error" = "disconnected") => {
     if (logIdRef.current) closeLog(logIdRef.current, status);
-    if (!everConnectedRef.current) return; // falha na conexão inicial — já mostra erro no terminal
+    if (!everConnectedRef.current) {
+      // Falha na conexão inicial — erro já aparece no terminal, notifica apenas se for erro
+      if (status === "error") {
+        notify("SSH Vault", t("notifications.sshError", { host: hostLabelRef.current }));
+      }
+      return;
+    }
+    if (status === "error") {
+      notify("SSH Vault", t("notifications.sshDropped", { host: hostLabelRef.current }));
+    }
     if (tabId) closeSession(tabId);
     navigate("/");
-  }, [tabId, closeSession, navigate, closeLog]);
+  }, [tabId, closeSession, navigate, closeLog, t]);
+
   const handleConnected = useCallback(() => {
     everConnectedRef.current = true;
     if (tab) {
@@ -53,8 +68,9 @@ export function TerminalPage() {
         connectedAt: new Date().toISOString(),
         status: "connected",
       });
+      notify("SSH Vault", t("notifications.sshConnected", { host: tab.hostLabel }));
     }
-  }, [tab, setLastConnected, openLog]);
+  }, [tab, setLastConnected, openLog, t]);
 
   if (!tab || !host) {
     return (

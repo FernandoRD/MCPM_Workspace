@@ -3,6 +3,7 @@ mod crypto;
 mod database;
 mod sftp;
 mod ssh;
+mod ssh_config;
 mod storage;
 mod sync;
 mod totp;
@@ -30,6 +31,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(AppState {
             storage: Mutex::new(storage),
             database,
@@ -53,6 +55,11 @@ pub fn run() {
             ssh::ssh_disconnect,
             ssh::ssh_copy_id,
             ssh::ssh_generate_key,
+            ssh::ssh_exec,
+            ssh::ssh_start_tunnel,
+            ssh::ssh_stop_tunnel,
+            ssh_config::ssh_import_config,
+            ssh_config::ssh_probe_host,
             sftp::sftp_connect,
             sftp::sftp_read_dir,
             sftp::sftp_download,

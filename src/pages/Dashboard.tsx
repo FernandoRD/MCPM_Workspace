@@ -13,15 +13,23 @@ import {
   ShieldCheck,
   Layers,
   FolderOpen,
+  ArrowUpAZ,
+  ArrowDownAZ,
+  Clock,
+  ClockArrowUp,
+  Tag,
+  X,
+  FileCode2,
 } from "lucide-react";
 import { useHostsStore } from "@/store/hosts";
-import { useUIStore } from "@/store/uiStore";
+import { useUIStore, DashboardSortBy } from "@/store/uiStore";
 import { useSessionsStore } from "@/store/sessions";
 import { useCredentialsStore } from "@/store/credentials";
 import { useSettingsStore } from "@/store/settings";
 import { SshHost } from "@/types";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { SshConfigImportModal } from "@/components/SshConfigImportModal";
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 
@@ -36,11 +44,23 @@ export function Dashboard() {
   const locale = useSettingsStore((s) => s.settings.locale);
   const savedGroups = useSettingsStore((s) => s.settings.groups);
 
+  const [showImportModal, setShowImportModal] = useState(false);
+
   const search = useUIStore((s) => s.dashboardSearch);
   const setSearch = useUIStore((s) => s.setDashboardSearch);
   const selectedGroup = useUIStore((s) => s.dashboardSelectedGroup);
   const setSelectedGroup = useUIStore((s) => s.setDashboardSelectedGroup);
+  const sortBy = useUIStore((s) => s.dashboardSortBy);
+  const setSortBy = useUIStore((s) => s.setDashboardSortBy);
+  const selectedTags = useUIStore((s) => s.dashboardSelectedTags);
+  const toggleTag = useUIStore((s) => s.toggleDashboardTag);
+  const clearTags = useUIStore((s) => s.clearDashboardTags);
   const [menuHostId, setMenuHostId] = useState<string | null>(null);
+
+  // Todas as tags únicas dos hosts
+  const allTags = [...new Set(hosts.flatMap((h) => h.tags))].sort((a, b) =>
+    a.localeCompare(b)
+  );
 
   // Todos os grupos (derivados dos hosts + salvos manualmente)
   const allGroups = [
@@ -57,14 +77,34 @@ export function Dashboard() {
   }, {});
 
   // Filtra por busca e grupo selecionado
-  const filtered = hosts.filter((h) => {
-    const matchSearch =
-      h.label.toLowerCase().includes(search.toLowerCase()) ||
-      h.host.toLowerCase().includes(search.toLowerCase()) ||
-      h.tags.some((tag) => tag.toLowerCase().includes(search.toLowerCase()));
-    const matchGroup = selectedGroup === null || h.group === selectedGroup;
-    return matchSearch && matchGroup;
-  });
+  const filtered = hosts
+    .filter((h) => {
+      const matchSearch =
+        h.label.toLowerCase().includes(search.toLowerCase()) ||
+        h.host.toLowerCase().includes(search.toLowerCase()) ||
+        h.tags.some((tag) => tag.toLowerCase().includes(search.toLowerCase()));
+      const matchGroup = selectedGroup === null || h.group === selectedGroup;
+      const matchTag =
+        selectedTags.length === 0 ||
+        selectedTags.some((tag) => h.tags.includes(tag));
+      return matchSearch && matchGroup && matchTag;
+    })
+    .sort((a, b) => {
+      if (sortBy === "label-asc") return a.label.localeCompare(b.label);
+      if (sortBy === "label-desc") return b.label.localeCompare(a.label);
+      // Para ordenação por data: hosts sem lastConnectedAt ficam no final
+      const dateA = a.lastConnectedAt ? new Date(a.lastConnectedAt).getTime() : 0;
+      const dateB = b.lastConnectedAt ? new Date(b.lastConnectedAt).getTime() : 0;
+      if (sortBy === "recent") return dateB - dateA;
+      if (sortBy === "oldest") {
+        // Hosts nunca conectados ficam no final mesmo no modo "mais antigo"
+        if (!a.lastConnectedAt && !b.lastConnectedAt) return 0;
+        if (!a.lastConnectedAt) return 1;
+        if (!b.lastConnectedAt) return -1;
+        return dateA - dateB;
+      }
+      return 0;
+    });
 
   const handleConnect = (host: SshHost) => {
     const cred = host.credentialId ? getCredential(host.credentialId) : undefined;
@@ -87,15 +127,26 @@ export function Dashboard() {
         <h1 className="text-lg font-semibold text-[var(--text-primary)]">
           {t("dashboard.title")}
         </h1>
-        <Button onClick={() => navigate("/hosts/new")} size="sm">
-          <Plus size={14} />
-          {t("nav.newConnection")}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setShowImportModal(true)}>
+            <FileCode2 size={14} />
+            {t("dashboard.importSshConfig")}
+          </Button>
+          <Button onClick={() => navigate("/hosts/new")} size="sm">
+            <Plus size={14} />
+            {t("nav.newConnection")}
+          </Button>
+        </div>
       </div>
 
-      {/* Search bar */}
-      <div className="px-6 py-3 border-b border-[var(--border)]">
-        <div className="relative max-w-md">
+      <SshConfigImportModal
+        open={showImportModal}
+        onClose={() => setShowImportModal(false)}
+      />
+
+      {/* Search bar + sort */}
+      <div className="px-6 py-3 border-b border-[var(--border)] flex items-center gap-3">
+        <div className="relative flex-1 max-w-md">
           <Search
             size={15}
             className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
@@ -108,6 +159,7 @@ export function Dashboard() {
             className="w-full h-9 rounded-md border border-[var(--border)] bg-[var(--bg-secondary)] pl-9 pr-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-focus)]"
           />
         </div>
+        <SortSelector value={sortBy} onChange={setSortBy} />
       </div>
 
       <div className="flex-1 overflow-auto px-6 py-4 flex flex-col gap-4">
@@ -153,6 +205,39 @@ export function Dashboard() {
               </div>
             )}
 
+            {/* Filtros de tag */}
+            {allTags.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="flex items-center gap-1 text-xs text-[var(--text-muted)] shrink-0">
+                  <Tag size={11} />
+                  {t("dashboard.tags.label")}:
+                </span>
+                {allTags.map((tag) => (
+                  <button
+                    key={tag}
+                    onClick={() => toggleTag(tag)}
+                    className={cn(
+                      "flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs transition-colors",
+                      selectedTags.includes(tag)
+                        ? "border-[var(--accent)] bg-[var(--accent-subtle)] text-[var(--accent)] font-medium"
+                        : "border-[var(--border)] bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:border-[var(--text-muted)]"
+                    )}
+                  >
+                    {tag}
+                  </button>
+                ))}
+                {selectedTags.length > 0 && (
+                  <button
+                    onClick={clearTags}
+                    className="flex items-center gap-0.5 text-xs text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors ml-1"
+                  >
+                    <X size={11} />
+                    {t("dashboard.tags.clear")}
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Grid de hosts */}
             {filtered.length === 0 ? (
               <p className="text-center py-12 text-[var(--text-muted)]">
@@ -185,6 +270,45 @@ export function Dashboard() {
   );
 }
 
+const SORT_OPTIONS: { value: DashboardSortBy; icon: React.ElementType; labelKey: string }[] = [
+  { value: "label-asc",  icon: ArrowUpAZ,    labelKey: "dashboard.sort.labelAsc"  },
+  { value: "label-desc", icon: ArrowDownAZ,  labelKey: "dashboard.sort.labelDesc" },
+  { value: "recent",     icon: Clock,        labelKey: "dashboard.sort.recent"    },
+  { value: "oldest",     icon: ClockArrowUp, labelKey: "dashboard.sort.oldest"    },
+];
+
+function SortSelector({
+  value,
+  onChange,
+}: {
+  value: DashboardSortBy;
+  onChange: (v: DashboardSortBy) => void;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <div className="relative flex items-center">
+      <div className="flex items-center gap-1 h-9 rounded-md border border-[var(--border)] bg-[var(--bg-secondary)] overflow-hidden">
+        {SORT_OPTIONS.map(({ value: v, icon: Icon, labelKey }) => (
+          <button
+            key={v}
+            title={t(labelKey)}
+            onClick={() => onChange(v)}
+            className={cn(
+              "h-full px-2.5 flex items-center justify-center transition-colors",
+              value === v
+                ? "bg-[var(--accent)] text-white"
+                : "text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+            )}
+          >
+            <Icon size={14} />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function HostCard({
   host,
   locale,
@@ -207,9 +331,6 @@ function HostCard({
   onDuplicate: (id: string) => void;
 }) {
   const { t } = useTranslation();
-  const getCredential = useCredentialsStore((s) => s.getCredential);
-  const cred = host.credentialId ? getCredential(host.credentialId) : undefined;
-  const username = cred?.username ?? host.username ?? "";
 
   return (
     <div className="relative group flex flex-col gap-3 rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] p-4 hover:border-[var(--border-focus)] transition-colors">
@@ -250,12 +371,6 @@ function HostCard({
             </div>
           )}
         </div>
-      </div>
-
-      {/* User */}
-      <div className="flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
-        <Server size={11} />
-        <span className="font-mono truncate">{username ? `${username}@${host.host}` : host.host}</span>
       </div>
 
       {/* Tags + MFA badge */}

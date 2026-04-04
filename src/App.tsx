@@ -14,14 +14,17 @@ import { SshKeys } from "@/pages/SshKeys";
 import { SshKeyEditor } from "@/pages/SshKeyEditor";
 import { Groups } from "@/pages/Groups";
 import { ConnectionLog } from "@/pages/ConnectionLog";
+import { Operations } from "@/pages/Operations";
 import { useHostsStore } from "@/store/hosts";
 import { useSettingsStore } from "@/store/settings";
 import { useCredentialsStore } from "@/store/credentials";
 import { useSshKeysStore } from "@/store/sshKeys";
 import { useConnectionLogsStore } from "@/store/connectionLogs";
+import { useAutoSync } from "@/hooks/useAutoSync";
 
 export default function App() {
   const [ready, setReady] = useState(false);
+  useAutoSync();
   const initHosts = useHostsStore((s) => s.init);
   const initSettings = useSettingsStore((s) => s.init);
   const initCredentials = useCredentialsStore((s) => s.init);
@@ -72,6 +75,7 @@ export default function App() {
           <Route path="ssh-keys/:id" element={<SshKeyEditor />} />
           <Route path="groups" element={<Groups />} />
           <Route path="connection-log" element={<ConnectionLog />} />
+          <Route path="operations" element={<Operations />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

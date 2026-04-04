@@ -9,6 +9,7 @@ import {
   KeySquare,
   Layers,
   History,
+  PlugZap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -23,6 +24,7 @@ export function Sidebar() {
     { to: "/ssh-keys", icon: KeySquare, label: t("nav.sshKeys") },
     { to: "/groups", icon: Layers, label: t("nav.groups") },
     { to: "/connection-log", icon: History, label: t("nav.connectionLog") },
+    { to: "/operations", icon: PlugZap, label: t("nav.operations") },
     { to: "/sync", icon: CloudUpload, label: t("nav.sync") },
     { to: "/backup", icon: HardDriveDownload, label: t("nav.backup") },
     { to: "/settings", icon: Settings, label: t("nav.settings") },

@@ -9,6 +9,7 @@
     "sshKeys": "Chaves SSH",
     "groups": "Grupos",
     "connectionLog": "Log de Conexões",
+    "operations": "Operações",
     "settings": "Configurações",
     "sync": "Sincronização",
     "newConnection": "Nova Conexão",
@@ -18,6 +19,17 @@
     "title": "Hosts",
     "searchPlaceholder": "Buscar hosts...",
     "allHosts": "Todos",
+    "sort": {
+      "labelAsc": "Nome A→Z",
+      "labelDesc": "Nome Z→A",
+      "recent": "Acesso mais recente",
+      "oldest": "Acesso mais antigo"
+    },
+    "tags": {
+      "label": "Tags",
+      "clear": "Limpar"
+    },
+    "importSshConfig": "Importar ~/.ssh/config",
     "noHosts": "Nenhum host cadastrado",
     "noHostsDescription": "Adicione seu primeiro servidor SSH para começar",
     "host": {
@@ -297,6 +309,16 @@
       "keepLocal": "Manter Local",
       "keepRemote": "Usar Remoto",
       "merge": "Mesclar"
+    },
+    "autoSync": {
+      "title": "Sincronização Automática",
+      "description": "Envia os dados automaticamente para o provider em intervalos regulares",
+      "intervalLabel": "Intervalo",
+      "interval15": "15 min",
+      "interval30": "30 min",
+      "interval60": "1 hora",
+      "interval120": "2 horas",
+      "noMasterPasswordWarning": "O sync automático não usa senha mestra. As credenciais serão sincronizadas sem criptografia adicional."
     }
   },
   "backup": {
@@ -482,6 +504,28 @@
       "error": "Erro"
     }
   },
+  "sshConfigImport": {
+    "title": "Importar ~/.ssh/config",
+    "loading": "Lendo arquivo de configuração SSH...",
+    "description": "Hosts detectados no arquivo de configuração. Duplicatas (mesmo alias, host, porta e usuário) são ignoradas automaticamente.",
+    "summary": {
+      "title": "Resumo da importação",
+      "hostsNew": "Hosts novos",
+      "credentialsNew": "Credenciais novas",
+      "keysNew": "Chaves novas",
+      "importedAliases": "{{count}} alias(es) a importar",
+      "skippedDuplicates": "{{count}} duplicata(s) ignorada(s)",
+      "supportedCompat": "Compatibilidade SSH: preset moderno por padrão"
+    },
+    "detectedHosts": "Hosts detectados",
+    "withJumpHost": "via jump host",
+    "authMethods": {
+      "password": "Senha",
+      "privateKey": "Chave privada",
+      "agent": "Agente SSH"
+    },
+    "importToVault": "Importar para o Vault"
+  },
   "common": {
     "loading": "Carregando...",
     "error": "Erro",
@@ -497,5 +541,13 @@
     "no": "Não",
     "confirmDelete": "Tem certeza que deseja excluir \"{{name}}\"?",
     "noResults": "Nenhum resultado encontrado"
+  },
+  "notifications": {
+    "sshConnected": "Conectado: {{host}}",
+    "sshError": "Falha ao conectar: {{host}}",
+    "sshDropped": "Sessão encerrada inesperadamente: {{host}}",
+    "syncPushSuccess": "Sincronização enviada com sucesso",
+    "syncPullSuccess": "Dados importados com sucesso",
+    "syncError": "Erro na sincronização"
   }
 }

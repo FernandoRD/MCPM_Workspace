@@ -9,6 +9,7 @@
     "sshKeys": "SSH Keys",
     "groups": "Groups",
     "connectionLog": "Connection Log",
+    "operations": "Operations",
     "settings": "Settings",
     "sync": "Sync",
     "newConnection": "New Connection",
@@ -18,6 +19,17 @@
     "title": "Hosts",
     "searchPlaceholder": "Search hosts...",
     "allHosts": "All",
+    "sort": {
+      "labelAsc": "Name A→Z",
+      "labelDesc": "Name Z→A",
+      "recent": "Most recently accessed",
+      "oldest": "Least recently accessed"
+    },
+    "tags": {
+      "label": "Tags",
+      "clear": "Clear"
+    },
+    "importSshConfig": "Import ~/.ssh/config",
     "noHosts": "No hosts added yet",
     "noHostsDescription": "Add your first SSH server to get started",
     "host": {
@@ -297,6 +309,16 @@
       "keepLocal": "Keep Local",
       "keepRemote": "Use Remote",
       "merge": "Merge"
+    },
+    "autoSync": {
+      "title": "Automatic Sync",
+      "description": "Automatically pushes data to the provider at regular intervals",
+      "intervalLabel": "Interval",
+      "interval15": "15 min",
+      "interval30": "30 min",
+      "interval60": "1 hour",
+      "interval120": "2 hours",
+      "noMasterPasswordWarning": "Auto-sync does not use the master password. Credentials will be synced without additional encryption."
     }
   },
   "backup": {
@@ -482,6 +504,28 @@
       "error": "Error"
     }
   },
+  "sshConfigImport": {
+    "title": "Import ~/.ssh/config",
+    "loading": "Reading SSH config file...",
+    "description": "Hosts detected in the config file. Duplicates (same alias, host, port, and user) are automatically skipped.",
+    "summary": {
+      "title": "Import summary",
+      "hostsNew": "New hosts",
+      "credentialsNew": "New credentials",
+      "keysNew": "New keys",
+      "importedAliases": "{{count}} alias(es) to import",
+      "skippedDuplicates": "{{count}} duplicate(s) skipped",
+      "supportedCompat": "SSH compatibility: modern preset by default"
+    },
+    "detectedHosts": "Detected hosts",
+    "withJumpHost": "via jump host",
+    "authMethods": {
+      "password": "Password",
+      "privateKey": "Private key",
+      "agent": "SSH agent"
+    },
+    "importToVault": "Import to Vault"
+  },
   "common": {
     "loading": "Loading...",
     "error": "Error",
@@ -497,5 +541,13 @@
     "no": "No",
     "confirmDelete": "Are you sure you want to delete \"{{name}}\"?",
     "noResults": "No results found"
+  },
+  "notifications": {
+    "sshConnected": "Connected: {{host}}",
+    "sshError": "Failed to connect: {{host}}",
+    "sshDropped": "Session dropped unexpectedly: {{host}}",
+    "syncPushSuccess": "Sync sent successfully",
+    "syncPullSuccess": "Data imported successfully",
+    "syncError": "Sync error"
   }
 }
