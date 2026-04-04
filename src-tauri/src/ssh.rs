@@ -831,6 +831,7 @@ pub async fn ssh_exec(
 // ─── TunnelSpec ───────────────────────────────────────────────────────────────
 
 #[derive(serde::Deserialize, Clone)]
+#[allow(dead_code)]
 pub struct TunnelSpec {
     pub kind: String,
     pub bind_address: String,
