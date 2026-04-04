@@ -21,6 +21,39 @@
     "title": "Hosts",
     "searchPlaceholder": "Buscar hosts...",
     "allHosts": "Todos",
+    "bulk": {
+      "selected": "{{count}} host(s) selecionado(s)",
+      "selectVisible": "Selecionar visiveis",
+      "unselectVisible": "Desmarcar visiveis",
+      "editSelected": "Editar selecionados",
+      "clearSelection": "Limpar selecao",
+      "selectHost": "Selecionar host",
+      "unselectHost": "Desmarcar host",
+      "modalTitle": "Editar hosts em massa",
+      "modalDescription": "Aplicar mudancas compartilhadas aos {{count}} host(s) selecionados.",
+      "apply": "Aplicar mudancas",
+      "fields": {
+        "credential": "Credencial",
+        "group": "Grupo",
+        "tags": "Tags"
+      },
+      "modes": {
+        "keep": "Manter como esta",
+        "set": "Definir valor",
+        "clear": "Remover valor"
+      },
+      "tagsModes": {
+        "replace": "Substituir tags",
+        "add": "Adicionar tags",
+        "remove": "Remover tags"
+      },
+      "placeholders": {
+        "selectCredential": "Selecionar credencial...",
+        "group": "Digite ou escolha um grupo",
+        "tags": "Separe as tags por virgula"
+      },
+      "tagsHint": "Use virgulas para informar varias tags de uma vez."
+    },
     "sort": {
       "labelAsc": "Nome A→Z",
       "labelDesc": "Nome Z→A",

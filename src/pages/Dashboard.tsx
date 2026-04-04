@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
@@ -20,37 +20,60 @@ import {
   Tag,
   X,
   FileCode2,
+  CheckSquare,
+  Square,
+  PencilLine,
+  UserRound,
 } from "lucide-react";
 import { useHostsStore } from "@/store/hosts";
 import { useUIStore, DashboardSortBy } from "@/store/uiStore";
 import { useSessionsStore } from "@/store/sessions";
 import { useCredentialsStore } from "@/store/credentials";
 import { useSettingsStore } from "@/store/settings";
-import { SshHost } from "@/types";
+import { Credential, SshHost } from "@/types";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { TagBadge } from "@/components/ui/TagBadge";
 import { SshConfigImportModal } from "@/components/SshConfigImportModal";
+import { Modal } from "@/components/ui/Modal";
+import { Select } from "@/components/ui/Select";
 import { launchTerminalSession } from "@/lib/sessionLauncher";
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { buildSessionRoute, isStandaloneWindow } from "@/lib/windowMode";
+
+type BulkEditCredentialMode = "keep" | "set" | "clear";
+type BulkEditGroupMode = "keep" | "set" | "clear";
+type BulkEditTagsMode = "keep" | "replace" | "add" | "remove";
+
+interface BulkEditChanges {
+  credentialMode: BulkEditCredentialMode;
+  credentialId?: string;
+  groupMode: BulkEditGroupMode;
+  groupName?: string;
+  tagsMode: BulkEditTagsMode;
+  tags: string[];
+}
 
 export function Dashboard() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   const hosts = useHostsStore((s) => s.hosts);
-  const { deleteHost, duplicateHost } = useHostsStore();
+  const { deleteHost, duplicateHost, updateHost } = useHostsStore();
   const openSession = useSessionsStore((s) => s.openSession);
   const openSftpTab = useSessionsStore((s) => s.openSftpTab);
+  const credentials = useCredentialsStore((s) => s.credentials);
   const getCredential = useCredentialsStore((s) => s.getCredential);
   const locale = useSettingsStore((s) => s.settings.locale);
   const sessionOpenMode = useSettingsStore((s) => s.settings.terminal.sessionOpenMode);
   const savedGroups = useSettingsStore((s) => s.settings.groups);
+  const updateGroups = useSettingsStore((s) => s.updateGroups);
   const standaloneWindow = isStandaloneWindow(location.search);
 
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showBulkEditModal, setShowBulkEditModal] = useState(false);
+  const [selectedHostIds, setSelectedHostIds] = useState<string[]>([]);
 
   const search = useUIStore((s) => s.dashboardSearch);
   const setSearch = useUIStore((s) => s.setDashboardSearch);
@@ -63,58 +86,68 @@ export function Dashboard() {
   const clearTags = useUIStore((s) => s.clearDashboardTags);
   const [menuHostId, setMenuHostId] = useState<string | null>(null);
 
-  // Todas as tags únicas dos hosts
-  const allTags = [...new Set(hosts.flatMap((h) => h.tags))].sort((a, b) =>
-    a.localeCompare(b)
+  const allTags = [...new Set(hosts.flatMap((host) => host.tags))].sort((left, right) =>
+    left.localeCompare(right)
   );
 
-  // Todos os grupos (derivados dos hosts + salvos manualmente)
   const allGroups = [
     ...new Set([
-      ...hosts.map((h) => h.group).filter((g): g is string => !!g),
+      ...hosts.map((host) => host.group).filter((group): group is string => !!group),
       ...savedGroups,
     ]),
-  ].sort((a, b) => a.localeCompare(b));
+  ].sort((left, right) => left.localeCompare(right));
 
-  // Contagem de hosts por grupo
-  const groupCount = hosts.reduce<Record<string, number>>((acc, h) => {
-    if (h.group) acc[h.group] = (acc[h.group] ?? 0) + 1;
+  const groupCount = hosts.reduce<Record<string, number>>((acc, host) => {
+    if (host.group) acc[host.group] = (acc[host.group] ?? 0) + 1;
     return acc;
   }, {});
 
-  // Filtra por busca e grupo selecionado
   const filtered = hosts
-    .filter((h) => {
+    .filter((host) => {
       const matchSearch =
-        h.label.toLowerCase().includes(search.toLowerCase()) ||
-        h.host.toLowerCase().includes(search.toLowerCase()) ||
-        h.tags.some((tag) => tag.toLowerCase().includes(search.toLowerCase()));
-      const matchGroup = selectedGroup === null || h.group === selectedGroup;
-      const matchTag =
-        selectedTags.length === 0 ||
-        selectedTags.some((tag) => h.tags.includes(tag));
+        host.label.toLowerCase().includes(search.toLowerCase()) ||
+        host.host.toLowerCase().includes(search.toLowerCase()) ||
+        host.tags.some((tag) => tag.toLowerCase().includes(search.toLowerCase()));
+      const matchGroup = selectedGroup === null || host.group === selectedGroup;
+      const matchTag = selectedTags.length === 0 || selectedTags.some((tag) => host.tags.includes(tag));
       return matchSearch && matchGroup && matchTag;
     })
-    .sort((a, b) => {
-      if (sortBy === "label-asc") return a.label.localeCompare(b.label);
-      if (sortBy === "label-desc") return b.label.localeCompare(a.label);
-      // Para ordenação por data: hosts sem lastConnectedAt ficam no final
-      const dateA = a.lastConnectedAt ? new Date(a.lastConnectedAt).getTime() : 0;
-      const dateB = b.lastConnectedAt ? new Date(b.lastConnectedAt).getTime() : 0;
-      if (sortBy === "recent") return dateB - dateA;
+    .sort((left, right) => {
+      if (sortBy === "label-asc") return left.label.localeCompare(right.label);
+      if (sortBy === "label-desc") return right.label.localeCompare(left.label);
+
+      const leftDate = left.lastConnectedAt ? new Date(left.lastConnectedAt).getTime() : 0;
+      const rightDate = right.lastConnectedAt ? new Date(right.lastConnectedAt).getTime() : 0;
+
+      if (sortBy === "recent") return rightDate - leftDate;
       if (sortBy === "oldest") {
-        // Hosts nunca conectados ficam no final mesmo no modo "mais antigo"
-        if (!a.lastConnectedAt && !b.lastConnectedAt) return 0;
-        if (!a.lastConnectedAt) return 1;
-        if (!b.lastConnectedAt) return -1;
-        return dateA - dateB;
+        if (!left.lastConnectedAt && !right.lastConnectedAt) return 0;
+        if (!left.lastConnectedAt) return 1;
+        if (!right.lastConnectedAt) return -1;
+        return leftDate - rightDate;
       }
       return 0;
     });
 
+  useEffect(() => {
+    const hostIds = new Set(hosts.map((host) => host.id));
+    setSelectedHostIds((current) => current.filter((id) => hostIds.has(id)));
+  }, [hosts]);
+
+  const selectedVisibleIds = useMemo(
+    () => filtered.map((host) => host.id).filter((id) => selectedHostIds.includes(id)),
+    [filtered, selectedHostIds]
+  );
+
+  const allVisibleSelected = filtered.length > 0 && selectedVisibleIds.length === filtered.length;
+  const selectedHosts = useMemo(
+    () => hosts.filter((host) => selectedHostIds.includes(host.id)),
+    [hosts, selectedHostIds]
+  );
+
   const handleConnect = async (host: SshHost) => {
-    const cred = host.credentialId ? getCredential(host.credentialId) : undefined;
-    const username = cred?.username ?? host.username ?? "";
+    const credential = host.credentialId ? getCredential(host.credentialId) : undefined;
+    const username = credential?.username ?? host.username ?? "";
     const hostAddress = username ? `${username}@${host.host}` : host.host;
     const route = await launchTerminalSession({
       hostId: host.id,
@@ -128,8 +161,8 @@ export function Dashboard() {
   };
 
   const handleOpenSftp = (host: SshHost) => {
-    const cred = host.credentialId ? getCredential(host.credentialId) : undefined;
-    const username = cred?.username ?? host.username ?? "";
+    const credential = host.credentialId ? getCredential(host.credentialId) : undefined;
+    const username = credential?.username ?? host.username ?? "";
     const hostAddress = username ? `${username}@${host.host}` : host.host;
     const tabId = openSftpTab(host.id, host.label, hostAddress);
     navigate(
@@ -142,13 +175,70 @@ export function Dashboard() {
     );
   };
 
+  const toggleHostSelection = (hostId: string) => {
+    setSelectedHostIds((current) =>
+      current.includes(hostId) ? current.filter((id) => id !== hostId) : [...current, hostId]
+    );
+  };
+
+  const toggleVisibleSelection = () => {
+    if (allVisibleSelected) {
+      setSelectedHostIds((current) => current.filter((id) => !selectedVisibleIds.includes(id)));
+      return;
+    }
+
+    const next = new Set(selectedHostIds);
+    filtered.forEach((host) => next.add(host.id));
+    setSelectedHostIds(Array.from(next));
+  };
+
+  const clearSelection = () => setSelectedHostIds([]);
+
+  const handleBulkApply = (changes: BulkEditChanges) => {
+    let nextGroups = savedGroups;
+
+    selectedHosts.forEach((host) => {
+      const selectedCredential = changes.credentialId
+        ? credentials.find((credential) => credential.id === changes.credentialId)
+        : undefined;
+
+      const payload: Partial<SshHost> = {
+        tags: applyTagMode(host.tags, changes.tagsMode, changes.tags),
+      };
+
+      if (changes.credentialMode === "set") {
+        payload.credentialId = changes.credentialId;
+        if (selectedCredential) {
+          payload.authMethod = selectedCredential.authMethod;
+        }
+      } else if (changes.credentialMode === "clear") {
+        payload.credentialId = undefined;
+      }
+
+      if (changes.groupMode === "set") {
+        payload.group = changes.groupName;
+        if (changes.groupName && !nextGroups.includes(changes.groupName)) {
+          nextGroups = [...nextGroups, changes.groupName].sort((left, right) => left.localeCompare(right));
+        }
+      } else if (changes.groupMode === "clear") {
+        payload.group = undefined;
+      }
+
+      updateHost(host.id, payload);
+    });
+
+    if (nextGroups !== savedGroups) {
+      updateGroups(nextGroups);
+    }
+
+    clearSelection();
+    setShowBulkEditModal(false);
+  };
+
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
       <div className="flex items-center justify-between border-b border-[var(--border)] px-6 py-4">
-        <h1 className="text-lg font-semibold text-[var(--text-primary)]">
-          {t("dashboard.title")}
-        </h1>
+        <h1 className="text-lg font-semibold text-[var(--text-primary)]">{t("dashboard.title")}</h1>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={() => setShowImportModal(true)}>
             <FileCode2 size={14} />
@@ -166,7 +256,15 @@ export function Dashboard() {
         onClose={() => setShowImportModal(false)}
       />
 
-      {/* Search bar + sort */}
+      <BulkEditHostsModal
+        open={showBulkEditModal}
+        onClose={() => setShowBulkEditModal(false)}
+        selectedCount={selectedHostIds.length}
+        credentials={credentials}
+        groups={allGroups}
+        onApply={handleBulkApply}
+      />
+
       <div className="px-6 py-3 border-b border-[var(--border)] flex items-center gap-3">
         <div className="relative flex-1 max-w-md">
           <Search
@@ -176,7 +274,7 @@ export function Dashboard() {
           <input
             type="text"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(event) => setSearch(event.target.value)}
             placeholder={t("dashboard.searchPlaceholder")}
             className="w-full h-9 rounded-md border border-[var(--border)] bg-[var(--bg-secondary)] pl-9 pr-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-focus)]"
           />
@@ -184,15 +282,39 @@ export function Dashboard() {
         <SortSelector value={sortBy} onChange={setSortBy} />
       </div>
 
+      {selectedHostIds.length > 0 && (
+        <div className="px-6 py-3 border-b border-[var(--border)] bg-[var(--accent-subtle)]/70">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm text-[var(--text-primary)]">
+              <CheckSquare size={15} className="text-[var(--accent)]" />
+              {t("dashboard.bulk.selected", { count: selectedHostIds.length })}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={toggleVisibleSelection}>
+                {allVisibleSelected ? <Square size={14} /> : <CheckSquare size={14} />}
+                {allVisibleSelected
+                  ? t("dashboard.bulk.unselectVisible")
+                  : t("dashboard.bulk.selectVisible")}
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => setShowBulkEditModal(true)}>
+                <PencilLine size={14} />
+                {t("dashboard.bulk.editSelected")}
+              </Button>
+              <Button variant="ghost" size="sm" onClick={clearSelection}>
+                {t("dashboard.bulk.clearSelection")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex-1 overflow-auto px-6 py-4 flex flex-col gap-4">
         {hosts.length === 0 ? (
           <EmptyState onAdd={() => navigate("/hosts/new")} />
         ) : (
           <>
-            {/* Filtros de grupo */}
             {allGroups.length > 0 && (
               <div className="flex flex-wrap gap-2">
-                {/* Botão Todos */}
                 <button
                   onClick={() => setSelectedGroup(null)}
                   className={cn(
@@ -207,7 +329,6 @@ export function Dashboard() {
                   <span className="text-xs opacity-70">({hosts.length})</span>
                 </button>
 
-                {/* Cards de grupo */}
                 {allGroups.map((group) => (
                   <button
                     key={group}
@@ -227,7 +348,6 @@ export function Dashboard() {
               </div>
             )}
 
-            {/* Filtros de tag */}
             {allTags.length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="flex items-center gap-1 text-xs text-[var(--text-muted)] shrink-0">
@@ -257,11 +377,8 @@ export function Dashboard() {
               </div>
             )}
 
-            {/* Grid de hosts */}
             {filtered.length === 0 ? (
-              <p className="text-center py-12 text-[var(--text-muted)]">
-                {t("common.noResults")}
-              </p>
+              <p className="text-center py-12 text-[var(--text-muted)]">{t("common.noResults")}</p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 {filtered.map((host) => (
@@ -270,12 +387,12 @@ export function Dashboard() {
                     host={host}
                     locale={locale}
                     menuOpen={menuHostId === host.id}
-                    onMenuToggle={(id) =>
-                      setMenuHostId((prev) => (prev === id ? null : id))
-                    }
+                    selected={selectedHostIds.includes(host.id)}
+                    onMenuToggle={(id) => setMenuHostId((current) => (current === id ? null : id))}
+                    onToggleSelected={toggleHostSelection}
                     onConnect={handleConnect}
                     onOpenSftp={handleOpenSftp}
-                    onEdit={(h) => navigate(`/hosts/${h.id}`)}
+                    onEdit={(item) => navigate(`/hosts/${item.id}`)}
                     onDelete={(id) => deleteHost(id)}
                     onDuplicate={(id) => duplicateHost(id)}
                   />
@@ -290,10 +407,10 @@ export function Dashboard() {
 }
 
 const SORT_OPTIONS: { value: DashboardSortBy; icon: React.ElementType; labelKey: string }[] = [
-  { value: "label-asc",  icon: ArrowUpAZ,    labelKey: "dashboard.sort.labelAsc"  },
-  { value: "label-desc", icon: ArrowDownAZ,  labelKey: "dashboard.sort.labelDesc" },
-  { value: "recent",     icon: Clock,        labelKey: "dashboard.sort.recent"    },
-  { value: "oldest",     icon: ClockArrowUp, labelKey: "dashboard.sort.oldest"    },
+  { value: "label-asc", icon: ArrowUpAZ, labelKey: "dashboard.sort.labelAsc" },
+  { value: "label-desc", icon: ArrowDownAZ, labelKey: "dashboard.sort.labelDesc" },
+  { value: "recent", icon: Clock, labelKey: "dashboard.sort.recent" },
+  { value: "oldest", icon: ClockArrowUp, labelKey: "dashboard.sort.oldest" },
 ];
 
 function SortSelector({
@@ -301,21 +418,21 @@ function SortSelector({
   onChange,
 }: {
   value: DashboardSortBy;
-  onChange: (v: DashboardSortBy) => void;
+  onChange: (value: DashboardSortBy) => void;
 }) {
   const { t } = useTranslation();
 
   return (
     <div className="relative flex items-center">
       <div className="flex items-center gap-1 h-9 rounded-md border border-[var(--border)] bg-[var(--bg-secondary)] overflow-hidden">
-        {SORT_OPTIONS.map(({ value: v, icon: Icon, labelKey }) => (
+        {SORT_OPTIONS.map(({ value: optionValue, icon: Icon, labelKey }) => (
           <button
-            key={v}
+            key={optionValue}
             title={t(labelKey)}
-            onClick={() => onChange(v)}
+            onClick={() => onChange(optionValue)}
             className={cn(
               "h-full px-2.5 flex items-center justify-center transition-colors",
-              value === v
+              value === optionValue
                 ? "bg-[var(--accent)] text-white"
                 : "text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
             )}
@@ -332,7 +449,9 @@ function HostCard({
   host,
   locale,
   menuOpen,
+  selected,
   onMenuToggle,
+  onToggleSelected,
   onConnect,
   onOpenSftp,
   onEdit,
@@ -342,22 +461,42 @@ function HostCard({
   host: SshHost;
   locale: string;
   menuOpen: boolean;
+  selected: boolean;
   onMenuToggle: (id: string) => void;
-  onConnect: (h: SshHost) => void;
-  onOpenSftp: (h: SshHost) => void;
-  onEdit: (h: SshHost) => void;
+  onToggleSelected: (id: string) => void;
+  onConnect: (host: SshHost) => void;
+  onOpenSftp: (host: SshHost) => void;
+  onEdit: (host: SshHost) => void;
   onDelete: (id: string) => void;
   onDuplicate: (id: string) => void;
 }) {
   const { t } = useTranslation();
 
   return (
-    <div className="relative group flex flex-col gap-3 rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] p-4 hover:border-[var(--border-focus)] transition-colors">
-      {/* Top row */}
+    <div
+      className={cn(
+        "relative group flex flex-col gap-3 rounded-xl border bg-[var(--bg-secondary)] p-4 transition-colors",
+        selected
+          ? "border-[var(--accent)] ring-1 ring-[var(--accent)]/20"
+          : "border-[var(--border)] hover:border-[var(--border-focus)]"
+      )}
+    >
       <div className="flex items-start justify-between">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <button
+            onClick={() => onToggleSelected(host.id)}
+            className={cn(
+              "mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors",
+              selected
+                ? "border-[var(--accent)] bg-[var(--accent)] text-white"
+                : "border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--accent)]"
+            )}
+            title={selected ? t("dashboard.bulk.unselectHost") : t("dashboard.bulk.selectHost")}
+          >
+            {selected ? <CheckSquare size={12} /> : <Square size={12} />}
+          </button>
           <div
-            className="h-9 w-9 rounded-lg flex items-center justify-center text-white font-bold text-sm"
+            className="h-9 w-9 shrink-0 rounded-lg flex items-center justify-center text-white font-bold text-sm"
             style={{ backgroundColor: host.color ?? "var(--accent)" }}
           >
             {host.label.charAt(0).toUpperCase()}
@@ -371,11 +510,14 @@ function HostCard({
             </p>
           </div>
         </div>
-        {/* Context menu */}
+
         <div className="relative">
           <button
             onClick={() => onMenuToggle(host.id)}
-            className="h-7 w-7 flex items-center justify-center rounded text-[var(--text-muted)] hover:bg-[var(--bg-hover)] transition-colors opacity-0 group-hover:opacity-100"
+            className={cn(
+              "h-7 w-7 flex items-center justify-center rounded text-[var(--text-muted)] hover:bg-[var(--bg-hover)] transition-colors",
+              selected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+            )}
           >
             <MoreVertical size={14} />
           </button>
@@ -392,7 +534,6 @@ function HostCard({
         </div>
       </div>
 
-      {/* Tags + MFA badge */}
       {(host.tags.length > 0 || host.mfaEnabled) && (
         <div className="flex flex-wrap gap-1">
           {host.mfaEnabled && (
@@ -404,18 +545,13 @@ function HostCard({
           {host.tags.slice(0, 3).map((tag) => (
             <TagBadge key={tag} tag={tag} />
           ))}
-          {host.tags.length > 3 && (
-            <Badge>+{host.tags.length - 3}</Badge>
-          )}
+          {host.tags.length > 3 && <Badge>+{host.tags.length - 3}</Badge>}
         </div>
       )}
 
-      {/* Footer */}
       <div className="flex items-center justify-between mt-auto pt-2 border-t border-[var(--border)]">
         <p className="text-xs text-[var(--text-muted)]">
-          {host.lastConnectedAt
-            ? formatDate(host.lastConnectedAt, locale)
-            : t("dashboard.host.neverConnected")}
+          {host.lastConnectedAt ? formatDate(host.lastConnectedAt, locale) : t("dashboard.host.neverConnected")}
         </p>
         <Button size="sm" onClick={() => onConnect(host)}>
           <Terminal size={12} />
@@ -423,6 +559,187 @@ function HostCard({
         </Button>
       </div>
     </div>
+  );
+}
+
+function BulkEditHostsModal({
+  open,
+  onClose,
+  selectedCount,
+  credentials,
+  groups,
+  onApply,
+}: {
+  open: boolean;
+  onClose: () => void;
+  selectedCount: number;
+  credentials: Credential[];
+  groups: string[];
+  onApply: (changes: BulkEditChanges) => void;
+}) {
+  const { t } = useTranslation();
+  const [credentialMode, setCredentialMode] = useState<BulkEditCredentialMode>("keep");
+  const [credentialId, setCredentialId] = useState("");
+  const [groupMode, setGroupMode] = useState<BulkEditGroupMode>("keep");
+  const [groupName, setGroupName] = useState("");
+  const [tagsMode, setTagsMode] = useState<BulkEditTagsMode>("keep");
+  const [tagsInput, setTagsInput] = useState("");
+
+  useEffect(() => {
+    if (!open) {
+      setCredentialMode("keep");
+      setCredentialId("");
+      setGroupMode("keep");
+      setGroupName("");
+      setTagsMode("keep");
+      setTagsInput("");
+    }
+  }, [open]);
+
+  const parsedTags = parseTagList(tagsInput);
+  const applyDisabled =
+    selectedCount === 0 ||
+    (credentialMode === "set" && !credentialId) ||
+    (groupMode === "set" && !groupName.trim()) ||
+    (tagsMode !== "keep" && parsedTags.length === 0);
+
+  return (
+    <Modal open={open} onClose={onClose} title={t("dashboard.bulk.modalTitle")} size="lg">
+      <div className="flex flex-col gap-5">
+        <p className="text-sm text-[var(--text-muted)]">
+          {t("dashboard.bulk.modalDescription", { count: selectedCount })}
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-primary)] p-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
+              <UserRound size={14} className="text-[var(--accent)]" />
+              {t("dashboard.bulk.fields.credential")}
+            </div>
+            <div className="mt-3 flex flex-col gap-3">
+              <Select
+                value={credentialMode}
+                onChange={(event) => setCredentialMode(event.target.value as BulkEditCredentialMode)}
+              >
+                <option value="keep">{t("dashboard.bulk.modes.keep")}</option>
+                <option value="set">{t("dashboard.bulk.modes.set")}</option>
+                <option value="clear">{t("dashboard.bulk.modes.clear")}</option>
+              </Select>
+
+              {credentialMode === "set" && (
+                <Select
+                  value={credentialId}
+                  onChange={(event) => setCredentialId(event.target.value)}
+                >
+                  <option value="">{t("dashboard.bulk.placeholders.selectCredential")}</option>
+                  {credentials.map((credential) => (
+                    <option key={credential.id} value={credential.id}>
+                      {credential.label} {credential.username ? `· ${credential.username}` : ""}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-primary)] p-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
+              <Layers size={14} className="text-[var(--accent)]" />
+              {t("dashboard.bulk.fields.group")}
+            </div>
+            <div className="mt-3 flex flex-col gap-3">
+              <Select
+                value={groupMode}
+                onChange={(event) => setGroupMode(event.target.value as BulkEditGroupMode)}
+              >
+                <option value="keep">{t("dashboard.bulk.modes.keep")}</option>
+                <option value="set">{t("dashboard.bulk.modes.set")}</option>
+                <option value="clear">{t("dashboard.bulk.modes.clear")}</option>
+              </Select>
+
+              {groupMode === "set" && (
+                <>
+                  <input
+                    type="text"
+                    value={groupName}
+                    onChange={(event) => setGroupName(event.target.value)}
+                    placeholder={t("dashboard.bulk.placeholders.group")}
+                    list="dashboard-bulk-groups"
+                    className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--bg-secondary)] px-3 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-focus)]"
+                  />
+                  <datalist id="dashboard-bulk-groups">
+                    {groups.map((group) => (
+                      <option key={group} value={group} />
+                    ))}
+                  </datalist>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-primary)] p-4">
+          <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
+            <Tag size={14} className="text-[var(--accent)]" />
+            {t("dashboard.bulk.fields.tags")}
+          </div>
+          <div className="mt-3 grid grid-cols-1 md:grid-cols-[220px_minmax(0,1fr)] gap-3">
+            <Select
+              value={tagsMode}
+              onChange={(event) => setTagsMode(event.target.value as BulkEditTagsMode)}
+            >
+              <option value="keep">{t("dashboard.bulk.modes.keep")}</option>
+              <option value="replace">{t("dashboard.bulk.tagsModes.replace")}</option>
+              <option value="add">{t("dashboard.bulk.tagsModes.add")}</option>
+              <option value="remove">{t("dashboard.bulk.tagsModes.remove")}</option>
+            </Select>
+
+            <div className="flex flex-col gap-2">
+              <input
+                type="text"
+                value={tagsInput}
+                onChange={(event) => setTagsInput(event.target.value)}
+                placeholder={t("dashboard.bulk.placeholders.tags")}
+                disabled={tagsMode === "keep"}
+                className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--bg-secondary)] px-3 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-focus)] disabled:opacity-50"
+              />
+              <p className="text-xs text-[var(--text-muted)]">{t("dashboard.bulk.tagsHint")}</p>
+              {parsedTags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {parsedTags.map((tag) => (
+                    <TagBadge key={tag} tag={tag}>
+                      {tag}
+                    </TagBadge>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            {t("common.cancel")}
+          </Button>
+          <Button
+            size="sm"
+            onClick={() =>
+              onApply({
+                credentialMode,
+                credentialId: credentialMode === "set" ? credentialId : undefined,
+                groupMode,
+                groupName: groupMode === "set" ? groupName.trim() : undefined,
+                tagsMode,
+                tags: parsedTags,
+              })
+            }
+            disabled={applyDisabled}
+          >
+            {t("dashboard.bulk.apply")}
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -469,4 +786,22 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
       </Button>
     </div>
   );
+}
+
+function parseTagList(input: string): string[] {
+  return Array.from(
+    new Set(
+      input
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+function applyTagMode(currentTags: string[], mode: BulkEditTagsMode, tags: string[]): string[] {
+  if (mode === "keep") return currentTags;
+  if (mode === "replace") return tags;
+  if (mode === "add") return Array.from(new Set([...currentTags, ...tags]));
+  return currentTags.filter((tag) => !tags.includes(tag));
 }

@@ -21,6 +21,39 @@
     "title": "Hosts",
     "searchPlaceholder": "Search hosts...",
     "allHosts": "All",
+    "bulk": {
+      "selected": "{{count}} host(s) selected",
+      "selectVisible": "Select visible",
+      "unselectVisible": "Unselect visible",
+      "editSelected": "Edit selected",
+      "clearSelection": "Clear selection",
+      "selectHost": "Select host",
+      "unselectHost": "Unselect host",
+      "modalTitle": "Bulk edit hosts",
+      "modalDescription": "Apply shared changes to the {{count}} selected host(s).",
+      "apply": "Apply changes",
+      "fields": {
+        "credential": "Credential",
+        "group": "Group",
+        "tags": "Tags"
+      },
+      "modes": {
+        "keep": "Keep as is",
+        "set": "Set value",
+        "clear": "Clear value"
+      },
+      "tagsModes": {
+        "replace": "Replace tags",
+        "add": "Add tags",
+        "remove": "Remove tags"
+      },
+      "placeholders": {
+        "selectCredential": "Select credential...",
+        "group": "Type or choose a group",
+        "tags": "Separate tags with commas"
+      },
+      "tagsHint": "Use commas to provide multiple tags at once."
+    },
     "sort": {
       "labelAsc": "Name A→Z",
       "labelDesc": "Name Z→A",
