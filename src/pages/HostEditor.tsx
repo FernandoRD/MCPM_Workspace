@@ -36,6 +36,7 @@ interface ValidationErrors {
 interface TotpSetup {
   secret: string;
   otpauth_url: string;
+  algorithm: "SHA1" | "SHA256";
 }
 
 export function HostEditor() {
@@ -85,6 +86,7 @@ export function HostEditor() {
         accountName: form.label || form.host || "host",
       });
       set("totpSecret", setup.secret);
+      set("totpAlgorithm", setup.algorithm);
       setTotpOtpauthUrl(setup.otpauth_url);
     } finally {
       setGeneratingTotp(false);
@@ -466,6 +468,7 @@ export function HostEditor() {
                       set("mfaEnabled", e.target.checked);
                       if (!e.target.checked) {
                         set("totpSecret", undefined);
+                        set("totpAlgorithm", undefined);
                         setTotpOtpauthUrl(null);
                       }
                     }}
@@ -494,7 +497,9 @@ export function HostEditor() {
                         placeholder={t("hostEditor.mfa.secretPlaceholder")}
                         value={form.totpSecret ?? ""}
                         onChange={(e) => {
-                          set("totpSecret", e.target.value.toUpperCase() || undefined);
+                          const value = e.target.value.toUpperCase();
+                          set("totpSecret", value || undefined);
+                          set("totpAlgorithm", value ? (form.totpAlgorithm ?? "SHA256") : undefined);
                           setTotpOtpauthUrl(null);
                         }}
                         className="font-mono"
@@ -524,7 +529,7 @@ export function HostEditor() {
 
                   {/* Live TOTP preview */}
                   {form.totpSecret && form.totpSecret.length >= 8 && (
-                    <TotpDisplay secretBase32={form.totpSecret} />
+                    <TotpDisplay secretBase32={form.totpSecret} secretAlgorithm={form.totpAlgorithm} />
                   )}
                 </>
               )}

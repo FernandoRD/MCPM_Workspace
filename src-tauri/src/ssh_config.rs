@@ -662,10 +662,12 @@ pub fn ssh_apply_imported_config(
 
 #[tauri::command]
 pub async fn ssh_probe_host(
+    state: State<'_, AppState>,
     host: String,
     port: u16,
     timeout_ms: Option<u64>,
 ) -> Result<SshProbeResult, String> {
+    state.rate_limiter.check("ssh_probe_host", 20, std::time::Duration::from_secs(60))?;
     let started = Instant::now();
     let timeout_duration = Duration::from_millis(timeout_ms.unwrap_or(4000));
 

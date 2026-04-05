@@ -3,10 +3,10 @@ import { resolveSshKeySecrets } from "@/lib/secrets";
 import {
   AppSettings,
   CommandSnippet,
+  TunnelProfile,
   Credential,
   SshHost,
   SshKey,
-  TunnelProfile,
 } from "@/types";
 
 export interface RemoteExecResult {
@@ -70,30 +70,15 @@ export function renderSnippetCommand(
 }
 
 export async function runRemoteCommand(params: {
-  host: SshHost;
-  credential?: Credential;
-  sshKey?: SshKey;
-  sshSettings: AppSettings["ssh"];
-  command: string;
+  hostId: string;
+  snippetId: string;
+  cwd?: string;
 }): Promise<RemoteExecResult> {
-  const { host, credential, sshKey, sshSettings, command } = params;
-  const resolvedSshKey = await resolveSshKeySecrets(sshKey);
-  const username = resolveUsername(host, credential);
-  const authMethod = credential?.authMethod ?? host.authMethod;
-  const password = credential?.password ?? host.passwordRef ?? null;
-
+  const { hostId, snippetId, cwd } = params;
   return invoke<RemoteExecResult>("ssh_exec", {
-    host: host.host,
-    port: host.port,
-    username,
-    authMethod,
-    password,
-    privateKeyContent: resolvedSshKey?.privateKeyContent ?? null,
-    privateKeyPassphrase: resolvedSshKey?.passphrase ?? null,
-    sshCompatPreset: host.sshCompat?.preset ?? "modern",
-    keepaliveInterval: host.keepAliveInterval ?? sshSettings.keepAliveInterval,
-    connectionTimeout: host.connectionTimeout ?? sshSettings.inactivityTimeout,
-    command,
+    hostId,
+    snippetId,
+    cwd: cwd ?? "~",
   });
 }
 

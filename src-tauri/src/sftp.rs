@@ -510,6 +510,7 @@ pub async fn sftp_download(
     remote_path: String,
     local_path: String,
 ) -> Result<(), String> {
+    state.rate_limiter.check("sftp_download", 30, std::time::Duration::from_secs(60))?;
     let conn_arc = {
         let mgr = state.sftp.lock().await;
         mgr.sessions
@@ -583,6 +584,7 @@ pub async fn sftp_upload(
     local_path: String,
     remote_path: String,
 ) -> Result<(), String> {
+    state.rate_limiter.check("sftp_upload", 30, std::time::Duration::from_secs(60))?;
     let conn_arc = {
         let mgr = state.sftp.lock().await;
         mgr.sessions

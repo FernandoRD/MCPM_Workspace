@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useRef } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
@@ -41,31 +42,75 @@ export function TerminalPage() {
   const sessionConnection = tab?.connection;
 
   useEffect(() => {
-    if (!tabId || tab || !bootstrap.standalone || !bootstrap.hostId) return;
+    if (!tabId || tab || !bootstrap.standalone) return;
 
-    const connection: SessionConnection | undefined = bootstrap.quickConnect && bootstrap.connectionHost
-      ? {
-          source: "quick-connect",
-          host: bootstrap.connectionHost,
-          port: bootstrap.connectionPort ?? 22,
-          username: bootstrap.connectionUsername ?? "",
-          authMethod: (bootstrap.connectionAuthMethod as SessionConnection["authMethod"]) ?? "agent",
-        }
-      : undefined;
+    let cancelled = false;
 
-    ensureSession({
-      id: tabId,
-      type: "terminal",
-      hostId: bootstrap.hostId,
-      hostLabel: bootstrap.hostLabel ?? "SSH",
-      hostAddress: bootstrap.hostAddress ?? bootstrap.hostLabel ?? "",
-      connection,
-      status: "connecting",
-      panes: [{ id: tabId, status: "connecting" }],
-      splitDirection: "horizontal",
-      createdAt: new Date().toISOString(),
-    });
-  }, [bootstrap.connectionAuthMethod, bootstrap.connectionHost, bootstrap.connectionPort, bootstrap.connectionUsername, bootstrap.hostAddress, bootstrap.hostId, bootstrap.hostLabel, bootstrap.quickConnect, bootstrap.standalone, ensureSession, tab, tabId]);
+    const ensureStandaloneSession = async () => {
+      if (bootstrap.quickConnect) {
+        if (!bootstrap.quickConnectBootstrapId) return;
+        const payload = await invoke<{
+          host_id: string;
+          host_label: string;
+          host_address: string;
+          connection_host: string;
+          connection_port: number;
+          connection_username: string;
+          connection_auth_method: SessionConnection["authMethod"];
+          connection_password?: string | null;
+          connection_private_key_content?: string | null;
+          connection_passphrase?: string | null;
+        } | null>("get_quick_connect_bootstrap", {
+          bootstrapId: bootstrap.quickConnectBootstrapId,
+        });
+
+        if (cancelled || !payload) return;
+
+        ensureSession({
+          id: tabId,
+          type: "terminal",
+          hostId: payload.host_id,
+          hostLabel: payload.host_label,
+          hostAddress: payload.host_address,
+          connection: {
+            source: "quick-connect",
+            bootstrapId: bootstrap.quickConnectBootstrapId,
+            host: payload.connection_host,
+            port: payload.connection_port,
+            username: payload.connection_username,
+            authMethod: payload.connection_auth_method,
+            password: payload.connection_password ?? null,
+            privateKeyContent: payload.connection_private_key_content ?? null,
+            passphrase: payload.connection_passphrase ?? null,
+          },
+          status: "connecting",
+          panes: [{ id: tabId, status: "connecting" }],
+          splitDirection: "horizontal",
+          createdAt: new Date().toISOString(),
+        });
+        return;
+      }
+
+      if (!bootstrap.hostId) return;
+
+      ensureSession({
+        id: tabId,
+        type: "terminal",
+        hostId: bootstrap.hostId,
+        hostLabel: bootstrap.hostLabel ?? "SSH",
+        hostAddress: bootstrap.hostAddress ?? bootstrap.hostLabel ?? "",
+        status: "connecting",
+        panes: [{ id: tabId, status: "connecting" }],
+        splitDirection: "horizontal",
+        createdAt: new Date().toISOString(),
+      });
+    };
+
+    void ensureStandaloneSession();
+    return () => {
+      cancelled = true;
+    };
+  }, [bootstrap.hostAddress, bootstrap.hostId, bootstrap.hostLabel, bootstrap.quickConnect, bootstrap.quickConnectBootstrapId, bootstrap.standalone, ensureSession, tab, tabId]);
 
   // Navega de volta ao Dashboard quando a sessão (pane principal) desconecta
   const everConnectedRef = useRef(false);
@@ -114,7 +159,11 @@ export function TerminalPage() {
     }
   }, [tab, setLastConnected, openLog, t]);
 
-  if (!tab && bootstrap.standalone && bootstrap.hostId) {
+  if (
+    !tab &&
+    bootstrap.standalone &&
+    (bootstrap.hostId || (bootstrap.quickConnect && bootstrap.quickConnectBootstrapId))
+  ) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
         <p className="text-[var(--text-muted)]">Carregando sessão...</p>

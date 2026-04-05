@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { v4 as uuidv4 } from "uuid";
 import { AppSettings, SessionConnection } from "@/types";
@@ -43,6 +44,30 @@ async function createStandaloneTerminalWindow(route: string, hostLabel: string, 
   });
 }
 
+async function storeQuickConnectBootstrap(
+  bootstrapId: string,
+  connection: SessionConnection,
+  hostId: string,
+  hostLabel: string,
+  hostAddress: string,
+): Promise<void> {
+  await invoke("store_quick_connect_bootstrap", {
+    bootstrapId,
+    payload: {
+      host_id: hostId,
+      host_label: hostLabel,
+      host_address: hostAddress,
+      connection_host: connection.host,
+      connection_port: connection.port,
+      connection_username: connection.username,
+      connection_auth_method: connection.authMethod,
+      connection_password: connection.password ?? null,
+      connection_private_key_content: connection.privateKeyContent ?? null,
+      connection_passphrase: connection.passphrase ?? null,
+    },
+  });
+}
+
 export async function launchTerminalSession({
   hostId,
   hostLabel,
@@ -85,36 +110,39 @@ export async function launchQuickConnectSession({
   openQuickConnectSession,
   standaloneWindow = false,
 }: LaunchQuickConnectSessionParams): Promise<string | null> {
+  const needsBootstrap = openMode === "window" || standaloneWindow;
+  const bootstrapId = needsBootstrap ? uuidv4() : undefined;
+
+  if (bootstrapId) {
+    const quickConnectHostId = `quick-connect:${bootstrapId}`;
+
+    await storeQuickConnectBootstrap(
+      bootstrapId,
+      { ...connection, bootstrapId },
+      quickConnectHostId,
+      hostLabel,
+      hostAddress,
+    );
+  }
+
   if (openMode === "window") {
     const sessionId = uuidv4();
     const route = buildSessionRoute("terminal", sessionId, {
       standalone: true,
-      hostId: `quick-connect:${sessionId}`,
-      hostLabel,
-      hostAddress,
       quickConnect: true,
-      connectionHost: connection.host,
-      connectionPort: connection.port,
-      connectionUsername: connection.username,
-      connectionAuthMethod: connection.authMethod,
+      quickConnectBootstrapId: bootstrapId,
     });
 
-    const opened = await createStandaloneTerminalWindow(route, hostLabel, sessionId);
+    const opened = await createStandaloneTerminalWindow(route, "Quick Connect", sessionId);
     if (opened) return null;
 
     notify("SSH Vault", `Nao foi possivel abrir janela separada para ${hostLabel}. Abrindo em aba.`);
   }
 
-  const sessionId = openQuickConnectSession(connection, hostLabel, hostAddress);
+  const sessionId = openQuickConnectSession({ ...connection, bootstrapId }, hostLabel, hostAddress);
   return buildSessionRoute("terminal", sessionId, {
     standalone: standaloneWindow,
-    hostId: standaloneWindow ? `quick-connect:${sessionId}` : undefined,
-    hostLabel: standaloneWindow ? hostLabel : undefined,
-    hostAddress: standaloneWindow ? hostAddress : undefined,
     quickConnect: standaloneWindow,
-    connectionHost: standaloneWindow ? connection.host : undefined,
-    connectionPort: standaloneWindow ? connection.port : undefined,
-    connectionUsername: standaloneWindow ? connection.username : undefined,
-    connectionAuthMethod: standaloneWindow ? connection.authMethod : undefined,
+    quickConnectBootstrapId: standaloneWindow ? bootstrapId : undefined,
   });
 }

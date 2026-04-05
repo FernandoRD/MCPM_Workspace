@@ -1,6 +1,8 @@
 mod credentials;
 mod crypto;
 mod database;
+mod rate_limit;
+mod session_bootstrap;
 mod sftp;
 mod ssh;
 mod ssh_config;
@@ -9,16 +11,20 @@ mod sync;
 mod totp;
 
 use database::Database;
+use session_bootstrap::QuickConnectBootstrapPayload;
 use sftp::SftpManager;
 use ssh::SshManager;
 use storage::Storage;
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 pub struct AppState {
     pub storage: Mutex<Storage>,
     pub database: Database,
+    pub quick_connect_bootstraps: Mutex<HashMap<String, QuickConnectBootstrapPayload>>,
     pub ssh: Arc<tokio::sync::Mutex<SshManager>>,
     pub sftp: Arc<tokio::sync::Mutex<SftpManager>>,
+    pub rate_limiter: rate_limit::RateLimiter,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -35,8 +41,10 @@ pub fn run() {
         .manage(AppState {
             storage: Mutex::new(storage),
             database,
+            quick_connect_bootstraps: Mutex::new(HashMap::new()),
             ssh: Arc::new(tokio::sync::Mutex::new(SshManager::new())),
             sftp: Arc::new(tokio::sync::Mutex::new(SftpManager::new())),
+            rate_limiter: rate_limit::RateLimiter::new(),
         })
         .invoke_handler(tauri::generate_handler![
             storage::get_app_data_dir,
@@ -49,6 +57,8 @@ pub fn run() {
             totp::generate_totp_code,
             totp::verify_totp_code,
             totp::generate_totp_secret,
+            session_bootstrap::store_quick_connect_bootstrap,
+            session_bootstrap::get_quick_connect_bootstrap,
             ssh::ssh_connect,
             ssh::ssh_send_input,
             ssh::ssh_resize,

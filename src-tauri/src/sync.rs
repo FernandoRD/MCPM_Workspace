@@ -2,6 +2,9 @@ use chrono::Utc;
 use hmac::{Hmac, Mac};
 use reqwest::Client;
 use sha2::{Digest, Sha256};
+use tauri::State;
+
+use crate::AppState;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -72,10 +75,12 @@ fn s3_auth_headers(
 
 #[tauri::command]
 pub async fn sync_gist_push(
+    state: State<'_, AppState>,
     token: String,
     gist_id: Option<String>,
     payload_json: String,
 ) -> Result<String, String> {
+    state.rate_limiter.check("sync_gist_push", 5, std::time::Duration::from_secs(60))?;
     let client = build_client()?;
 
     let files = serde_json::json!({ "vault.json": { "content": payload_json } });
@@ -123,7 +128,8 @@ pub async fn sync_gist_push(
 }
 
 #[tauri::command]
-pub async fn sync_gist_pull(token: String, gist_id: String) -> Result<String, String> {
+pub async fn sync_gist_pull(state: State<'_, AppState>, token: String, gist_id: String) -> Result<String, String> {
+    state.rate_limiter.check("sync_gist_pull", 5, std::time::Duration::from_secs(60))?;
     let client = build_client()?;
     let url = format!("https://api.github.com/gists/{gist_id}");
 
@@ -188,12 +194,14 @@ pub async fn sync_gist_pull(token: String, gist_id: String) -> Result<String, St
 
 #[tauri::command]
 pub async fn sync_webdav_push(
+    state: State<'_, AppState>,
     url: String,
     username: String,
     password: String,
     path: String,
     payload_json: String,
 ) -> Result<(), String> {
+    state.rate_limiter.check("sync_webdav_push", 5, std::time::Duration::from_secs(60))?;
     let client = build_client()?;
     let base_url = ensure_https_url(&url, "WebDAV")?;
     let full_url = format!(
@@ -222,11 +230,13 @@ pub async fn sync_webdav_push(
 
 #[tauri::command]
 pub async fn sync_webdav_pull(
+    state: State<'_, AppState>,
     url: String,
     username: String,
     password: String,
     path: String,
 ) -> Result<String, String> {
+    state.rate_limiter.check("sync_webdav_pull", 5, std::time::Duration::from_secs(60))?;
     let client = build_client()?;
     let base_url = ensure_https_url(&url, "WebDAV")?;
     let full_url = format!(
@@ -278,6 +288,7 @@ fn s3_url(endpoint: &str, bucket: &str, region: &str) -> Result<(String, String)
 
 #[tauri::command]
 pub async fn sync_s3_push(
+    state: State<'_, AppState>,
     endpoint: String,
     bucket: String,
     region: String,
@@ -285,6 +296,7 @@ pub async fn sync_s3_push(
     secret_key: String,
     payload_json: String,
 ) -> Result<(), String> {
+    state.rate_limiter.check("sync_s3_push", 5, std::time::Duration::from_secs(60))?;
     let client = build_client()?;
     let payload = payload_json.as_bytes();
     let (host, url) = s3_url(&endpoint, &bucket, &region)?;
@@ -315,12 +327,14 @@ pub async fn sync_s3_push(
 
 #[tauri::command]
 pub async fn sync_s3_pull(
+    state: State<'_, AppState>,
     endpoint: String,
     bucket: String,
     region: String,
     access_key: String,
     secret_key: String,
 ) -> Result<String, String> {
+    state.rate_limiter.check("sync_s3_pull", 5, std::time::Duration::from_secs(60))?;
     let client = build_client()?;
     let (host, url) = s3_url(&endpoint, &bucket, &region)?;
     let path = format!("/{bucket}/{S3_OBJECT_KEY}");
@@ -352,7 +366,8 @@ pub async fn sync_s3_pull(
 // ── Endpoint Customizado ──────────────────────────────────────────────────────
 
 #[tauri::command]
-pub async fn sync_custom_push(url: String, payload_json: String) -> Result<(), String> {
+pub async fn sync_custom_push(state: State<'_, AppState>, url: String, payload_json: String) -> Result<(), String> {
+    state.rate_limiter.check("sync_custom_push", 5, std::time::Duration::from_secs(60))?;
     let client = build_client()?;
     let validated_url = ensure_https_url(&url, "endpoint customizado")?;
 
@@ -374,7 +389,8 @@ pub async fn sync_custom_push(url: String, payload_json: String) -> Result<(), S
 }
 
 #[tauri::command]
-pub async fn sync_custom_pull(url: String) -> Result<String, String> {
+pub async fn sync_custom_pull(state: State<'_, AppState>, url: String) -> Result<String, String> {
+    state.rate_limiter.check("sync_custom_pull", 5, std::time::Duration::from_secs(60))?;
     let client = build_client()?;
     let validated_url = ensure_https_url(&url, "endpoint customizado")?;
 

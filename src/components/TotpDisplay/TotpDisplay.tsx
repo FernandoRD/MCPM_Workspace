@@ -11,11 +11,12 @@ interface TotpCode {
 
 interface TotpDisplayProps {
   secretBase32: string;
+  secretAlgorithm?: "SHA1" | "SHA256";
 }
 
 const STEP = 30;
 
-export function TotpDisplay({ secretBase32 }: TotpDisplayProps) {
+export function TotpDisplay({ secretBase32, secretAlgorithm }: TotpDisplayProps) {
   const { t } = useTranslation();
   const [totpCode, setTotpCode] = useState<TotpCode | null>(null);
   const [copied, setCopied] = useState(false);
@@ -26,13 +27,14 @@ export function TotpDisplay({ secretBase32 }: TotpDisplayProps) {
     try {
       const result = await invoke<TotpCode>("generate_totp_code", {
         secretBase32: secretBase32.trim().toUpperCase(),
+        totpAlgorithm: secretAlgorithm,
       });
       setTotpCode(result);
       setError(false);
     } catch {
       setError(true);
     }
-  }, [secretBase32]);
+  }, [secretAlgorithm, secretBase32]);
 
   useEffect(() => {
     if (!secretBase32.trim()) return;

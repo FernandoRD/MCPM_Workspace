@@ -40,6 +40,7 @@ export interface SshHost {
   // MFA / TOTP
   mfaEnabled?: boolean;
   totpSecret?: string;  // Base32 — sempre cifrado no sync/backup
+  totpAlgorithm?: "SHA1" | "SHA256";
   group?: string;
   tags: string[];
   notes?: string;
@@ -67,6 +68,7 @@ export interface SessionConnection {
   port: number;
   username: string;
   authMethod: AuthMethod;
+  bootstrapId?: string;
   password?: string | null;
   privateKeyContent?: string | null;
   passphrase?: string | null;

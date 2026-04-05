@@ -19,14 +19,13 @@ export function TabBar() {
   const tabRoute = (tab: SessionTab) =>
     buildSessionRoute(tab.type, tab.id, {
       standalone,
-      hostId: standalone ? tab.hostId : undefined,
-      hostLabel: standalone ? tab.hostLabel : undefined,
-      hostAddress: standalone ? tab.hostAddress : undefined,
+      hostId: standalone && tab.connection?.source !== "quick-connect" ? tab.hostId : undefined,
+      hostLabel: standalone && tab.connection?.source !== "quick-connect" ? tab.hostLabel : undefined,
+      hostAddress: standalone && tab.connection?.source !== "quick-connect" ? tab.hostAddress : undefined,
       quickConnect: standalone && tab.connection?.source === "quick-connect",
-      connectionHost: standalone ? tab.connection?.host : undefined,
-      connectionPort: standalone ? tab.connection?.port : undefined,
-      connectionUsername: standalone ? tab.connection?.username : undefined,
-      connectionAuthMethod: standalone ? tab.connection?.authMethod : undefined,
+      quickConnectBootstrapId: standalone && tab.connection?.source === "quick-connect"
+        ? tab.connection.bootstrapId
+        : undefined,
     });
 
   const handleTabClick = (tab: SessionTab) => {

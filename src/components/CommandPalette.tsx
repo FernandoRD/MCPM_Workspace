@@ -79,6 +79,11 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const [query, setQuery] = useState("");
+  const [quickConnectAuthMethod, setQuickConnectAuthMethod] = useState<SessionConnection["authMethod"]>("agent");
+  const [quickConnectPassword, setQuickConnectPassword] = useState("");
+  const [quickConnectPrivateKey, setQuickConnectPrivateKey] = useState("");
+  const [quickConnectPassphrase, setQuickConnectPassphrase] = useState("");
+  const [quickConnectError, setQuickConnectError] = useState<string | null>(null);
   const hosts = useHostsStore((s) => s.hosts);
   const getCredential = useCredentialsStore((s) => s.getCredential);
   const openSession = useSessionsStore((s) => s.openSession);
@@ -88,7 +93,14 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const standaloneWindow = isStandaloneWindow(location.search);
 
   useEffect(() => {
-    if (!open) setQuery("");
+    if (!open) {
+      setQuery("");
+      setQuickConnectAuthMethod("agent");
+      setQuickConnectPassword("");
+      setQuickConnectPrivateKey("");
+      setQuickConnectPassphrase("");
+      setQuickConnectError(null);
+    }
   }, [open]);
 
   const sortedHosts = useMemo(
@@ -176,14 +188,28 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const connectDirectly = async () => {
     if (!quickConnectCandidate) return;
 
+    if (quickConnectAuthMethod === "password" && !quickConnectPassword.trim()) {
+      setQuickConnectError(t("commandPalette.directConnectPasswordRequired"));
+      return;
+    }
+
+    if (quickConnectAuthMethod === "privateKey" && !quickConnectPrivateKey.trim()) {
+      setQuickConnectError(t("commandPalette.directConnectKeyRequired"));
+      return;
+    }
+
     const connection: SessionConnection = {
       source: "quick-connect",
       host: quickConnectCandidate.host,
       port: quickConnectCandidate.port,
       username: quickConnectCandidate.username,
-      authMethod: "agent",
+      authMethod: quickConnectAuthMethod,
+      password: quickConnectAuthMethod === "password" ? quickConnectPassword : null,
+      privateKeyContent: quickConnectAuthMethod === "privateKey" ? quickConnectPrivateKey : null,
+      passphrase: quickConnectAuthMethod === "privateKey" ? quickConnectPassphrase || null : null,
     };
 
+    setQuickConnectError(null);
     onClose();
     const route = await launchQuickConnectSession({
       connection,
@@ -247,26 +273,94 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
             <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
               {t("commandPalette.directConnect")}
             </p>
-            <button
-              type="button"
-              onClick={() => void connectDirectly()}
-              className="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--bg-primary)] px-4 py-4 text-left hover:border-[var(--border-focus)]"
-            >
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--accent-subtle)] text-[var(--accent)]">
-                <Zap size={16} />
+            <div className="flex flex-col gap-3 rounded-xl border border-[var(--border)] bg-[var(--bg-primary)] px-4 py-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--accent-subtle)] text-[var(--accent)]">
+                  <Zap size={16} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-[var(--text-primary)]">
+                    {quickConnectCandidate.label}
+                  </p>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    {t("commandPalette.directConnectHint")}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void connectDirectly()}
+                  className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--text-primary)] hover:border-[var(--border-focus)]"
+                >
+                  {t("commandPalette.directConnectAction")}
+                </button>
               </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-[var(--text-primary)]">
-                  {quickConnectCandidate.label}
-                </p>
-                <p className="text-xs text-[var(--text-muted)]">
-                  {t("commandPalette.directConnectHint")}
-                </p>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="flex flex-col gap-1 text-xs text-[var(--text-muted)]">
+                  {t("hostEditor.fields.authMethod")}
+                  <select
+                    value={quickConnectAuthMethod}
+                    onChange={(event) => {
+                      setQuickConnectAuthMethod(event.target.value as SessionConnection["authMethod"]);
+                      setQuickConnectError(null);
+                    }}
+                    className="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--border-focus)]"
+                  >
+                    <option value="agent">{t("credentials.authMethods.agent")}</option>
+                    <option value="password">{t("credentials.authMethods.password")}</option>
+                    <option value="privateKey">{t("credentials.authMethods.privateKey")}</option>
+                  </select>
+                </label>
               </div>
-              <span className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--text-primary)]">
-                {t("commandPalette.directConnectAction")}
-              </span>
-            </button>
+
+              {quickConnectAuthMethod === "password" && (
+                <label className="flex flex-col gap-1 text-xs text-[var(--text-muted)]">
+                  {t("credentials.fields.password")}
+                  <input
+                    type="password"
+                    value={quickConnectPassword}
+                    onChange={(event) => {
+                      setQuickConnectPassword(event.target.value);
+                      setQuickConnectError(null);
+                    }}
+                    className="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--border-focus)]"
+                  />
+                </label>
+              )}
+
+              {quickConnectAuthMethod === "privateKey" && (
+                <div className="flex flex-col gap-3">
+                  <label className="flex flex-col gap-1 text-xs text-[var(--text-muted)]">
+                    {t("hostEditor.fields.privateKey")}
+                    <textarea
+                      value={quickConnectPrivateKey}
+                      onChange={(event) => {
+                        setQuickConnectPrivateKey(event.target.value);
+                        setQuickConnectError(null);
+                      }}
+                      rows={5}
+                      className="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--border-focus)]"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs text-[var(--text-muted)]">
+                    {t("hostEditor.fields.passphrase")}
+                    <input
+                      type="password"
+                      value={quickConnectPassphrase}
+                      onChange={(event) => {
+                        setQuickConnectPassphrase(event.target.value);
+                        setQuickConnectError(null);
+                      }}
+                      className="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--border-focus)]"
+                    />
+                  </label>
+                </div>
+              )}
+
+              {quickConnectError && (
+                <p className="text-xs text-red-400">{quickConnectError}</p>
+              )}
+            </div>
           </section>
         )}
 

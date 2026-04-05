@@ -8,6 +8,7 @@ use async_trait::async_trait;
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
 use cfg_if::cfg_if;
+use rusqlite::{params, Connection};
 use russh::{cipher, compression, kex, mac};
 use russh::client;
 use russh::Channel;
@@ -17,11 +18,12 @@ use russh_keys::agent::client::AgentClient;
 use russh_keys::key::PublicKey;
 use russh_sftp::client::SftpSession;
 use serde::Serialize;
+use serde_json::Value;
 use tauri::{AppHandle, Emitter};
 use zeroize::Zeroizing;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::mpsc;
-use tokio::time::timeout;
+use tokio::time::{sleep, timeout};
 
 // ─── Algoritmos legado (KEX + ciphers + MACs + host-key) ─────────────────────
 
@@ -473,6 +475,7 @@ pub async fn ssh_connect(
     cols: u16,
     rows: u16,
 ) -> Result<(), String> {
+    state.rate_limiter.check("ssh_connect", 10, std::time::Duration::from_secs(60))?;
     let _ = app.emit(
         "ssh-status",
         SshStatusEvent {
@@ -741,6 +744,7 @@ pub async fn ssh_copy_id(
     password: String,
     public_key_content: String,
 ) -> Result<(), String> {
+    state.rate_limiter.check("ssh_copy_id", 5, std::time::Duration::from_secs(60))?;
     // Zeroiza credenciais sensíveis ao sair de escopo
     let password = Zeroizing::new(password);
 
@@ -889,12 +893,21 @@ async fn authenticate_session(
 
 // ─── Proxy bidirecional: TCP <-> canal SSH ────────────────────────────────────
 
+/// Tempo máximo sem tráfego antes de encerrar um túnel — evita conexões mortas indefinidas.
+const TUNNEL_IDLE_TIMEOUT: Duration = Duration::from_secs(300);
+
 async fn proxy_tcp_to_channel(stream: tokio::net::TcpStream, mut channel: Channel<client::Msg>) {
     let (mut tcp_read, mut tcp_write) = stream.into_split();
     let mut buf = vec![0u8; 32 * 1024];
 
     loop {
         tokio::select! {
+            // Encerra o túnel se ficar ocioso por mais de TUNNEL_IDLE_TIMEOUT.
+            // O timer é recriado a cada iteração, portanto reseta a cada transferência.
+            _ = sleep(TUNNEL_IDLE_TIMEOUT) => {
+                let _ = channel.eof().await;
+                break;
+            }
             n = tcp_read.read(&mut buf) => {
                 match n {
                     Ok(0) | Err(_) => {
@@ -993,35 +1006,179 @@ pub struct RemoteExecResult {
     pub duration_ms: u64,
 }
 
+fn load_db_value_by_id(conn: &Connection, table: &str, id: &str) -> Result<Option<Value>, String> {
+    let sql = format!("SELECT data FROM {table} WHERE id = ?1");
+    let result: Result<String, _> = conn.query_row(&sql, params![id], |row| row.get(0));
+
+    match result {
+        Ok(data) => serde_json::from_str(&data).map(Some).map_err(|e| e.to_string()),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+fn load_app_settings(conn: &Connection) -> Result<Option<Value>, String> {
+    let result: Result<String, _> = conn.query_row(
+        "SELECT value FROM settings WHERE key = 'app_settings'",
+        [],
+        |row| row.get(0),
+    );
+
+    match result {
+        Ok(data) => serde_json::from_str(&data).map(Some).map_err(|e| e.to_string()),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+fn snippet_applies_to_host(snippet: &Value, host: &Value) -> bool {
+    match snippet["scopeType"].as_str().unwrap_or("global") {
+        "global" => true,
+        "host" => snippet["scopeValue"].as_str() == host["id"].as_str(),
+        "group" => {
+            let host_group = host["group"].as_str().map(str::trim).unwrap_or("");
+            let scope_value = snippet["scopeValue"].as_str().map(str::trim).unwrap_or("");
+            !host_group.is_empty() && host_group == scope_value
+        }
+        _ => false,
+    }
+}
+
+fn render_snippet_command(
+    template: &str,
+    host: &Value,
+    credential: Option<&Value>,
+    cwd: &str,
+) -> String {
+    let username = credential
+        .and_then(|cred| cred["username"].as_str())
+        .or_else(|| host["username"].as_str())
+        .unwrap_or("");
+    let replacements = [
+        ("${host}", host["host"].as_str().unwrap_or("")),
+        ("${user}", username),
+        ("${port}", &host["port"].as_u64().unwrap_or(22).to_string()),
+        ("${cwd}", cwd),
+        ("${label}", host["label"].as_str().unwrap_or("")),
+        ("${group}", host["group"].as_str().unwrap_or("")),
+    ];
+
+    let mut rendered = template.to_string();
+    for (token, value) in replacements {
+        rendered = rendered.replace(token, value);
+    }
+    rendered
+}
+
 #[tauri::command]
 pub async fn ssh_exec(
     state: tauri::State<'_, crate::AppState>,
-    host: String,
-    port: u16,
-    username: String,
-    auth_method: String,
-    password: Option<String>,
-    private_key_content: Option<String>,
-    private_key_passphrase: Option<String>,
-    ssh_compat_preset: Option<String>,
-    keepalive_interval: Option<u32>,
-    connection_timeout: Option<u32>,
-    command: String,
+    host_id: String,
+    snippet_id: String,
+    cwd: Option<String>,
 ) -> Result<RemoteExecResult, String> {
-    // Zeroiza credenciais sensíveis ao sair de escopo
-    let password = password.map(Zeroizing::new);
-    let private_key_content = private_key_content.map(Zeroizing::new);
-    let private_key_passphrase = private_key_passphrase.map(Zeroizing::new);
+    state.rate_limiter.check("ssh_exec", 30, std::time::Duration::from_secs(60))?;
+    let (host, credential, ssh_key, settings, command) = {
+        let conn = state
+            .database
+            .connection()
+            .lock()
+            .map_err(|e| e.to_string())?;
 
-    let preset = ssh_compat_preset.as_deref().unwrap_or("modern");
-    let config = build_ssh_config(preset, keepalive_interval.unwrap_or(0), connection_timeout.unwrap_or(30));
+        let host = load_db_value_by_id(&conn, "hosts", &host_id)?
+            .ok_or_else(|| "Host não encontrado.".to_string())?;
+
+        let settings = load_app_settings(&conn)?
+            .ok_or_else(|| "Configurações da aplicação não encontradas.".to_string())?;
+
+        let snippets = settings["productivity"]["snippets"]
+            .as_array()
+            .ok_or_else(|| "Lista de snippets indisponível nas configurações.".to_string())?;
+        let snippet = snippets
+            .iter()
+            .find(|candidate| candidate["id"].as_str() == Some(snippet_id.as_str()))
+            .ok_or_else(|| "Snippet não encontrado.".to_string())?;
+
+        if !snippet_applies_to_host(snippet, &host) {
+            return Err("O snippet selecionado não está autorizado para este host.".to_string());
+        }
+
+        let credential = match host["credentialId"].as_str() {
+            Some(id) if !id.is_empty() => load_db_value_by_id(&conn, "credentials", id)?,
+            _ => None,
+        };
+
+        let ssh_key = match credential.as_ref().and_then(|cred| cred["keyId"].as_str()) {
+            Some(id) if !id.is_empty() => load_db_value_by_id(&conn, "ssh_keys", id)?,
+            _ => None,
+        };
+
+        let rendered = render_snippet_command(
+            snippet["command"].as_str().unwrap_or(""),
+            &host,
+            credential.as_ref(),
+            cwd.as_deref().unwrap_or("~"),
+        );
+        if rendered.trim().is_empty() {
+            return Err("O snippet renderizado resultou em um comando vazio.".to_string());
+        }
+
+        (host, credential, ssh_key, settings, rendered)
+    };
+
+    let host_name = host["host"]
+        .as_str()
+        .ok_or_else(|| "Host salvo sem endereço válido.".to_string())?
+        .to_string();
+    let port = host["port"].as_u64().unwrap_or(22) as u16;
+    let username = credential
+        .as_ref()
+        .and_then(|cred| cred["username"].as_str())
+        .or_else(|| host["username"].as_str())
+        .ok_or_else(|| "Host salvo sem usuário configurado.".to_string())?
+        .to_string();
+    let auth_method = credential
+        .as_ref()
+        .and_then(|cred| cred["authMethod"].as_str())
+        .or_else(|| host["authMethod"].as_str())
+        .unwrap_or("agent")
+        .to_string();
+
+    // Zeroiza credenciais sensíveis ao sair de escopo
+    let password = credential
+        .as_ref()
+        .and_then(|cred| cred["password"].as_str())
+        .or_else(|| host["passwordRef"].as_str())
+        .map(|value| Zeroizing::new(value.to_string()));
+    let private_key_content = ssh_key
+        .as_ref()
+        .and_then(|key| key["privateKeyContent"].as_str())
+        .map(|value| Zeroizing::new(value.to_string()));
+    let private_key_passphrase = ssh_key
+        .as_ref()
+        .and_then(|key| key["passphrase"].as_str())
+        .map(|value| Zeroizing::new(value.to_string()));
+
+    let preset = host["sshCompat"]["preset"].as_str().unwrap_or("modern");
+    let keepalive_interval = host["keepAliveInterval"]
+        .as_u64()
+        .map(|value| value as u32)
+        .or_else(|| settings["ssh"]["keepAliveInterval"].as_u64().map(|value| value as u32))
+        .unwrap_or(0);
+    let connection_timeout = host["connectionTimeout"]
+        .as_u64()
+        .map(|value| value as u32)
+        .or_else(|| settings["ssh"]["inactivityTimeout"].as_u64().map(|value| value as u32))
+        .unwrap_or(30);
+
+    let config = build_ssh_config(preset, keepalive_interval, connection_timeout);
 
     let data_dir = state.storage.lock().unwrap().data_dir.clone();
     let known_hosts_map = load_known_hosts(&data_dir);
     let known_hosts = Arc::new(std::sync::Mutex::new(known_hosts_map));
 
-    let addr = format!("{}:{}", host, port);
-    let mut session = client::connect(config, addr, ClientHandler::new(&host, port, known_hosts.clone()))
+    let addr = format!("{}:{}", host_name, port);
+    let mut session = client::connect(config, addr, ClientHandler::new(&host_name, port, known_hosts.clone()))
         .await
         .map_err(|e| e.to_string())?;
 

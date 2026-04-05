@@ -40,7 +40,6 @@ import {
   createEmptySnippet,
   createEmptyTunnelProfile,
   getSnippetScopeLabel,
-  renderSnippetCommand,
   runRemoteCommand,
   startTunnel,
   stopTunnel,
@@ -192,21 +191,22 @@ export function Operations() {
           tagLabel: "Tag",
           all: "Todos",
           emptyHosts: "Nenhum host encontrado para os filtros atuais.",
-          commandLabel: "Comando / template",
-          commandPlaceholder: "uname -a && echo ${host} && whoami",
-          commandHint: "As variáveis ${host}, ${user}, ${port} e ${cwd} são renderizadas por host antes da execução.",
+          snippetLabel: "Snippet",
+          snippetPlaceholder: "Selecionar snippet...",
+          snippetHint: "A execução em lote usa apenas snippets salvos. As variáveis ${host}, ${user}, ${port} e ${cwd} são renderizadas no backend por host.",
+          snippetPreview: "Comando do snippet",
           execute: "Executar em lote",
           executing: "Executando...",
           selectedCount: "{{count}} host(s) selecionado(s)",
           emptyTitle: "Sem execuções ainda",
-          emptyDescription: "Selecione hosts, informe um comando e rode sua primeira operação em lote.",
+          emptyDescription: "Selecione hosts, escolha um snippet salvo e rode sua primeira operação em lote.",
           running: "Executando",
           ok: "OK",
           error: "Erro",
           viewHost: "Ver host",
           stdout: "STDOUT",
           stderr: "STDERR",
-          requireCommand: "Informe um comando para a execução em lote.",
+          requireSnippet: "Selecione um snippet para a execução em lote.",
           requireHosts: "Selecione pelo menos um host para executar em lote.",
         },
       }
@@ -315,21 +315,22 @@ export function Operations() {
           tagLabel: "Tag",
           all: "All",
           emptyHosts: "No hosts found for the current filters.",
-          commandLabel: "Command / template",
-          commandPlaceholder: "uname -a && echo ${host} && whoami",
-          commandHint: "Variables ${host}, ${user}, ${port}, and ${cwd} are rendered per host before execution.",
+          snippetLabel: "Snippet",
+          snippetPlaceholder: "Select snippet...",
+          snippetHint: "Batch execution only uses saved snippets. Variables ${host}, ${user}, ${port}, and ${cwd} are rendered in the backend per host.",
+          snippetPreview: "Snippet command",
           execute: "Run batch",
           executing: "Running...",
           selectedCount: "{{count}} host(s) selected",
           emptyTitle: "No executions yet",
-          emptyDescription: "Select hosts, enter a command, and run your first batch operation.",
+          emptyDescription: "Select hosts, choose a saved snippet, and run your first batch operation.",
           running: "Running",
           ok: "OK",
           error: "Error",
           viewHost: "View host",
           stdout: "STDOUT",
           stderr: "STDERR",
-          requireCommand: "Provide a command for batch execution.",
+          requireSnippet: "Select a snippet for batch execution.",
           requireHosts: "Select at least one host to run in batch.",
         },
       };
@@ -339,7 +340,7 @@ export function Operations() {
   const [editingSnippetId, setEditingSnippetId] = useState<string | null>(null);
   const [tunnelDraft, setTunnelDraft] = useState<TunnelDraft>(createEmptyTunnelProfile(hosts[0]?.id ?? ""));
   const [editingTunnelId, setEditingTunnelId] = useState<string | null>(null);
-  const [batchCommand, setBatchCommand] = useState("");
+  const [batchSnippetId, setBatchSnippetId] = useState("");
   const [batchSelectedHostIds, setBatchSelectedHostIds] = useState<string[]>([]);
   const [batchSearch, setBatchSearch] = useState("");
   const [batchGroupFilter, setBatchGroupFilter] = useState("");
@@ -355,6 +356,7 @@ export function Operations() {
   const tags = [...new Set(hosts.flatMap((host) => host.tags ?? []).filter(Boolean))].sort();
 
   const hostNameResolver = (hostId: string) => hosts.find((host) => host.id === hostId)?.label;
+  const selectedBatchSnippet = snippets.find((snippet) => snippet.id === batchSnippetId) ?? null;
 
   const visibleBatchHosts = useMemo(
     () => hosts.filter((host) => {
@@ -604,8 +606,8 @@ export function Operations() {
   };
 
   const executeBatch = async () => {
-    if (!batchCommand.trim()) {
-      showFeedback("error", text.batch.requireCommand);
+    if (!batchSnippetId) {
+      showFeedback("error", text.batch.requireSnippet);
       return;
     }
 
@@ -625,26 +627,11 @@ export function Operations() {
     })));
 
     for (const host of selectedHosts) {
-      const credential = host.credentialId ? getCredential(host.credentialId) : undefined;
-      const sshKey = credential?.keyId ? getSshKey(credential.keyId) : undefined;
-      const renderedCommand = {
-        id: "batch",
-        label: "batch",
-        command: batchCommand,
-        description: "",
-        scopeType: "global" as const,
-        tags: [],
-        createdAt: "",
-        updatedAt: "",
-      };
-
       try {
         const result = await runRemoteCommand({
-          host,
-          credential,
-          sshKey,
-          sshSettings: settings.ssh,
-          command: renderSnippetCommand(renderedCommand, host, credential, "~"),
+          hostId: host.id,
+          snippetId: batchSnippetId,
+          cwd: "~",
         });
 
         setBatchResults((current) => current.map((entry) =>
@@ -1185,16 +1172,34 @@ export function Operations() {
             </div>
 
             <div className="space-y-4">
-              <Textarea
-                label={text.batch.commandLabel}
-                value={batchCommand}
-                onChange={(event) => setBatchCommand(event.target.value)}
-                rows={5}
-                placeholder={text.batch.commandPlaceholder}
-                hint={text.batch.commandHint}
-              />
+              <Select
+                id="batch-snippet"
+                label={text.batch.snippetLabel}
+                value={batchSnippetId}
+                onChange={(event) => setBatchSnippetId(event.target.value)}
+              >
+                <option value="">{text.batch.snippetPlaceholder}</option>
+                {snippets.map((snippet) => (
+                  <option key={snippet.id} value={snippet.id}>
+                    {snippet.label}
+                  </option>
+                ))}
+              </Select>
+              <p className="text-xs text-[var(--text-muted)]">
+                {text.batch.snippetHint}
+              </p>
+              {selectedBatchSnippet && (
+                <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-primary)] p-4">
+                  <p className="text-xs font-medium uppercase tracking-wider text-[var(--text-muted)]">
+                    {text.batch.snippetPreview}
+                  </p>
+                  <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-words rounded-lg bg-[var(--bg-secondary)] p-3 text-xs text-[var(--text-secondary)]">
+                    {selectedBatchSnippet.command}
+                  </pre>
+                </div>
+              )}
               <div className="flex items-center gap-2 flex-wrap">
-                <Button onClick={executeBatch} disabled={batchRunning || batchSelectedHostIds.length === 0}>
+                <Button onClick={executeBatch} disabled={batchRunning || batchSelectedHostIds.length === 0 || !batchSnippetId}>
                   {batchRunning ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
                   {batchRunning ? text.batch.executing : text.batch.execute}
                 </Button>

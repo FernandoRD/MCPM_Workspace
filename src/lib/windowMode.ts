@@ -6,10 +6,7 @@ export interface SessionRouteOptions {
   hostLabel?: string;
   hostAddress?: string;
   quickConnect?: boolean;
-  connectionHost?: string;
-  connectionPort?: number;
-  connectionUsername?: string;
-  connectionAuthMethod?: string;
+  quickConnectBootstrapId?: string;
 }
 
 export interface SessionBootstrapParams {
@@ -18,10 +15,7 @@ export interface SessionBootstrapParams {
   hostLabel?: string;
   hostAddress?: string;
   quickConnect: boolean;
-  connectionHost?: string;
-  connectionPort?: number;
-  connectionUsername?: string;
-  connectionAuthMethod?: string;
+  quickConnectBootstrapId?: string;
 }
 
 export function isStandaloneWindow(search: string): boolean {
@@ -55,10 +49,7 @@ export function buildSessionRoute(
   if (options.hostLabel) params.set("hostLabel", options.hostLabel);
   if (options.hostAddress) params.set("hostAddress", options.hostAddress);
   if (options.quickConnect) params.set("quickConnect", "1");
-  if (options.connectionHost) params.set("connectionHost", options.connectionHost);
-  if (typeof options.connectionPort === "number") params.set("connectionPort", String(options.connectionPort));
-  if (options.connectionUsername) params.set("connectionUsername", options.connectionUsername);
-  if (options.connectionAuthMethod) params.set("connectionAuthMethod", options.connectionAuthMethod);
+  if (options.quickConnectBootstrapId) params.set("quickConnectBootstrapId", options.quickConnectBootstrapId);
 
   const query = params.toString();
   return query ? `${basePath}?${query}` : basePath;
@@ -73,9 +64,6 @@ export function readSessionBootstrap(search: string): SessionBootstrapParams {
     hostLabel: params.get("hostLabel") ?? undefined,
     hostAddress: params.get("hostAddress") ?? undefined,
     quickConnect: params.get("quickConnect") === "1",
-    connectionHost: params.get("connectionHost") ?? undefined,
-    connectionPort: params.get("connectionPort") ? Number(params.get("connectionPort")) : undefined,
-    connectionUsername: params.get("connectionUsername") ?? undefined,
-    connectionAuthMethod: params.get("connectionAuthMethod") ?? undefined,
+    quickConnectBootstrapId: params.get("quickConnectBootstrapId") ?? undefined,
   };
 }
