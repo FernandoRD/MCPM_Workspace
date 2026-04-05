@@ -15,8 +15,10 @@ use russh::Preferred;
 use russh::ChannelMsg;
 use russh_keys::agent::client::AgentClient;
 use russh_keys::key::PublicKey;
+use russh_sftp::client::SftpSession;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
+use zeroize::Zeroizing;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::mpsc;
 use tokio::time::timeout;
@@ -283,6 +285,22 @@ pub fn ssh_list_known_hosts(
     Ok(entries)
 }
 
+/// Armazena explicitamente a fingerprint de um host nos known_hosts.
+/// Chamado pelo frontend após o usuário confirmar a fingerprint de um host novo.
+#[tauri::command]
+pub fn ssh_trust_host(
+    state: tauri::State<'_, crate::AppState>,
+    host: String,
+    port: u16,
+    fingerprint: String,
+) -> Result<(), String> {
+    let data_dir = state.storage.lock().unwrap().data_dir.clone();
+    let mut known_hosts = load_known_hosts(&data_dir);
+    known_hosts.insert(format_host_key(&host, port), fingerprint);
+    save_known_hosts(&data_dir, &known_hosts);
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn ssh_health_check(
     state: tauri::State<'_, crate::AppState>,
@@ -471,6 +489,19 @@ pub async fn ssh_connect(
 
     let data_dir = state.storage.lock().unwrap().data_dir.clone();
     let known_hosts_map = load_known_hosts(&data_dir);
+
+    // Antes de conectar: se o host não está nos known_hosts, busca a fingerprint
+    // e retorna um erro especial para o frontend pedir confirmação ao usuário.
+    // Isso impede aceitação silenciosa de hosts desconhecidos (TOFU inseguro).
+    let host_key_id = format_host_key(&host, port);
+    if !known_hosts_map.contains_key(&host_key_id) {
+        let timeout_dur = Duration::from_secs(10);
+        let fingerprint = fetch_server_fingerprint(&host, port, ssh_compat_preset.as_deref(), timeout_dur)
+            .await
+            .map_err(|e| e)?;
+        return Err(format!("HOST_KEY_UNKNOWN:{fingerprint}"));
+    }
+
     let known_hosts = Arc::new(std::sync::Mutex::new(known_hosts_map));
 
     let addr = format!("{}:{}", host, port);
@@ -482,19 +513,25 @@ pub async fn ssh_connect(
     .await
     .map_err(|e| e.to_string())?;
 
+    // Zeroiza credenciais sensíveis ao sair de escopo
+    let password = password.map(Zeroizing::new);
+    let private_key_content = private_key_content.map(Zeroizing::new);
+    let private_key_passphrase = private_key_passphrase.map(Zeroizing::new);
+
     let ok = match auth_method.as_str() {
         "password" => {
             let pwd = password.ok_or("Senha não informada")?;
             session
-                .authenticate_password(&username, pwd)
+                .authenticate_password(&username, pwd.as_str())
                 .await
                 .map_err(|e| e.to_string())?
         }
 
         "privateKey" => {
             let content = private_key_content.ok_or("Conteúdo da chave privada não informado")?;
+            let passphrase = private_key_passphrase.as_ref().map(|z| z.as_str());
             let key =
-                russh_keys::decode_secret_key(&content, private_key_passphrase.as_deref())
+                russh_keys::decode_secret_key(content.as_str(), passphrase)
                     .map_err(|e| format!("Falha ao decodificar a chave privada: {e}"))?;
             session
                 .authenticate_publickey(&username, Arc::new(key))
@@ -691,19 +728,38 @@ pub async fn ssh_disconnect(
 
 // ─── ssh-copy-id ──────────────────────────────────────────────────────────────
 
+/// Instala uma chave pública no `~/.ssh/authorized_keys` do servidor remoto.
+///
+/// Usa SFTP em vez de execução de shell para eliminar o risco de injeção de
+/// comandos via conteúdo malicioso na chave pública.
 #[tauri::command]
 pub async fn ssh_copy_id(
+    state: tauri::State<'_, crate::AppState>,
     host: String,
     port: u16,
     username: String,
     password: String,
     public_key_content: String,
 ) -> Result<(), String> {
+    // Zeroiza credenciais sensíveis ao sair de escopo
+    let password = Zeroizing::new(password);
+
+    let data_dir = state.storage.lock().unwrap().data_dir.clone();
+    let known_hosts_map = load_known_hosts(&data_dir);
+
+    // Rejeita host desconhecido — o usuário deve confirmar a fingerprint primeiro
+    let host_key_id = format_host_key(&host, port);
+    if !known_hosts_map.contains_key(&host_key_id) {
+        let fingerprint = fetch_server_fingerprint(&host, port, None, Duration::from_secs(10))
+            .await
+            .map_err(|e| e)?;
+        return Err(format!("HOST_KEY_UNKNOWN:{fingerprint}"));
+    }
+
     let config = Arc::new(client::Config::default());
     let addr = format!("{}:{}", host, port);
+    let known_hosts = Arc::new(std::sync::Mutex::new(known_hosts_map));
 
-    // Usa known_hosts em memória (sem persistência) para o ssh-copy-id
-    let known_hosts = Arc::new(std::sync::Mutex::new(HashMap::<String, String>::new()));
     let mut session = client::connect(
         config,
         addr,
@@ -713,7 +769,7 @@ pub async fn ssh_copy_id(
     .map_err(|e| format!("Erro ao conectar: {e}"))?;
 
     let ok = session
-        .authenticate_password(&username, &password)
+        .authenticate_password(&username, password.as_str())
         .await
         .map_err(|e| format!("Erro de autenticação: {e}"))?;
 
@@ -721,41 +777,60 @@ pub async fn ssh_copy_id(
         return Err("Senha incorreta ou autenticação recusada pelo servidor.".into());
     }
 
-    // Escapa aspas simples no conteúdo da chave para uso no shell
-    let key = public_key_content.trim().replace('\'', "'\\''");
-
-    // Garante ~/.ssh com permissões corretas e adiciona a chave em authorized_keys
-    let cmd = format!(
-        "umask 077; mkdir -p ~/.ssh && \
-         grep -qxF '{key}' ~/.ssh/authorized_keys 2>/dev/null || \
-         echo '{key}' >> ~/.ssh/authorized_keys"
-    );
-
-    let mut channel = session
+    // Abre sessão SFTP — sem passar pela shell, sem risco de injeção
+    let channel = session
         .channel_open_session()
         .await
-        .map_err(|e| format!("Erro ao abrir canal: {e}"))?;
-
+        .map_err(|e| format!("Erro ao abrir canal SFTP: {e}"))?;
     channel
-        .exec(true, cmd.as_str())
+        .request_subsystem(true, "sftp")
         .await
-        .map_err(|e| format!("Erro ao executar comando: {e}"))?;
+        .map_err(|e| format!("Erro ao iniciar subsistema SFTP: {e}"))?;
+    let sftp = SftpSession::new(channel.into_stream())
+        .await
+        .map_err(|e| format!("Erro ao iniciar sessão SFTP: {e}"))?;
 
-    // Aguarda o canal fechar e captura eventuais erros de exit status
-    loop {
-        match channel.wait().await {
-            Some(ChannelMsg::ExitStatus { exit_status }) => {
-                if exit_status != 0 {
-                    return Err(format!(
-                        "Comando remoto falhou com status {exit_status}."
-                    ));
-                }
-                break;
-            }
-            Some(ChannelMsg::Close) | None => break,
-            _ => {}
+    // Cria ~/.ssh se não existir (ignora erro "já existe")
+    let _ = sftp.create_dir(".ssh").await;
+
+    // Lê authorized_keys existente (ou usa string vazia)
+    let authorized_keys_path = ".ssh/authorized_keys";
+    let existing = match sftp.open(authorized_keys_path).await {
+        Ok(mut f) => {
+            let mut buf = Vec::new();
+            f.read_to_end(&mut buf)
+                .await
+                .map_err(|e| format!("Erro ao ler authorized_keys: {e}"))?;
+            String::from_utf8_lossy(&buf).into_owned()
         }
+        Err(_) => String::new(),
+    };
+
+    // Verifica se a chave já está presente (linha exata)
+    let key_trimmed = public_key_content.trim();
+    let already_present = existing
+        .lines()
+        .any(|line| line.trim() == key_trimmed);
+
+    if already_present {
+        return Ok(());
     }
+
+    // Monta o novo conteúdo e escreve via SFTP — sem shell, sem injeção
+    let new_content = if existing.is_empty() || existing.ends_with('\n') {
+        format!("{key_trimmed}\n")
+    } else {
+        format!("\n{key_trimmed}\n")
+    };
+    let full_content = format!("{existing}{new_content}");
+
+    let mut f = sftp
+        .create(authorized_keys_path)
+        .await
+        .map_err(|e| format!("Erro ao escrever authorized_keys: {e}"))?;
+    f.write_all(full_content.as_bytes())
+        .await
+        .map_err(|e| format!("Erro ao gravar authorized_keys: {e}"))?;
 
     Ok(())
 }
@@ -933,6 +1008,11 @@ pub async fn ssh_exec(
     connection_timeout: Option<u32>,
     command: String,
 ) -> Result<RemoteExecResult, String> {
+    // Zeroiza credenciais sensíveis ao sair de escopo
+    let password = password.map(Zeroizing::new);
+    let private_key_content = private_key_content.map(Zeroizing::new);
+    let private_key_passphrase = private_key_passphrase.map(Zeroizing::new);
+
     let preset = ssh_compat_preset.as_deref().unwrap_or("modern");
     let config = build_ssh_config(preset, keepalive_interval.unwrap_or(0), connection_timeout.unwrap_or(30));
 
@@ -949,9 +1029,9 @@ pub async fn ssh_exec(
         &mut session,
         &auth_method,
         &username,
-        password.as_deref(),
-        private_key_content.as_deref(),
-        private_key_passphrase.as_deref(),
+        password.as_ref().map(|z| z.as_str()),
+        private_key_content.as_ref().map(|z| z.as_str()),
+        private_key_passphrase.as_ref().map(|z| z.as_str()),
     )
     .await?;
 
@@ -1018,6 +1098,11 @@ pub async fn ssh_start_tunnel(
     connection_timeout: Option<u32>,
     spec: TunnelSpec,
 ) -> Result<(), String> {
+    // Zeroiza credenciais sensíveis ao sair de escopo
+    let password = password.map(Zeroizing::new);
+    let private_key_content = private_key_content.map(Zeroizing::new);
+    let private_key_passphrase = private_key_passphrase.map(Zeroizing::new);
+
     // Verifica se túnel já está ativo
     {
         let mgr = state.ssh.lock().await;
@@ -1042,9 +1127,9 @@ pub async fn ssh_start_tunnel(
         &mut session,
         &auth_method,
         &username,
-        password.as_deref(),
-        private_key_content.as_deref(),
-        private_key_passphrase.as_deref(),
+        password.as_ref().map(|z| z.as_str()),
+        private_key_content.as_ref().map(|z| z.as_str()),
+        private_key_passphrase.as_ref().map(|z| z.as_str()),
     )
     .await?;
 

@@ -44,7 +44,7 @@ import { buildSessionRoute, isStandaloneWindow } from "@/lib/windowMode";
 
 type BulkEditCredentialMode = "keep" | "set" | "clear";
 type BulkEditGroupMode = "keep" | "set" | "clear";
-type BulkEditTagsMode = "keep" | "replace" | "add" | "remove";
+type BulkEditTagsMode = "keep" | "replace" | "add" | "remove" | "clear";
 
 interface BulkEditChanges {
   credentialMode: BulkEditCredentialMode;
@@ -601,7 +601,7 @@ function BulkEditHostsModal({
     selectedCount === 0 ||
     (credentialMode === "set" && !credentialId) ||
     (groupMode === "set" && !groupName.trim()) ||
-    (tagsMode !== "keep" && parsedTags.length === 0);
+    (tagsMode !== "keep" && tagsMode !== "clear" && parsedTags.length === 0);
 
   return (
     <Modal open={open} onClose={onClose} title={t("dashboard.bulk.modalTitle")} size="lg">
@@ -692,6 +692,7 @@ function BulkEditHostsModal({
               <option value="replace">{t("dashboard.bulk.tagsModes.replace")}</option>
               <option value="add">{t("dashboard.bulk.tagsModes.add")}</option>
               <option value="remove">{t("dashboard.bulk.tagsModes.remove")}</option>
+              <option value="clear">{t("dashboard.bulk.modes.clear")}</option>
             </Select>
 
             <div className="flex flex-col gap-2">
@@ -700,7 +701,7 @@ function BulkEditHostsModal({
                 value={tagsInput}
                 onChange={(event) => setTagsInput(event.target.value)}
                 placeholder={t("dashboard.bulk.placeholders.tags")}
-                disabled={tagsMode === "keep"}
+                disabled={tagsMode === "keep" || tagsMode === "clear"}
                 className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--bg-secondary)] px-3 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-focus)] disabled:opacity-50"
               />
               <p className="text-xs text-[var(--text-muted)]">{t("dashboard.bulk.tagsHint")}</p>
@@ -803,5 +804,6 @@ function applyTagMode(currentTags: string[], mode: BulkEditTagsMode, tags: strin
   if (mode === "keep") return currentTags;
   if (mode === "replace") return tags;
   if (mode === "add") return Array.from(new Set([...currentTags, ...tags]));
+  if (mode === "clear") return [];
   return currentTags.filter((tag) => !tags.includes(tag));
 }

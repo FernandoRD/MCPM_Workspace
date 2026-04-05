@@ -45,7 +45,7 @@
       "tagsModes": {
         "replace": "Substituir tags",
         "add": "Adicionar tags",
-        "remove": "Remover tags"
+        "remove": "Remover tags específicas"
       },
       "placeholders": {
         "selectCredential": "Selecionar credencial...",

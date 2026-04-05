@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebLinksAddon } from "@xterm/addon-web-links";
@@ -51,6 +51,7 @@ export function SshPane({
   const cancelRef = useRef<(() => void) | null>(null);
   const terminalSettings = useSettingsStore((s) => s.settings.terminal);
   const sshSettings = useSettingsStore((s) => s.settings.ssh);
+  const [pendingFingerprint, setPendingFingerprint] = useState<string | null>(null);
 
   const connect = useCallback(async () => {
     if (!termRef.current) return;
@@ -151,10 +152,15 @@ export function SshPane({
       cols: dims.cols ?? 80,
       rows: dims.rows ?? 24,
     }).catch((err: string) => {
-      if (!cancelled) {
-        xtermRef.current?.writeln(`\r\n\x1b[1;31mErro: ${err}\x1b[0m\r\n`);
-        onStatusChange(paneId, "error");
+      if (cancelled) return;
+      // Host desconhecido: pede confirmação de fingerprint antes de prosseguir
+      if (typeof err === "string" && err.startsWith("HOST_KEY_UNKNOWN:")) {
+        const fingerprint = err.slice("HOST_KEY_UNKNOWN:".length);
+        setPendingFingerprint(fingerprint);
+        return;
       }
+      xtermRef.current?.writeln(`\r\n\x1b[1;31mErro: ${err}\x1b[0m\r\n`);
+      onStatusChange(paneId, "error");
     });
 
     const resizeObserver = new ResizeObserver(() => {
@@ -179,6 +185,23 @@ export function SshPane({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paneId]);
 
+  const handleTrustHost = useCallback(async (accepted: boolean) => {
+    if (!pendingFingerprint) return;
+    if (!accepted) {
+      setPendingFingerprint(null);
+      onStatusChange(paneId, "error");
+      onDisconnectedRef.current?.("error");
+      return;
+    }
+    try {
+      await invoke("ssh_trust_host", { host, port, fingerprint: pendingFingerprint });
+    } catch {
+      // ignora erro ao salvar — a conexão prossegue
+    }
+    setPendingFingerprint(null);
+    connect();
+  }, [pendingFingerprint, host, port, paneId, onStatusChange, connect]);
+
   useEffect(() => {
     connect();
     return () => {
@@ -198,6 +221,41 @@ export function SshPane({
   return (
     <div className="relative h-full w-full" style={{ backgroundColor: "var(--terminal-bg)" }}>
       <div ref={termRef} className="h-full w-full" />
+
+      {pendingFingerprint && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/70">
+          <div className="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] p-6 shadow-2xl flex flex-col gap-4">
+            <div className="flex flex-col gap-1">
+              <p className="font-semibold text-[var(--text-primary)]">Host desconhecido</p>
+              <p className="text-sm text-[var(--text-muted)]">
+                Esta é a primeira conexão com <span className="font-medium text-[var(--text-primary)]">{host}:{port}</span>.
+                Verifique a fingerprint abaixo antes de continuar.
+              </p>
+            </div>
+            <div className="rounded-lg bg-[var(--bg-primary)] border border-[var(--border)] px-4 py-3">
+              <p className="text-xs text-[var(--text-muted)] mb-1">Fingerprint (SHA-256)</p>
+              <p className="font-mono text-xs text-[var(--text-primary)] break-all select-all">{pendingFingerprint}</p>
+            </div>
+            <p className="text-xs text-[var(--text-muted)]">
+              Se você não consegue verificar esta fingerprint com o administrador do servidor, recuse a conexão.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => handleTrustHost(false)}
+                className="px-4 py-2 rounded-lg text-sm border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors"
+              >
+                Recusar
+              </button>
+              <button
+                onClick={() => handleTrustHost(true)}
+                className="px-4 py-2 rounded-lg text-sm bg-[var(--accent)] text-white hover:opacity-90 transition-opacity"
+              >
+                Confiar e conectar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

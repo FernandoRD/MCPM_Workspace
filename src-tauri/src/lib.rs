@@ -53,6 +53,7 @@ pub fn run() {
             ssh::ssh_send_input,
             ssh::ssh_resize,
             ssh::ssh_disconnect,
+            ssh::ssh_trust_host,
             ssh::ssh_copy_id,
             ssh::ssh_generate_key,
             ssh::ssh_exec,

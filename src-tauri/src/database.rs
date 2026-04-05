@@ -92,6 +92,14 @@ impl Database {
         std::fs::write(&key_path, &key)
             .map_err(|e| format!("Falha ao salvar arquivo de chave: {e}"))?;
 
+        // Restringe o arquivo de chave para leitura/escrita apenas pelo dono (Unix)
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let perms = std::fs::Permissions::from_mode(0o600);
+            let _ = std::fs::set_permissions(&key_path, perms);
+        }
+
         if let Ok(entry) = Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_DB_KEY_ACCOUNT) {
             let _ = entry.set_password(&key);
         }
