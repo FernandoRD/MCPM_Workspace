@@ -1,6 +1,6 @@
-# SSH Vault — Referência Técnica
+# MPCM Workspace — Referência Técnica
 
-Documento de referência para desenvolvimento e manutenção do SSH Vault no estado atual do projeto.
+Documento de referência para desenvolvimento e manutenção do MPCM Workspace no estado atual do projeto.
 
 ## Sumário
 
@@ -18,7 +18,7 @@ Documento de referência para desenvolvimento e manutenção do SSH Vault no est
 
 ## 1. Visão geral
 
-O SSH Vault é uma aplicação desktop Tauri com frontend React e backend Rust para gerenciar:
+O MPCM Workspace é uma aplicação desktop Tauri com frontend React e backend Rust para gerenciar:
 
 - hosts SSH
 - credenciais reutilizáveis
@@ -28,6 +28,8 @@ O SSH Vault é uma aplicação desktop Tauri com frontend React e backend Rust p
 - sincronização remota
 - backup/restore
 - health check e inventário de fingerprints
+
+O posicionamento atual do produto é `Multi-Protocol Connection Manager`, embora o núcleo implementado hoje ainda esteja concentrado em SSH/SFTP.
 
 O app segue uma abordagem `local-first`:
 
@@ -100,6 +102,7 @@ src/
   locales/
   pages/
     Backup.tsx
+    About.tsx
     ConnectionLog.tsx
     CredentialEditor.tsx
     Credentials.tsx
@@ -241,6 +244,7 @@ Rotas atuais:
 - `/connection-log`
 - `/operations`
 - `/health`
+- `/about`
 
 ## 7. Bibliotecas do frontend
 
@@ -250,6 +254,12 @@ Rotas atuais:
   Decide entre abrir em aba ou janela dedicada.
 - [windowMode.ts](/home/fernando/Documentos/ssh_vault/src/lib/windowMode.ts)
   Helpers para rotas e bootstrap de janelas standalone.
+
+### Branding e identidade
+
+- O branding visível do app foi atualizado para `MPCM Workspace`
+- O subtítulo usado na documentação e na página `About` é `Multi-Protocol Connection Manager`
+- Identificadores internos legados como `ssh-vault` foram mantidos em storage, sync e backup para evitar migrações destrutivas de dados existentes
 
 ### Sync / backup / estado portátil
 

@@ -24,6 +24,7 @@ import {
   SyncResult,
 } from "@/lib/sync";
 import { pushToProvider, pullFromProvider } from "@/lib/syncProviders";
+import { APP_NAME } from "@/lib/appInfo";
 
 // ─── Página principal ─────────────────────────────────────────────────────────
 
@@ -82,10 +83,10 @@ export function Sync() {
       const newGistId = await pushToProvider(sync, payload);
       if (newGistId) updateSync({ gist: { ...sync.gist!, gistId: newGistId } });
       updateSync({ lastSyncAt: new Date().toISOString() });
-      notify("SSH Vault", t("notifications.syncPushSuccess"));
+      notify(APP_NAME, t("notifications.syncPushSuccess"));
     } catch (e) {
       setError(String(e));
-      notify("SSH Vault", t("notifications.syncError"));
+      notify(APP_NAME, t("notifications.syncError"));
     } finally {
       setSyncStatus("idle");
     }
@@ -113,10 +114,10 @@ export function Sync() {
       );
       updateSync({ lastSyncAt: new Date().toISOString() });
       setLastResult(result);
-      notify("SSH Vault", t("notifications.syncPullSuccess"));
+      notify(APP_NAME, t("notifications.syncPullSuccess"));
     } catch (e) {
       setError(String(e));
-      notify("SSH Vault", t("notifications.syncError"));
+      notify(APP_NAME, t("notifications.syncError"));
     } finally {
       setSyncStatus("idle");
     }

@@ -86,7 +86,7 @@ pub async fn sync_gist_push(
     let files = serde_json::json!({ "vault.json": { "content": payload_json } });
     let body = match &gist_id {
         None => serde_json::json!({
-            "description": "SSH Vault Sync",
+            "description": "MPCM Workspace Sync",
             "public": false,
             "files": files
         }),

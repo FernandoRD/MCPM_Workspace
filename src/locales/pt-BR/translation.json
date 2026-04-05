@@ -1,7 +1,8 @@
 {
   "app": {
-    "name": "SSH Vault",
-    "tagline": "Seu gerenciador de conexões SSH"
+    "name": "MPCM Workspace",
+    "tagline": "Organize e opere conexoes remotas em um unico workspace",
+    "classification": "Multi-Protocol Connection Manager"
   },
   "nav": {
     "dashboard": "Hosts",
@@ -15,7 +16,32 @@
     "newConnection": "Nova Conexão",
     "backup": "Backup",
     "quickConnect": "Quick Connect",
-    "health": "Health"
+    "health": "Health",
+    "about": "About"
+  },
+  "about": {
+    "description": "Workspace local-first para organizar conexoes remotas, operar hosts e centralizar fluxos de acesso em um unico lugar.",
+    "facts": {
+      "version": "Versao",
+      "category": "Categoria",
+      "protocols": "Protocolos"
+    },
+    "protocols": {
+      "ssh": "SSH",
+      "sftp": "SFTP",
+      "future": "Telnet e futuros"
+    },
+    "highlightsTitle": "Destaques",
+    "highlights": {
+      "quickConnect": "Quick Connect para conexoes temporarias sem cadastro previo",
+      "sessions": "Terminais, SFTP, abas, splits e janelas dedicadas",
+      "health": "Health check, inventario de fingerprints e operacao em massa",
+      "sync": "Sync remoto, backup e restauracao de estado portatil"
+    },
+    "stackTitle": "Stack atual",
+    "stackDescription": "Construido com Tauri, Rust, React, TypeScript, Zustand e Tailwind CSS.",
+    "compatibilityTitle": "Compatibilidade",
+    "compatibilityDescription": "O branding visivel foi atualizado para MPCM Workspace. Identificadores internos legados de storage, sync e backup foram mantidos para preservar compatibilidade com instalacoes e dados ja existentes."
   },
   "dashboard": {
     "title": "Hosts",
@@ -373,7 +399,7 @@
       "username": "Usuário",
       "password": "Senha",
       "path": "Caminho remoto",
-      "pathHint": "Caminho do arquivo no servidor (ex: ssh-vault/vault.json)"
+      "pathHint": "Caminho do arquivo no servidor (ex: mpcm-workspace/vault.json)"
     },
     "custom": {
       "url": "URL do Endpoint",

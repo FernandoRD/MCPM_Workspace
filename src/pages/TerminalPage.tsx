@@ -14,6 +14,7 @@ import { SshPane } from "@/components/Terminal/SshPane";
 import { Button } from "@/components/ui/Button";
 import { SessionConnection } from "@/types";
 import { buildSessionRoute, readSessionBootstrap, withStandaloneQuery } from "@/lib/windowMode";
+import { APP_NAME } from "@/lib/appInfo";
 
 export function TerminalPage() {
   const { t } = useTranslation();
@@ -124,12 +125,12 @@ export function TerminalPage() {
     if (!everConnectedRef.current) {
       // Falha na conexão inicial — erro já aparece no terminal, notifica apenas se for erro
       if (status === "error") {
-        notify("SSH Vault", t("notifications.sshError", { host: hostLabelRef.current }));
+        notify(APP_NAME, t("notifications.sshError", { host: hostLabelRef.current }));
       }
       return;
     }
     if (status === "error") {
-      notify("SSH Vault", t("notifications.sshDropped", { host: hostLabelRef.current }));
+      notify(APP_NAME, t("notifications.sshDropped", { host: hostLabelRef.current }));
     }
     if (tabId) closeSession(tabId);
     if (bootstrap.standalone) {
@@ -155,7 +156,7 @@ export function TerminalPage() {
         connectedAt: new Date().toISOString(),
         status: "connected",
       });
-      notify("SSH Vault", t("notifications.sshConnected", { host: tab.hostLabel }));
+      notify(APP_NAME, t("notifications.sshConnected", { host: tab.hostLabel }));
     }
   }, [tab, setLastConnected, openLog, t]);
 

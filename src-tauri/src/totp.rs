@@ -137,7 +137,7 @@ mod tests {
     #[test]
     fn test_generate_secret() {
         let setup = generate_totp_secret(
-            "SSH Vault".to_string(),
+            "MPCM Workspace".to_string(),
             "user@server".to_string(),
         )
         .expect("deve gerar segredo");

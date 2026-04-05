@@ -1,5 +1,5 @@
 /**
- * SSH Vault — Backup / Restore
+ * MPCM Workspace — Backup / Restore
  *
  * Formato do arquivo (.sshvault):
  * {
@@ -103,10 +103,10 @@ export async function exportBackup(
   // Abrir diálogo de salvar
   const now = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   const filePath = await save({
-    title: "Salvar backup do SSH Vault",
-    defaultPath: `ssh-vault-backup-${now}.sshvault`,
+    title: "Salvar backup do MPCM Workspace",
+    defaultPath: `mpcm-workspace-backup-${now}.sshvault`,
     filters: [
-      { name: "SSH Vault Backup", extensions: ["sshvault"] },
+      { name: "MPCM Workspace Backup", extensions: ["sshvault"] },
       { name: "JSON", extensions: ["json"] },
     ],
   });
@@ -127,10 +127,10 @@ export async function importBackup(
   masterPassword: string | null
 ): Promise<ImportResult | null> {
   const filePath = await open({
-    title: "Abrir backup do SSH Vault",
+    title: "Abrir backup do MPCM Workspace",
     multiple: false,
     filters: [
-      { name: "SSH Vault Backup", extensions: ["sshvault", "json"] },
+      { name: "MPCM Workspace Backup", extensions: ["sshvault", "json"] },
     ],
   });
 
@@ -172,7 +172,7 @@ function parseBackupFile(raw: string): BackupFile {
   const obj = data as Record<string, unknown>;
 
   if (obj["app"] !== "ssh-vault") {
-    throw new Error("Arquivo inválido: não é um backup do SSH Vault");
+    throw new Error("Arquivo inválido: não é um backup do MPCM Workspace");
   }
   if (obj["version"] !== 1) {
     throw new Error(`Versão de backup não suportada: ${obj["version"]}`);

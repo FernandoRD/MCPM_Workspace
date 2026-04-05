@@ -1,6 +1,6 @@
-# SSH Vault
+# MPCM Workspace
 
-SSH Vault é um cliente desktop local-first para operação SSH, SFTP e organização de acesso a infraestrutura.
+MPCM Workspace é um `Multi-Protocol Connection Manager` local-first para organizar conexões remotas e operar infraestrutura a partir de um único workspace.
 
 Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `Tailwind CSS`.
 
@@ -22,6 +22,8 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 - MFA/TOTP por host
 - Interface traduzida para `pt-BR` e `en-US`
 
+Hoje o foco principal é `SSH` e `SFTP`, com espaço para crescimento futuro como workspace multi protocolo.
+
 ## Arquitetura em alto nível
 
 - `Frontend`
@@ -32,6 +34,12 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
   Hosts, credenciais, chaves SSH, logs e settings ficam em SQLite; estado volátil de sessão fica em memória por janela.
 - `Segredos`
   Segredos sensíveis podem ser exportados/sincronizados de forma cifrada com senha mestra usando `Argon2id + AES-256-GCM`.
+
+## Branding e compatibilidade
+
+- O nome visível do produto agora é `MPCM Workspace`
+- A classificação usada na documentação é `Multi-Protocol Connection Manager`
+- Identificadores internos legados como chaves de storage, diretórios de dados e marcadores de sync/backup continuam preservados para manter compatibilidade com instalações e arquivos já existentes
 
 ## Sync e backup
 
@@ -124,6 +132,7 @@ O projeto já cobre o núcleo operacional do fluxo SSH/SFTP e agora também incl
 - health check e inventário de fingerprints
 - edição em massa de hosts
 - sync/backup alinhados com hosts, credenciais, chaves SSH e settings portáveis
+- página `About` com identidade e posicionamento do produto
 
 ## Licença
 

@@ -12,6 +12,7 @@ import {
   PlugZap,
   Search,
   Activity,
+  Info,
 } from "lucide-react";
 import { useUIStore } from "@/store/uiStore";
 import { cn } from "@/lib/utils";
@@ -30,6 +31,7 @@ export function Sidebar() {
     { to: "/connection-log", icon: History, label: t("nav.connectionLog") },
     { to: "/operations", icon: PlugZap, label: t("nav.operations") },
     { to: "/health", icon: Activity, label: t("nav.health") },
+    { to: "/about", icon: Info, label: t("nav.about") },
     { to: "/sync", icon: CloudUpload, label: t("nav.sync") },
     { to: "/backup", icon: HardDriveDownload, label: t("nav.backup") },
     { to: "/settings", icon: Settings, label: t("nav.settings") },

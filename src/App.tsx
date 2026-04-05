@@ -16,6 +16,7 @@ import { Groups } from "@/pages/Groups";
 import { ConnectionLog } from "@/pages/ConnectionLog";
 import { Operations } from "@/pages/Operations";
 import { Health } from "@/pages/Health";
+import { About } from "@/pages/About";
 import { useHostsStore } from "@/store/hosts";
 import { useSettingsStore } from "@/store/settings";
 import { useCredentialsStore } from "@/store/credentials";
@@ -78,6 +79,7 @@ export default function App() {
           <Route path="connection-log" element={<ConnectionLog />} />
           <Route path="operations" element={<Operations />} />
           <Route path="health" element={<Health />} />
+          <Route path="about" element={<About />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

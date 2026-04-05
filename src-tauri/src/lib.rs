@@ -109,5 +109,5 @@ pub fn run() {
             sync::sync_custom_pull,
         ])
         .run(tauri::generate_context!())
-        .expect("Erro ao inicializar SSH Vault");
+        .expect("Erro ao inicializar MPCM Workspace");
 }

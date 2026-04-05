@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "SSH Vault",
+  "productName": "MPCM Workspace",
   "version": "0.1.0",
   "identifier": "com.fernando.ssh-vault",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "SSH Vault",
+        "title": "MPCM Workspace",
         "width": 1200,
         "height": 750,
         "minWidth": 900,

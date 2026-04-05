@@ -82,7 +82,7 @@ export function HostEditor() {
     setGeneratingTotp(true);
     try {
       const setup = await invoke<TotpSetup>("generate_totp_secret", {
-        issuer: "SSH Vault",
+        issuer: "MPCM Workspace",
         accountName: form.label || form.host || "host",
       });
       set("totpSecret", setup.secret);

@@ -6,6 +6,7 @@ import { useSettingsStore } from "@/store/settings";
 import { buildSyncPayload } from "@/lib/sync";
 import { pushToProvider } from "@/lib/syncProviders";
 import { notify } from "@/lib/notifications";
+import { APP_NAME } from "@/lib/appInfo";
 
 /**
  * Gerencia o sync automático periódico.
@@ -64,7 +65,7 @@ export function useAutoSync() {
         }
         updateSyncRef.current({ lastSyncAt: new Date().toISOString() });
       } catch (e) {
-        notify("SSH Vault", `Erro no sync automático: ${String(e)}`);
+        notify(APP_NAME, `Erro no sync automático: ${String(e)}`);
       }
     };
 

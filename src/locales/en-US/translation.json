@@ -1,7 +1,8 @@
 {
   "app": {
-    "name": "SSH Vault",
-    "tagline": "Your SSH connection manager"
+    "name": "MPCM Workspace",
+    "tagline": "Organize and operate remote connections from one workspace",
+    "classification": "Multi-Protocol Connection Manager"
   },
   "nav": {
     "dashboard": "Hosts",
@@ -15,7 +16,32 @@
     "newConnection": "New Connection",
     "backup": "Backup",
     "quickConnect": "Quick Connect",
-    "health": "Health"
+    "health": "Health",
+    "about": "About"
+  },
+  "about": {
+    "description": "A local-first workspace for organizing remote connections, operating hosts, and centralizing access workflows in one place.",
+    "facts": {
+      "version": "Version",
+      "category": "Category",
+      "protocols": "Protocols"
+    },
+    "protocols": {
+      "ssh": "SSH",
+      "sftp": "SFTP",
+      "future": "Telnet and more"
+    },
+    "highlightsTitle": "Highlights",
+    "highlights": {
+      "quickConnect": "Quick Connect for temporary connections without saving hosts first",
+      "sessions": "Terminal, SFTP, tabs, split panes and dedicated windows",
+      "health": "Health checks, fingerprint inventory and bulk operations",
+      "sync": "Remote sync, backup and portable state restore"
+    },
+    "stackTitle": "Current stack",
+    "stackDescription": "Built with Tauri, Rust, React, TypeScript, Zustand and Tailwind CSS.",
+    "compatibilityTitle": "Compatibility",
+    "compatibilityDescription": "Visible branding has been updated to MPCM Workspace. Legacy internal identifiers for storage, sync, and backup were kept to preserve compatibility with existing installs and data."
   },
   "dashboard": {
     "title": "Hosts",
@@ -373,7 +399,7 @@
       "username": "Username",
       "password": "Password",
       "path": "Remote path",
-      "pathHint": "File path on the server (e.g. ssh-vault/vault.json)"
+      "pathHint": "File path on the server (e.g. mpcm-workspace/vault.json)"
     },
     "custom": {
       "url": "Endpoint URL",

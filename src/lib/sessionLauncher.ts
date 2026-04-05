@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from "uuid";
 import { AppSettings, SessionConnection } from "@/types";
 import { buildSessionRoute } from "@/lib/windowMode";
 import { notify } from "@/lib/notifications";
+import { APP_NAME } from "@/lib/appInfo";
 
 interface LaunchTerminalSessionParams {
   hostId: string;
@@ -30,7 +31,7 @@ async function createStandaloneTerminalWindow(route: string, hostLabel: string, 
   const absoluteUrl = `${window.location.origin}${route}`;
   const webview = new WebviewWindow(`ssh-session-${sessionId}`, {
     url: absoluteUrl,
-    title: `SSH Vault - ${hostLabel}`,
+    title: `${APP_NAME} - ${hostLabel}`,
     width: 1200,
     height: 750,
     minWidth: 900,
@@ -90,7 +91,7 @@ export async function launchTerminalSession({
 
     // Fallback: janela não pôde ser criada (ex: restrição do Wayland ou permissão ausente).
     // Abre a sessão em aba no lugar.
-    notify("SSH Vault", `Não foi possível abrir janela separada para ${hostLabel}. Abrindo em aba.`);
+    notify(APP_NAME, `Não foi possível abrir janela separada para ${hostLabel}. Abrindo em aba.`);
   }
 
   const sessionId = openSession(hostId, hostLabel, hostAddress);
@@ -136,7 +137,7 @@ export async function launchQuickConnectSession({
     const opened = await createStandaloneTerminalWindow(route, "Quick Connect", sessionId);
     if (opened) return null;
 
-    notify("SSH Vault", `Nao foi possivel abrir janela separada para ${hostLabel}. Abrindo em aba.`);
+    notify(APP_NAME, `Nao foi possivel abrir janela separada para ${hostLabel}. Abrindo em aba.`);
   }
 
   const sessionId = openQuickConnectSession({ ...connection, bootstrapId }, hostLabel, hostAddress);

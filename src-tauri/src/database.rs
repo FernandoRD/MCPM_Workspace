@@ -77,7 +77,7 @@ impl Database {
             Err(e) => {
                 return Err(format!(
                     "Nao foi possivel ler a chave SQLCipher do keychain do sistema: {e}. \
-SSH Vault nao persiste mais essa chave em arquivo plain. Configure o keychain do sistema \
+MPCM Workspace nao persiste mais essa chave em arquivo plain. Configure o keychain do sistema \
 ou migre o vault para um ambiente com armazenamento seguro antes de continuar."
                 ));
             }
@@ -96,7 +96,7 @@ ou migre o vault para um ambiente com armazenamento seguro antes de continuar."
             entry.set_password(trimmed).map_err(|e| {
                 format!(
                     "Foi encontrado um arquivo legado .db_key, mas nao foi possivel migrar a chave para o keychain do sistema: {e}. \
-SSH Vault nao usa mais fallback em arquivo plain. Corrija o acesso ao keychain antes de continuar."
+MPCM Workspace nao usa mais fallback em arquivo plain. Corrija o acesso ao keychain antes de continuar."
                 )
             })?;
             Self::remove_legacy_key_file(&key_path)?;
@@ -109,7 +109,7 @@ SSH Vault nao usa mais fallback em arquivo plain. Corrija o acesso ao keychain a
         if db_path.exists() {
             return Err(
                 "O arquivo vault.db ja existe, mas a chave SQLCipher nao foi encontrada no keychain do sistema. \
-SSH Vault nao vai gerar uma nova chave automaticamente para evitar perda de dados. \
+MPCM Workspace nao vai gerar uma nova chave automaticamente para evitar perda de dados. \
 Recupere o acesso ao keychain ou restaure a chave antiga antes de continuar."
                     .to_string(),
             );
@@ -125,7 +125,7 @@ Recupere o acesso ao keychain ou restaure a chave antiga antes de continuar."
         entry.set_password(&key).map_err(|e| {
             format!(
                 "Nao foi possivel armazenar a chave SQLCipher no keychain do sistema: {e}. \
-SSH Vault nao persiste mais essa chave em arquivo plain. Habilite o keychain do sistema antes de continuar."
+MPCM Workspace nao persiste mais essa chave em arquivo plain. Habilite o keychain do sistema antes de continuar."
             )
         })?;
 
