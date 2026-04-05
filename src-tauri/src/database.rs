@@ -1,4 +1,4 @@
-use keyring::Entry;
+use keyring::{Entry, Error as KeyringError};
 use rand::Rng;
 use rusqlite::{params, Connection};
 use serde_json::Value;
@@ -58,53 +58,88 @@ impl Database {
     }
 
     fn get_or_create_key(data_dir: &PathBuf) -> Result<String, String> {
+        let key_path = data_dir.join(".db_key");
+        let db_path = data_dir.join("vault.db");
+        let entry = Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_DB_KEY_ACCOUNT)
+            .map_err(|e| format!("Falha ao acessar o keychain do sistema: {e}"))?;
+
         // Tenta ler do keychain do SO primeiro
-        if let Ok(entry) = Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_DB_KEY_ACCOUNT) {
-            if let Ok(key) = entry.get_password() {
-                if !key.is_empty() {
-                    return Ok(key);
-                }
+        match entry.get_password() {
+            Ok(key) if !key.is_empty() => {
+                Self::remove_legacy_key_file(&key_path)?;
+                return Ok(key);
+            }
+            Ok(_) | Err(KeyringError::NoEntry) => {}
+            Err(e) => {
+                return Err(format!(
+                    "Nao foi possivel ler a chave SQLCipher do keychain do sistema: {e}. \
+SSH Vault nao persiste mais essa chave em arquivo plain. Configure o keychain do sistema \
+ou migre o vault para um ambiente com armazenamento seguro antes de continuar."
+                ));
             }
         }
 
-        // Fallback: arquivo de chave no diretório de dados
-        // Garante que a chave persista mesmo se o keychain falhar (comum em builds Windows)
-        let key_path = data_dir.join(".db_key");
+        // Migra instalacoes antigas que ainda tenham .db_key somente se conseguirmos
+        // gravar a chave no keychain e remover o arquivo legado.
         if key_path.exists() {
             let key = std::fs::read_to_string(&key_path)
-                .map_err(|e| format!("Falha ao ler arquivo de chave: {e}"))?;
-            if !key.trim().is_empty() {
-                // Tenta salvar no keychain para uso futuro
-                if let Ok(entry) = Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_DB_KEY_ACCOUNT) {
-                    let _ = entry.set_password(key.trim());
-                }
-                return Ok(key.trim().to_string());
+                .map_err(|e| format!("Falha ao ler arquivo legado de chave: {e}"))?;
+            let trimmed = key.trim();
+            if trimmed.is_empty() {
+                return Err("Arquivo legado .db_key esta vazio. Remova-o manualmente e inicialize o vault novamente.".to_string());
             }
+
+            entry.set_password(trimmed).map_err(|e| {
+                format!(
+                    "Foi encontrado um arquivo legado .db_key, mas nao foi possivel migrar a chave para o keychain do sistema: {e}. \
+SSH Vault nao usa mais fallback em arquivo plain. Corrija o acesso ao keychain antes de continuar."
+                )
+            })?;
+            Self::remove_legacy_key_file(&key_path)?;
+            return Ok(trimmed.to_string());
         }
 
-        // Gera uma nova chave e persiste em ambos os lugares
+        // Se o banco ja existe mas nao temos mais a chave, jamais gere uma nova:
+        // isso faria o app abrir com uma chave diferente e recriar o vault,
+        // parecendo perda de dados/configuracoes.
+        if db_path.exists() {
+            return Err(
+                "O arquivo vault.db ja existe, mas a chave SQLCipher nao foi encontrada no keychain do sistema. \
+SSH Vault nao vai gerar uma nova chave automaticamente para evitar perda de dados. \
+Recupere o acesso ao keychain ou restaure a chave antiga antes de continuar."
+                    .to_string(),
+            );
+        }
+
+        // Gera uma nova chave e persiste apenas no keychain do sistema.
         let key: String = rand::thread_rng()
             .sample_iter(&rand::distributions::Alphanumeric)
             .take(64)
             .map(char::from)
             .collect();
 
-        std::fs::write(&key_path, &key)
-            .map_err(|e| format!("Falha ao salvar arquivo de chave: {e}"))?;
-
-        // Restringe o arquivo de chave para leitura/escrita apenas pelo dono (Unix)
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let perms = std::fs::Permissions::from_mode(0o600);
-            let _ = std::fs::set_permissions(&key_path, perms);
-        }
-
-        if let Ok(entry) = Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_DB_KEY_ACCOUNT) {
-            let _ = entry.set_password(&key);
-        }
+        entry.set_password(&key).map_err(|e| {
+            format!(
+                "Nao foi possivel armazenar a chave SQLCipher no keychain do sistema: {e}. \
+SSH Vault nao persiste mais essa chave em arquivo plain. Habilite o keychain do sistema antes de continuar."
+            )
+        })?;
 
         Ok(key)
+    }
+
+    fn remove_legacy_key_file(key_path: &std::path::Path) -> Result<(), String> {
+        if !key_path.exists() {
+            return Ok(());
+        }
+
+        std::fs::remove_file(key_path).map_err(|e| {
+            format!(
+                "A chave SQLCipher ja foi movida para o keychain, mas nao foi possivel remover o arquivo legado {}: {e}. \
+Remova esse arquivo manualmente antes de continuar.",
+                key_path.display()
+            )
+        })
     }
 
     fn migrate(conn: &Connection) -> Result<(), String> {

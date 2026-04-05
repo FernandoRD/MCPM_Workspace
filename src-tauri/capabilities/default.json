@@ -9,11 +9,29 @@
     "opener:default",
     "dialog:allow-save",
     "dialog:allow-open",
-    "fs:allow-read-text-file",
-    "fs:allow-write-text-file",
-    "fs:allow-read-file",
-    "fs:allow-write-file",
-    "fs:allow-exists",
+    "fs:allow-appdata-meta-recursive",
+    "fs:allow-appdata-read-recursive",
+    "fs:allow-appdata-write-recursive",
+    {
+      "identifier": "fs:allow-read-text-file",
+      "allow": [{ "path": "$APPDATA/**" }]
+    },
+    {
+      "identifier": "fs:allow-write-text-file",
+      "allow": [{ "path": "$APPDATA/**" }]
+    },
+    {
+      "identifier": "fs:allow-read-file",
+      "allow": [{ "path": "$APPDATA/**" }]
+    },
+    {
+      "identifier": "fs:allow-write-file",
+      "allow": [{ "path": "$APPDATA/**" }]
+    },
+    {
+      "identifier": "fs:allow-exists",
+      "allow": [{ "path": "$APPDATA/**" }]
+    },
     "fs:default",
     "notification:default"
   ]
