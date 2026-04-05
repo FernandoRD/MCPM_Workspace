@@ -16,6 +16,10 @@ pub struct Database {
 }
 
 impl Database {
+    pub fn connection(&self) -> &Mutex<Connection> {
+        &self.conn
+    }
+
     pub fn open(data_dir: &PathBuf) -> Result<Self, String> {
         let key = Self::get_or_create_key(data_dir)?;
         let db_path = data_dir.join("vault.db");

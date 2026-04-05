@@ -422,6 +422,7 @@ function WebDavConfigForm({
         placeholder="https://nextcloud.example.com/remote.php/dav/files/user"
         value={url}
         onChange={(e) => setUrl(e.target.value)}
+        hint={t("sync.webdav.urlHint")}
       />
       <div className="grid grid-cols-2 gap-4">
         <Input

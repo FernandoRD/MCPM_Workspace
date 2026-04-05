@@ -361,7 +361,7 @@
     },
     "s3": {
       "endpoint": "Endpoint (optional)",
-      "endpointHint": "Leave blank for AWS S3. For MinIO, provide the base URL (e.g. https://minio.example.com)",
+      "endpointHint": "Leave blank for AWS S3. For MinIO, provide the HTTPS base URL (e.g. https://minio.example.com)",
       "bucket": "Bucket",
       "region": "Region",
       "accessKey": "Access Key",
@@ -369,6 +369,7 @@
     },
     "webdav": {
       "url": "Server URL",
+      "urlHint": "Use HTTPS to protect username and password during sync.",
       "username": "Username",
       "password": "Password",
       "path": "Remote path",
@@ -376,7 +377,7 @@
     },
     "custom": {
       "url": "Endpoint URL",
-      "urlHint": "The URL must accept PUT for upload and GET for download (returns JSON)"
+      "urlHint": "The URL must use HTTPS and accept PUT for upload and GET for download (returns JSON)"
     },
     "actions": {
       "syncNow": "Push to Remote",

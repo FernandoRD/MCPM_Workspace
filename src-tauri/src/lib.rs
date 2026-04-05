@@ -62,6 +62,7 @@ pub fn run() {
             ssh::ssh_list_known_hosts,
             ssh::ssh_health_check,
             ssh_config::ssh_import_config,
+            ssh_config::ssh_apply_imported_config,
             ssh_config::ssh_probe_host,
             sftp::sftp_connect,
             sftp::sftp_read_dir,

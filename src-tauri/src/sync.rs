@@ -195,7 +195,12 @@ pub async fn sync_webdav_push(
     payload_json: String,
 ) -> Result<(), String> {
     let client = build_client()?;
-    let full_url = format!("{}/{}", url.trim_end_matches('/'), path.trim_start_matches('/'));
+    let base_url = ensure_https_url(&url, "WebDAV")?;
+    let full_url = format!(
+        "{}/{}",
+        base_url.as_str().trim_end_matches('/'),
+        path.trim_start_matches('/')
+    );
 
     let resp = client
         .put(&full_url)
@@ -223,7 +228,12 @@ pub async fn sync_webdav_pull(
     path: String,
 ) -> Result<String, String> {
     let client = build_client()?;
-    let full_url = format!("{}/{}", url.trim_end_matches('/'), path.trim_start_matches('/'));
+    let base_url = ensure_https_url(&url, "WebDAV")?;
+    let full_url = format!(
+        "{}/{}",
+        base_url.as_str().trim_end_matches('/'),
+        path.trim_start_matches('/')
+    );
 
     let resp = client
         .get(&full_url)
@@ -249,19 +259,20 @@ const S3_OBJECT_KEY: &str = "vault.json";
 
 /// Constrói o host e a URL para uma operação S3.
 /// Se `endpoint` for vazio, usa o endpoint regional da AWS.
-fn s3_url(endpoint: &str, bucket: &str, region: &str) -> (String, String) {
+fn s3_url(endpoint: &str, bucket: &str, region: &str) -> Result<(String, String), String> {
     if endpoint.is_empty() {
         let host = format!("s3.{region}.amazonaws.com");
         let url = format!("https://{host}/{bucket}/{S3_OBJECT_KEY}");
-        (host, url)
+        Ok((host, url))
     } else {
-        let base = endpoint.trim_end_matches('/');
-        let host = base
-            .trim_start_matches("https://")
-            .trim_start_matches("http://")
+        let base_url = ensure_https_url(endpoint, "S3 endpoint")?;
+        let base = base_url.as_str().trim_end_matches('/').to_string();
+        let host = base_url
+            .host_str()
+            .ok_or_else(|| "S3 endpoint inválido: host ausente.".to_string())?
             .to_string();
         let url = format!("{base}/{bucket}/{S3_OBJECT_KEY}");
-        (host, url)
+        Ok((host, url))
     }
 }
 
@@ -276,7 +287,7 @@ pub async fn sync_s3_push(
 ) -> Result<(), String> {
     let client = build_client()?;
     let payload = payload_json.as_bytes();
-    let (host, url) = s3_url(&endpoint, &bucket, &region);
+    let (host, url) = s3_url(&endpoint, &bucket, &region)?;
     let path = format!("/{bucket}/{S3_OBJECT_KEY}");
 
     let (auth, amz_date, content_sha256) =
@@ -311,7 +322,7 @@ pub async fn sync_s3_pull(
     secret_key: String,
 ) -> Result<String, String> {
     let client = build_client()?;
-    let (host, url) = s3_url(&endpoint, &bucket, &region);
+    let (host, url) = s3_url(&endpoint, &bucket, &region)?;
     let path = format!("/{bucket}/{S3_OBJECT_KEY}");
 
     let (auth, amz_date, content_sha256) =
@@ -343,9 +354,10 @@ pub async fn sync_s3_pull(
 #[tauri::command]
 pub async fn sync_custom_push(url: String, payload_json: String) -> Result<(), String> {
     let client = build_client()?;
+    let validated_url = ensure_https_url(&url, "endpoint customizado")?;
 
     let resp = client
-        .put(&url)
+        .put(validated_url)
         .header("Content-Type", "application/json")
         .body(payload_json)
         .send()
@@ -364,9 +376,10 @@ pub async fn sync_custom_push(url: String, payload_json: String) -> Result<(), S
 #[tauri::command]
 pub async fn sync_custom_pull(url: String) -> Result<String, String> {
     let client = build_client()?;
+    let validated_url = ensure_https_url(&url, "endpoint customizado")?;
 
     let resp = client
-        .get(&url)
+        .get(validated_url)
         .header("Accept", "application/json")
         .send()
         .await
@@ -384,6 +397,19 @@ pub async fn sync_custom_pull(url: String) -> Result<String, String> {
 }
 
 // ── Utilitários ───────────────────────────────────────────────────────────────
+
+fn ensure_https_url(raw_url: &str, label: &str) -> Result<reqwest::Url, String> {
+    let url = reqwest::Url::parse(raw_url.trim())
+        .map_err(|e| format!("{label} inválido: {e}"))?;
+
+    if url.scheme() != "https" {
+        return Err(format!(
+            "{label} deve usar HTTPS. URLs HTTP expõem credenciais e tokens em texto claro na rede."
+        ));
+    }
+
+    Ok(url)
+}
 
 fn build_client() -> Result<Client, String> {
     Client::builder()

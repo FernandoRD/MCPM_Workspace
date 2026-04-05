@@ -6,12 +6,12 @@ import { useCredentialsStore } from "@/store/credentials";
 import { useSshKeysStore } from "@/store/sshKeys";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
-import { loadSshConfigPreview, SshConfigImportPreview } from "@/lib/sshConfigImport";
+import { importSshConfigToVault, loadSshConfigPreview, SshConfigImportPreview, SshConfigImportResult } from "@/lib/sshConfigImport";
 
 interface SshConfigImportModalProps {
   open: boolean;
   onClose: () => void;
-  onImported?: (result: SshConfigImportPreview) => void;
+  onImported?: (result: SshConfigImportResult) => void;
 }
 
 export function SshConfigImportModal({
@@ -21,14 +21,13 @@ export function SshConfigImportModal({
 }: SshConfigImportModalProps) {
   const { t } = useTranslation();
   const hosts = useHostsStore((s) => s.hosts);
-  const replaceHosts = useHostsStore((s) => s.replaceHosts);
-  const credentials = useCredentialsStore((s) => s.credentials);
-  const replaceCredentials = useCredentialsStore((s) => s.replaceCredentials);
-  const sshKeys = useSshKeysStore((s) => s.sshKeys);
-  const replaceSshKeys = useSshKeysStore((s) => s.replaceSshKeys);
+  const initHosts = useHostsStore((s) => s.init);
+  const initCredentials = useCredentialsStore((s) => s.init);
+  const initSshKeys = useSshKeysStore((s) => s.init);
 
   const [preview, setPreview] = useState<SshConfigImportPreview | null>(null);
   const [loading, setLoading] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -40,20 +39,27 @@ export function SshConfigImportModal({
 
     setLoading(true);
     setError(null);
-    loadSshConfigPreview(hosts, credentials, sshKeys)
+    loadSshConfigPreview()
       .then((result) => setPreview(result))
       .catch((err) => setError(String(err)))
       .finally(() => setLoading(false));
-  }, [open, hosts, credentials, sshKeys]);
+  }, [open, hosts]);
 
-  const handleImport = () => {
+  const handleImport = async () => {
     if (!preview) return;
 
-    replaceHosts([...hosts, ...preview.hosts]);
-    replaceCredentials([...credentials, ...preview.credentials]);
-    replaceSshKeys([...sshKeys, ...preview.sshKeys]);
-    onImported?.(preview);
-    onClose();
+    try {
+      setImporting(true);
+      setError(null);
+      const result = await importSshConfigToVault();
+      await Promise.all([initHosts(), initCredentials(), initSshKeys()]);
+      onImported?.(result);
+      onClose();
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setImporting(false);
+    }
   };
 
   return (
@@ -78,7 +84,7 @@ export function SshConfigImportModal({
             <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-primary)] px-4 py-4">
               <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
                 <FileCode2 size={15} className="text-[var(--accent)]" />
-                {preview.sourcePath ?? "~/.ssh/config"}
+                {preview.source_path ?? "~/.ssh/config"}
               </div>
               <p className="mt-1 text-xs text-[var(--text-muted)]">
                 {t("sshConfigImport.description")}
@@ -86,16 +92,16 @@ export function SshConfigImportModal({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <SummaryCard icon={Server} label={t("sshConfigImport.summary.hostsNew")} value={preview.hosts.length} />
-              <SummaryCard icon={KeyRound} label={t("sshConfigImport.summary.credentialsNew")} value={preview.credentials.length} />
-              <SummaryCard icon={KeySquare} label={t("sshConfigImport.summary.keysNew")} value={preview.sshKeys.length} />
+              <SummaryCard icon={Server} label={t("sshConfigImport.summary.hostsNew")} value={preview.imported_count} />
+              <SummaryCard icon={KeyRound} label={t("sshConfigImport.summary.credentialsNew")} value={preview.credentials_count} />
+              <SummaryCard icon={KeySquare} label={t("sshConfigImport.summary.keysNew")} value={preview.ssh_keys_count} />
             </div>
 
             <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-primary)] px-4 py-4">
               <p className="text-sm font-medium text-[var(--text-primary)]">{t("sshConfigImport.summary.title")}</p>
               <ul className="mt-2 flex flex-col gap-1 text-sm text-[var(--text-secondary)]">
-                <li>{t("sshConfigImport.summary.importedAliases", { count: preview.importedCount })}</li>
-                <li>{t("sshConfigImport.summary.skippedDuplicates", { count: preview.skippedCount })}</li>
+                <li>{t("sshConfigImport.summary.importedAliases", { count: preview.imported_count })}</li>
+                <li>{t("sshConfigImport.summary.skippedDuplicates", { count: preview.skipped_count })}</li>
                 <li>{t("sshConfigImport.summary.supportedCompat")}</li>
               </ul>
             </div>
@@ -107,19 +113,19 @@ export function SshConfigImportModal({
               <div className="flex flex-col gap-2">
                 {preview.hosts.map((host) => (
                   <div
-                    key={host.id}
+                    key={`${host.alias}-${host.host}-${host.port}`}
                     className="flex items-center justify-between gap-3 rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] px-3 py-2"
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-[var(--text-primary)]">{host.label}</p>
+                      <p className="truncate text-sm font-medium text-[var(--text-primary)]">{host.alias}</p>
                       <p className="truncate text-xs text-[var(--text-muted)]">
                         {host.username ? `${host.username}@` : ""}{host.host}:{host.port}
                       </p>
                     </div>
                     <span className="shrink-0 text-xs text-[var(--text-muted)]">
-                      {host.jumpHostId
+                      {host.has_jump_host
                         ? t("sshConfigImport.withJumpHost")
-                        : t(`sshConfigImport.authMethods.${host.authMethod}`)}
+                        : t(`sshConfigImport.authMethods.${host.auth_method}`)}
                     </span>
                   </div>
                 ))}
@@ -133,9 +139,9 @@ export function SshConfigImportModal({
               <Button
                 size="sm"
                 onClick={handleImport}
-                disabled={preview.importedCount === 0}
+                disabled={preview.imported_count === 0 || importing}
               >
-                <Import size={14} />
+                {importing ? <Loader2 size={14} className="animate-spin" /> : <Import size={14} />}
                 {t("sshConfigImport.importToVault")}
               </Button>
             </div>
