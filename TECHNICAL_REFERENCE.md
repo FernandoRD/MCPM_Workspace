@@ -1,1447 +1,463 @@
 # SSH Vault — Referência Técnica
 
-> Documento de referência para desenvolvedores. Cobre arquitetura, tipos, comandos Tauri, stores, componentes, roteamento e configuração.
-
----
+Documento de referência para desenvolvimento e manutenção do SSH Vault no estado atual do projeto.
 
 ## Sumário
 
-1. [Visão geral da arquitetura](#1-visão-geral-da-arquitetura)
-2. [Estrutura de diretórios](#2-estrutura-de-diretórios)
-3. [Tipos TypeScript](#3-tipos-typescript)
-4. [Stores Zustand](#4-stores-zustand)
-5. [Comandos Tauri (Rust)](#5-comandos-tauri-rust)
-6. [Páginas React](#6-páginas-react)
-7. [Componentes reutilizáveis](#7-componentes-reutilizáveis)
-8. [Hooks](#8-hooks)
-9. [Módulo de notificações](#9-módulo-de-notificações)
-10. [Roteamento](#10-roteamento)
-11. [Internacionalização (i18n)](#11-internacionalização-i18n)
-12. [Módulo de backup](#12-módulo-de-backup)
-13. [Temas](#13-temas)
-14. [Configuração do Tauri](#14-configuração-do-tauri)
-15. [Dependências Rust](#15-dependências-rust)
-16. [Segurança — fluxo de dados sensíveis](#16-segurança--fluxo-de-dados-sensíveis)
-17. [Build e empacotamento](#17-build-e-empacotamento)
+1. Visão geral
+2. Stack e dependências
+3. Estrutura do projeto
+4. Modelo de dados
+5. Stores Zustand
+6. Rotas React
+7. Bibliotecas do frontend
+8. Comandos Tauri
+9. Sync e backup
+10. Segurança e segredos
+11. Fluxos importantes
 
----
+## 1. Visão geral
 
-## 1. Visão geral da arquitetura
+O SSH Vault é uma aplicação desktop Tauri com frontend React e backend Rust para gerenciar:
+
+- hosts SSH
+- credenciais reutilizáveis
+- chaves SSH
+- sessões de terminal e SFTP
+- snippets, túneis e workspaces
+- sincronização remota
+- backup/restore
+- health check e inventário de fingerprints
+
+O app segue uma abordagem `local-first`:
+
+- o estado principal vive localmente
+- a UI usa Zustand e reidrata a partir do banco local
+- sync e backup são fluxos explícitos de exportação/importação do estado portátil
+
+## 2. Stack e dependências
+
+### Frontend
+
+- `React 19`
+- `TypeScript`
+- `React Router`
+- `Zustand`
+- `Tailwind CSS`
+- `xterm.js`
+- `react-i18next`
+
+### Backend
+
+- `Tauri 2`
+- `Rust`
+- `russh`
+- `russh-sftp`
+- `reqwest`
+- `serde`
+- `tokio`
+
+### Integrações Tauri
+
+- `@tauri-apps/api`
+- `@tauri-apps/plugin-dialog`
+- `@tauri-apps/plugin-fs`
+- `@tauri-apps/plugin-notification`
+- `@tauri-apps/plugin-opener`
+
+## 3. Estrutura do projeto
 
 ```text
-┌─────────────────────────────────────────────┐
-│                  Frontend                   │
-│   React 19 + TypeScript + Tailwind CSS      │
-│                                             │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
-│  │  Zustand │  │  React   │  │ i18next  │   │
-│  │  Stores  │  │  Router  │  │ pt-BR/en │   │
-│  └──────────┘  └──────────┘  └──────────┘   │
-│                                             │
-│  ┌──────────────────────────────────────┐   │
-│  │            xterm.js                  │   │
-│  │        (terminal emulator)           │   │
-│  └──────────────────────────────────────┘   │
-└────────────────────┬────────────────────────┘
-                     │ @tauri-apps/api (invoke)
-┌────────────────────▼────────────────────────┐
-│               Backend Rust                  │
-│                                             │
-│  ┌──────────┐  ┌──────────┐  ┌───────────┐  │
-│  │  crypto  │  │   totp   │  │credentials│  │
-│  │ AES-GCM  │  │  RFC6238 │  │ keychain  │  │
-│  │ Argon2id │  │  totp-rs │  │  keyring  │  │
-│  └──────────┘  └──────────┘  └───────────┘  │
-│                                             │
-│  ┌──────────┐  ┌──────────────────────────┐ │
-│  │ database │  │          sync            │ │
-│  │SQLCipher │  │  Gist · S3 · WebDAV · *  │ │
-│  │ keychain │  │   reqwest + Sig V4       │ │
-│  └──────────┘  └──────────────────────────┘ │
-└─────────────────────────────────────────────┘
+src/
+  App.tsx
+  components/
+    CommandPalette.tsx
+    Layout/AppLayout.tsx
+    Sidebar/Sidebar.tsx
+    SshConfigImportModal.tsx
+    TabBar/TabBar.tsx
+    Terminal/SshPane.tsx
+    TotpDisplay/TotpDisplay.tsx
+    ui/
+  hooks/
+    useAutoSync.ts
+  lib/
+    backup.ts
+    health.ts
+    hostSearch.ts
+    i18n.ts
+    notifications.ts
+    portableState.ts
+    productivity.ts
+    secrets.ts
+    sessionLauncher.ts
+    sshConfigImport.ts
+    sync.ts
+    syncProviders.ts
+    tagColors.ts
+    utils.ts
+    windowMode.ts
+  locales/
+  pages/
+    Backup.tsx
+    ConnectionLog.tsx
+    CredentialEditor.tsx
+    Credentials.tsx
+    Dashboard.tsx
+    Groups.tsx
+    Health.tsx
+    HostEditor.tsx
+    Operations.tsx
+    Settings.tsx
+    SftpPage.tsx
+    SshKeyEditor.tsx
+    SshKeys.tsx
+    Sync.tsx
+    TerminalPage.tsx
+  store/
+    connectionLogs.ts
+    credentials.ts
+    hosts.ts
+    sessions.ts
+    settings.ts
+    sshKeys.ts
+    tunnelRuntime.ts
+    uiStore.ts
+  themes/
+  types/
+
+src-tauri/
+  src/
+    credentials.rs
+    crypto.rs
+    database.rs
+    lib.rs
+    sftp.rs
+    ssh.rs
+    ssh_config.rs
+    storage.rs
+    sync.rs
+    totp.rs
 ```
 
-**Camada de comunicação:** `invoke()` do `@tauri-apps/api/core` — IPC síncrono entre frontend e Rust.
+## 4. Modelo de dados
 
-**Persistência de estado (fase 3+):** Zustand sem `persist` — os stores são inicializados via `init()` que lê do banco SQLCipher. Mutações fazem update otimista no estado local e persistem no DB de forma assíncrona (fire-and-forget). Dados sensíveis nunca são gravados em claro.
+Arquivo-base: [index.ts](/home/fernando/Documentos/ssh_vault/src/types/index.ts)
+
+### Entidades principais
+
+- `SshHost`
+  Host salvo no vault, com grupo, tags, notas, cor, TOTP, `jumpHostId`, preset SSH e vínculo opcional com `credentialId`.
+- `Credential`
+  Credencial reutilizável com `username`, `authMethod`, `password?` e `keyId?`.
+- `SshKey`
+  Chave SSH persistida separadamente com `privateKeyContent`, `publicKeyContent?` e `passphrase?`.
+- `SessionTab`
+  Estado volátil de sessão de terminal ou SFTP na janela atual.
+- `AppSettings`
+  Tema, idioma, terminal, SSH, segurança, sync, grupos e produtividade.
+
+### AppSettings
+
+`AppSettings` hoje inclui:
+
+- `themeId`
+- `locale`
+- `terminal`
+  `fontSize`, `fontFamily`, `cursorStyle`, `cursorBlink`, `scrollback`, `sessionOpenMode`
+- `ssh`
+  `keepAliveInterval`, `inactivityTimeout`
+- `security`
+  `masterPasswordSet`, `verificationPayload?`, `syncCredentials`
+- `sync`
+  `provider`, `autoSync`, `autoSyncIntervalMinutes?`, `lastSyncAt?`, configs por provider
+- `groups`
+- `productivity`
+  `snippets`, `tunnels`, `workspaces`
+
+### Estado portátil
+
+Arquivo-chave: [portableState.ts](/home/fernando/Documentos/ssh_vault/src/lib/portableState.ts)
+
+Esse módulo centraliza a conversão entre:
+
+- estado persistido completo do app
+- representação portátil para sync/backup
+- segredos cifrados transportáveis
+
+Ele sanitiza e reidrata:
+
+- hosts
+- credenciais
+- chaves SSH
+- settings portáveis
+- segredos de sync e backup
+
+## 5. Stores Zustand
+
+### Persistidos
+
+- [hosts.ts](/home/fernando/Documentos/ssh_vault/src/store/hosts.ts)
+  CRUD de hosts e `replaceHosts`.
+- [credentials.ts](/home/fernando/Documentos/ssh_vault/src/store/credentials.ts)
+  CRUD de credenciais e `replaceCredentials`.
+- [sshKeys.ts](/home/fernando/Documentos/ssh_vault/src/store/sshKeys.ts)
+  CRUD de chaves e `replaceSshKeys`.
+- [settings.ts](/home/fernando/Documentos/ssh_vault/src/store/settings.ts)
+  Inicialização, normalização, updates parciais e `replaceSettings`.
+- [connectionLogs.ts](/home/fernando/Documentos/ssh_vault/src/store/connectionLogs.ts)
+  Histórico local de conexões.
+
+### Voláteis
+
+- [sessions.ts](/home/fernando/Documentos/ssh_vault/src/store/sessions.ts)
+  Abas/sessões abertas na janela atual.
+- [uiStore.ts](/home/fernando/Documentos/ssh_vault/src/store/uiStore.ts)
+  Busca, filtros do dashboard e estado da command palette.
+- [tunnelRuntime.ts](/home/fernando/Documentos/ssh_vault/src/store/tunnelRuntime.ts)
+  Estado de túneis ativos em runtime.
+
+## 6. Rotas React
+
+Arquivo-base: [App.tsx](/home/fernando/Documentos/ssh_vault/src/App.tsx)
+
+Rotas atuais:
+
+- `/`
+- `/hosts/new`
+- `/hosts/:id`
+- `/terminal/:tabId`
+- `/sftp/:tabId`
+- `/settings`
+- `/sync`
+- `/backup`
+- `/credentials`
+- `/credentials/new`
+- `/credentials/:id`
+- `/ssh-keys`
+- `/ssh-keys/new`
+- `/ssh-keys/:id`
+- `/groups`
+- `/connection-log`
+- `/operations`
+- `/health`
+
+## 7. Bibliotecas do frontend
+
+### Sessões e janelas
+
+- [sessionLauncher.ts](/home/fernando/Documentos/ssh_vault/src/lib/sessionLauncher.ts)
+  Decide entre abrir em aba ou janela dedicada.
+- [windowMode.ts](/home/fernando/Documentos/ssh_vault/src/lib/windowMode.ts)
+  Helpers para rotas e bootstrap de janelas standalone.
+
+### Sync / backup / estado portátil
+
+- [sync.ts](/home/fernando/Documentos/ssh_vault/src/lib/sync.ts)
+  `buildSyncPayload`, `parseSyncFile`, `applySyncPayload`.
+- [syncProviders.ts](/home/fernando/Documentos/ssh_vault/src/lib/syncProviders.ts)
+  Push/pull por provider.
+- [backup.ts](/home/fernando/Documentos/ssh_vault/src/lib/backup.ts)
+  Export/import `.sshvault`.
+- [portableState.ts](/home/fernando/Documentos/ssh_vault/src/lib/portableState.ts)
+  Sanitização, merge e reidratação.
+
+### Operações auxiliares
+
+- [health.ts](/home/fernando/Documentos/ssh_vault/src/lib/health.ts)
+  Wrapper frontend para health check e inventário de fingerprints.
+- [sshConfigImport.ts](/home/fernando/Documentos/ssh_vault/src/lib/sshConfigImport.ts)
+  Importação de `~/.ssh/config` e probe TCP simples.
+- [productivity.ts](/home/fernando/Documentos/ssh_vault/src/lib/productivity.ts)
+  Resolução de snippets e lançamento de túneis.
+- [tagColors.ts](/home/fernando/Documentos/ssh_vault/src/lib/tagColors.ts)
+  Cores consistentes para tags.
+- [hostSearch.ts](/home/fernando/Documentos/ssh_vault/src/lib/hostSearch.ts)
+  Busca e utilitários de ordenação/último acesso.
+
+## 8. Comandos Tauri
+
+Arquivo-base: [lib.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/lib.rs)
+
+### Storage / crypto / TOTP
+
+- `get_app_data_dir`
+- `encrypt_credentials`
+- `decrypt_credentials`
+- `verify_master_password`
+- `generate_totp_code`
+- `verify_totp_code`
+- `generate_totp_secret`
+
+### SSH
+
+- `ssh_connect`
+- `ssh_send_input`
+- `ssh_resize`
+- `ssh_disconnect`
+- `ssh_copy_id`
+- `ssh_generate_key`
+- `ssh_exec`
+- `ssh_start_tunnel`
+- `ssh_stop_tunnel`
+- `ssh_list_known_hosts`
+- `ssh_health_check`
+
+### SSH config
+
+- `ssh_import_config`
+- `ssh_probe_host`
+
+### SFTP
+
+- `sftp_connect`
+- `sftp_read_dir`
+- `sftp_download`
+- `sftp_upload`
+- `sftp_mkdir`
+- `sftp_delete`
+- `sftp_rename`
+- `sftp_disconnect`
+
+### Banco
+
+- `db_get_hosts`
+- `db_save_host`
+- `db_delete_host`
+- `db_clear_hosts`
+- `db_get_settings`
+- `db_save_settings`
+- `db_get_credentials`
+- `db_save_credential`
+- `db_delete_credential`
+- `db_clear_credentials`
+- `db_get_ssh_keys`
+- `db_save_ssh_key`
+- `db_delete_ssh_key`
+- `db_clear_ssh_keys`
+- `db_add_connection_log`
+- `db_get_connection_logs`
+- `db_clear_connection_logs`
+
+### Sync remoto
+
+- `sync_gist_push`
+- `sync_gist_pull`
+- `sync_webdav_push`
+- `sync_webdav_pull`
+- `sync_s3_push`
+- `sync_s3_pull`
+- `sync_custom_push`
+- `sync_custom_pull`
+
+## 9. Sync e backup
+
+### Sync
+
+Arquivos principais:
+
+- [Sync.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Sync.tsx)
+- [sync.ts](/home/fernando/Documentos/ssh_vault/src/lib/sync.ts)
+- [syncProviders.ts](/home/fernando/Documentos/ssh_vault/src/lib/syncProviders.ts)
+
+O pacote de sync atual inclui:
+
+- `hosts`
+- `credentials`
+- `sshKeys`
+- `settings` portáveis
+- `encryptedSecrets?`
+
+Observações:
+
+- `push` envia snapshot local atual
+- `pull` importa/mescla conteúdo remoto nas stores locais
+- `autoSync` só faz push em background
+- segredos cifrados dependem da senha mestra informada no fluxo manual
+
+### Backup
+
+Arquivos principais:
+
+- [Backup.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Backup.tsx)
+- [backup.ts](/home/fernando/Documentos/ssh_vault/src/lib/backup.ts)
+
+O arquivo `.sshvault` hoje pode transportar:
+
+- hosts
+- credenciais
+- chaves SSH
+- settings portáveis
+- segredos cifrados opcionais
+
+O restore preserva IDs e restaura entidades com `replace*`, evitando perder vínculos entre host, credencial e chave.
+
+## 10. Segurança e segredos
+
+### Onde vivem os segredos
+
+- em memória durante uso
+- no banco local para entidades persistidas
+- cifrados em sync/backup quando o fluxo usa senha mestra
+
+### O que é sanitizado antes de transportar
+
+- `password` de credenciais
+- `totpSecret` de hosts
+- `privateKeyContent` e `passphrase` de chaves
+- partes sensíveis da configuração de sync
+
+### Fingerprints
+
+O backend mantém inventário TOFU em `known_hosts.json` e agora expõe leitura desse inventário e health check com comparação entre:
+
+- fingerprint atual do host
+- fingerprint armazenada localmente
+
+Arquivo principal: [ssh.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/ssh.rs)
+
+## 11. Fluxos importantes
+
+### Quick Connect
+
+- UI: [CommandPalette.tsx](/home/fernando/Documentos/ssh_vault/src/components/CommandPalette.tsx)
+- Abre sessão temporária com `user@host[:port]`
+- Não cria host salvo
+
+### Sessões em janela dedicada
+
+- Configuração em [Settings.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Settings.tsx)
+- Lançamento e bootstrap em [sessionLauncher.ts](/home/fernando/Documentos/ssh_vault/src/lib/sessionLauncher.ts) e [windowMode.ts](/home/fernando/Documentos/ssh_vault/src/lib/windowMode.ts)
+
+### Health check e fingerprints
+
+- Página: [Health.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Health.tsx)
+- Backend: [ssh.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/ssh.rs)
+
+### Edição em massa de hosts
+
+- Página: [Dashboard.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Dashboard.tsx)
+- Escopo atual:
+  - credencial
+  - grupo
+  - tags (`replace`, `add`, `remove`)
+
+### Importação de `~/.ssh/config`
+
+- UI: [SshConfigImportModal.tsx](/home/fernando/Documentos/ssh_vault/src/components/SshConfigImportModal.tsx)
+- Parser/probe: [sshConfigImport.ts](/home/fernando/Documentos/ssh_vault/src/lib/sshConfigImport.ts) e [ssh_config.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/ssh_config.rs)
+
+### Auto-sync
+
+- Hook: [useAutoSync.ts](/home/fernando/Documentos/ssh_vault/src/hooks/useAutoSync.ts)
+- Dispara push periódico com base nas settings atuais
 
 ---
 
-## 2. Estrutura de diretórios
-
-```text
-ssh_client_dev/
-├── .github/
-│   └── workflows/
-│       └── build.yml               # CI: Linux + Windows + macOS
-├── src/                            # Frontend React + TypeScript
-│   ├── components/
-│   │   ├── Layout/
-│   │   │   └── AppLayout.tsx       # Shell: Sidebar + TabBar + <Outlet>
-│   │   ├── Sidebar/
-│   │   │   └── Sidebar.tsx         # Navegação + lista de hosts
-│   │   ├── TabBar/
-│   │   │   └── TabBar.tsx          # Abas de sessões abertas
-│   │   ├── TotpDisplay/
-│   │   │   └── TotpDisplay.tsx     # Código TOTP ao vivo + countdown
-│   │   └── ui/
-│   │       ├── Badge.tsx
-│   │       ├── Button.tsx
-│   │       ├── Input.tsx
-│   │       ├── Modal.tsx
-│   │       ├── Select.tsx
-│   │       └── Textarea.tsx
-│   ├── lib/
-│   │   ├── backup.ts               # Export/import de .sshvault
-│   │   ├── i18n.ts                 # Configuração react-i18next
-│   │   ├── sync.ts                 # SyncFile, buildSyncPayload, applySyncPayload
-│   │   └── utils.ts                # cn(), formatDate(), getHostColor()
-│   ├── locales/
-│   │   ├── en-US/translation.json
-│   │   └── pt-BR/translation.json
-│   ├── pages/
-│   │   ├── Backup.tsx
-│   │   ├── CredentialEditor.tsx    # Criar/editar credencial reutilizável
-│   │   ├── Credentials.tsx         # Lista de credenciais
-│   │   ├── Dashboard.tsx
-│   │   ├── HostEditor.tsx
-│   │   ├── Settings.tsx
-│   │   ├── Sync.tsx
-│   │   └── TerminalPage.tsx
-│   ├── store/
-│   │   ├── credentials.ts          # CRUD de credenciais (DB)
-│   │   ├── hosts.ts                # CRUD de hosts (DB)
-│   │   ├── sessions.ts             # Abas de terminal (volátil)
-│   │   └── settings.ts             # Tema, idioma, segurança, sync (DB)
-│   ├── themes/
-│   │   ├── index.ts                # THEMES, ThemeId, applyTheme()
-│   │   └── themes.css              # CSS variables por tema
-│   ├── types/
-│   │   └── index.ts                # Todos os tipos compartilhados
-│   ├── App.tsx                     # Rotas + inicialização dos stores
-│   └── index.css                   # Tailwind + estilos globais
-└── src-tauri/                      # Backend Rust (Tauri)
-    ├── src/
-    │   ├── lib.rs                  # Entry point + registro de comandos
-    │   ├── storage.rs              # get_app_data_dir
-    │   ├── credentials.rs          # Keychain do SO (keyring)
-    │   ├── crypto.rs               # Argon2id + AES-256-GCM
-    │   ├── database.rs             # SQLCipher: schema + comandos db_*
-    │   ├── ssh.rs                  # Sessões SSH reais (russh)
-    │   ├── sync.rs                 # Sync remoto: Gist, S3, WebDAV, Custom
-    │   └── totp.rs                 # RFC 6238 (totp-rs)
-    ├── Cargo.toml
-    └── tauri.conf.json
-```
-
----
-
-## 3. Tipos TypeScript
-
-**Arquivo:** `src/types/index.ts`
-
-### `AuthMethod`
-
-```typescript
-type AuthMethod = "password" | "privateKey" | "agent";
-```
-
----
-
-### `SshHost`
-
-Campo central da aplicação. Armazenado em `localStorage` via Zustand.
-
-```typescript
-interface SshHost {
-  id: string;                    // UUID v4
-  label: string;                 // Nome exibido
-  host: string;                  // IP ou hostname
-  port: number;                  // 1–65535
-  username: string;
-  authMethod: AuthMethod;
-
-  // Credenciais — nunca persistidas em claro no localStorage
-  passwordRef?: string;          // Referência à senha no keychain
-  privateKeyPath?: string;       // Caminho para o arquivo .pem / id_rsa
-  passphrase?: string;           // Frase-senha da chave privada
-
-  // MFA / TOTP
-  mfaEnabled?: boolean;
-  totpSecret?: string;           // Segredo Base32 — cifrado no sync/backup
-
-  // Organização
-  group?: string;
-  tags: string[];
-  notes?: string;
-  color?: string;                // Hex color (#rrggbb)
-
-  // Conexão avançada
-  jumpHostId?: string;           // ID de outro SshHost usado como bastião
-  keepAliveInterval?: number;    // Segundos; 0 = desativado
-  connectionTimeout?: number;    // Segundos
-
-  // Metadados
-  lastConnectedAt?: string;      // ISO 8601
-  createdAt: string;             // ISO 8601
-  updatedAt: string;             // ISO 8601
-}
-```
-
----
-
-### `SessionTab`
-
-```typescript
-interface SessionTab {
-  id: string;                    // UUID v4
-  hostId: string;
-  hostLabel: string;
-  hostAddress: string;           // "username@host"
-  status: "connecting" | "connected" | "disconnected" | "error";
-  createdAt: string;             // ISO 8601
-}
-```
-
----
-
-### `AppSettings`
-
-```typescript
-interface AppSettings {
-  themeId: string;               // Ver ThemeId
-  locale: string;                // "pt-BR" | "en-US"
-  terminal: {
-    fontSize: number;
-    fontFamily: string;
-    cursorStyle: "block" | "underline" | "bar";
-    cursorBlink: boolean;
-    scrollback: number;
-  };
-  security: {
-    masterPasswordSet: boolean;
-    verificationPayload?: string; // Ciphertext para validar senha na próxima sessão
-    syncCredentials: boolean;
-  };
-  sync: {
-    provider: SyncProvider;
-    autoSync: boolean;
-    autoSyncIntervalMinutes?: number; // 15 | 30 | 60 | 120 — padrão 30
-    lastSyncAt?: string;
-    gist?: GistSyncConfig;
-    s3?: S3SyncConfig;
-    webdav?: WebDavSyncConfig;
-    custom?: CustomSyncConfig;
-  };
-}
-```
-
----
-
-### Tipos de sincronização
-
-```typescript
-type SyncProvider = "githubGist" | "s3" | "webdav" | "custom" | null;
-type SyncStatus  = "idle" | "syncing" | "synced" | "error" | "notConfigured";
-
-interface GistSyncConfig {
-  token: string;   // Personal Access Token com escopo "gist"
-  gistId?: string; // Vazio = cria automaticamente
-}
-
-interface S3SyncConfig {
-  endpoint: string; // Vazio = AWS S3; preenchido = MinIO ou compatível
-  bucket: string;
-  region: string;
-  accessKey: string;
-  secretKey: string;
-}
-
-interface WebDavSyncConfig {
-  url: string;
-  username: string;
-  password: string;
-  path: string; // Caminho do arquivo no servidor
-}
-
-interface CustomSyncConfig {
-  url: string; // Aceita PUT (upload) e GET (download) retornando JSON
-}
-```
-
----
-
-### `Credential` e `CredentialMeta`
-
-```typescript
-interface Credential {
-  id: string;           // UUID v4
-  label: string;        // Nome exibido
-  username: string;
-  authMethod: AuthMethod;
-  password?: string;    // Presente em authMethod="password"
-  privateKeyPath?: string;
-  passphrase?: string;
-  createdAt: string;    // ISO 8601
-  updatedAt: string;    // ISO 8601
-}
-
-// Versão sem campos sensíveis — viaja em claro no SyncFile
-type CredentialMeta = Omit<Credential, "password" | "passphrase">;
-```
-
----
-
-### Tipos de criptografia e backup/sync
-
-```typescript
-interface EncryptedCredentials {
-  version: number;    // Sempre 1
-  salt: string;       // Base64, 16 bytes aleatórios
-  nonce: string;      // Base64, 12 bytes aleatórios
-  ciphertext: string; // Base64, AES-256-GCM
-}
-
-// Payload do arquivo de sync remoto (vault.json)
-interface SyncFile {
-  app: "ssh-vault";
-  version: 1;
-  syncedAt: string;                        // ISO 8601
-  hosts: SshHost[];
-  credentials: CredentialMeta[];           // Metadados sem segredos
-  settings: Partial<AppSettings>;
-  encryptedSecrets?: EncryptedCredentials; // Segredos por credentialId, cifrados
-}
-```
-
----
-
-## 4. Stores Zustand
-
-A partir da fase 3, os stores **não usam `persist`**. A persistência é feita via banco SQLCipher através de comandos Tauri. O padrão é:
-
-1. `init()` carrega os dados do DB ao iniciar a app (com fallback de migração do `localStorage`)
-2. Mutações fazem update otimista no estado Zustand e disparam `invoke(...)` de forma assíncrona (fire-and-forget)
-
-`App.tsx` chama `Promise.all([initHosts(), initSettings(), initCredentials()])` antes de renderizar a UI (exibe tela de loading enquanto não resolve).
-
----
-
-### `useHostsStore`
-
-**Arquivo:** `src/store/hosts.ts` | **Persistência:** SQLCipher (`hosts` table)
-
-```typescript
-interface HostsStore {
-  hosts: SshHost[];
-  initialized: boolean;
-  init         (): Promise<void>;
-  addHost      (data: Omit<SshHost, "id" | "createdAt" | "updatedAt">): void;
-  updateHost   (id: string, data: Partial<SshHost>): void;
-  deleteHost   (id: string): void;
-  duplicateHost(id: string): void;
-  setLastConnected(id: string): void;
-  getHost      (id: string): SshHost | undefined;
-  getGroups    (): string[];
-  replaceHosts (hosts: SshHost[]): void; // Usado pelo sync remoto
-}
-```
-
-`addHost` gera `id` (UUID v4) e timestamps automaticamente.
-`duplicateHost` cria cópia com novo `id` e sufixo `" (cópia)"` no label.
-`replaceHosts` chama `db_clear_hosts` e reinserção em sequência.
-
----
-
-### `useSessionsStore`
-
-**Arquivo:** `src/store/sessions.ts` | **Persistência:** nenhuma (volátil)
-
-```typescript
-interface SessionsStore {
-  tabs: SessionTab[];
-  activeTabId: string | null;
-  openSession     (hostId: string, hostLabel: string, hostAddress: string): string;
-  closeSession    (tabId: string): void;
-  setActiveTab    (tabId: string): void;
-  updateTabStatus (tabId: string, status: SessionTab["status"]): void;
-}
-```
-
----
-
-### `useSettingsStore`
-
-**Arquivo:** `src/store/settings.ts` | **Persistência:** SQLCipher (`settings` table)
-
-```typescript
-interface SettingsStore {
-  settings: AppSettings;
-  initialized: boolean;
-  init          (): Promise<void>;
-  setTheme      (themeId: ThemeId): void;
-  setLocale     (locale: string): void;
-  updateTerminal(terminal: Partial<AppSettings["terminal"]>): void;
-  updateSecurity(security: Partial<AppSettings["security"]>): void;
-  updateSync    (sync: Partial<AppSettings["sync"]>): void;
-  resetSettings (): void;
-}
-```
-
-`init()` aplica o tema e idioma após carregar do DB (equivalente ao antigo `onRehydrateStorage`).
-
-**Valores padrão:**
-
-```typescript
-const DEFAULT_SETTINGS: AppSettings = {
-  themeId: "dark",
-  locale: "pt-BR",
-  terminal: {
-    fontSize: 14,
-    fontFamily: "JetBrains Mono",
-    cursorStyle: "block",
-    cursorBlink: true,
-    scrollback: 5000,
-  },
-  security: {
-    masterPasswordSet: false,
-    syncCredentials: false,
-  },
-  sync: {
-    provider: null,
-    autoSync: false,
-    autoSyncIntervalMinutes: 30,
-  },
-};
-```
-
----
-
-### `useCredentialsStore`
-
-**Arquivo:** `src/store/credentials.ts` | **Persistência:** SQLCipher (`credentials` table)
-
-```typescript
-interface CredentialsStore {
-  credentials: Credential[];
-  initialized: boolean;
-  init              (): Promise<void>;
-  addCredential     (data: Omit<Credential, "id" | "createdAt" | "updatedAt">): string;
-  updateCredential  (id: string, data: Partial<Omit<Credential, "id" | "createdAt" | "updatedAt">>): void;
-  deleteCredential  (id: string): void;
-  getCredential     (id: string): Credential | undefined;
-  replaceCredentials(credentials: Credential[]): void; // Usado pelo sync remoto
-}
-```
-
-`addCredential` retorna o `id` gerado para uso imediato.
-`replaceCredentials` chama `db_clear_credentials` e reinserção em sequência.
-
----
-
-### `useUIStore`
-
-**Arquivo:** `src/store/uiStore.ts` | **Persistência:** nenhuma (volátil, em memória)
-
-Estado da UI do Dashboard — busca, filtros e ordenação. Separado dos demais stores pois não é persistido.
-
-```typescript
-type DashboardSortBy = "label-asc" | "label-desc" | "recent" | "oldest";
-
-interface UIStore {
-  dashboardSearch: string;
-  dashboardSelectedGroup: string | null;
-  dashboardSortBy: DashboardSortBy;
-  dashboardSelectedTags: string[];
-  setDashboardSearch      (v: string): void;
-  setDashboardSelectedGroup(v: string | null): void;
-  setDashboardSortBy      (v: DashboardSortBy): void;
-  toggleDashboardTag      (tag: string): void; // adiciona ou remove da seleção
-  clearDashboardTags      (): void;
-}
-```
-
-**Semântica de ordenação:**
-
-| Valor | Comportamento |
-| --- | --- |
-| `"label-asc"` | Alfabético A → Z (padrão) |
-| `"label-desc"` | Alfabético Z → A |
-| `"recent"` | `lastConnectedAt` decrescente; sem conexão = último |
-| `"oldest"` | `lastConnectedAt` crescente; sem conexão = último |
-
-**Semântica do filtro de tags:** OR — um host é exibido se possuir **qualquer** das tags selecionadas. Combinado com AND ao filtro de grupo e de busca textual.
-
----
-
-## 5. Comandos Tauri (Rust)
-
-Todos são invocados via `invoke()` do `@tauri-apps/api/core`.
-
-### `crypto.rs` — Criptografia
-
-#### `encrypt_credentials`
-
-```typescript
-invoke("encrypt_credentials", {
-  credentialsJson: string,   // JSON serializado do CredentialsMap
-  masterPassword: string,
-}) → Promise<string>         // JSON serializado do EncryptedCredentials
-```
-
-Fluxo interno:
-
-1. Gera salt aleatório (16 bytes) e nonce (12 bytes)
-2. Deriva chave AES-256 via Argon2id (`m=65536`, `t=3`, `p=1`)
-3. Cifra com AES-256-GCM (autenticado)
-4. Serializa `{ version, salt, nonce, ciphertext }` em Base64
-5. Zeroiza chave e senha da memória
-
----
-
-#### `decrypt_credentials`
-
-```typescript
-invoke("decrypt_credentials", {
-  encryptedPayloadJson: string,  // JSON de EncryptedCredentials
-  masterPassword: string,
-}) → Promise<string>             // JSON do CredentialsMap decifrado
-                                 // Lança erro genérico se senha errada
-```
-
-O erro é propositalmente genérico ("decryption failed") para evitar timing attacks.
-
----
-
-#### `verify_master_password`
-
-```typescript
-invoke("verify_master_password", {
-  encryptedPayloadJson: string,  // verificationPayload das settings
-  masterPassword: string,
-}) → Promise<boolean>
-```
-
-Usado para validar a senha antes de operações de sync/backup sem expor o conteúdo.
-
----
-
-### `totp.rs` — MFA / TOTP
-
-#### `generate_totp_code`
-
-```typescript
-invoke("generate_totp_code", {
-  secretBase32: string,   // Segredo em Base32 (case-insensitive)
-}) → Promise<{
-  code: string,           // 6 dígitos (ex: "123456")
-  remaining_seconds: number, // 1–30
-  valid_from: number,     // Unix timestamp do início da janela
-}>
-```
-
-Algoritmo: SHA-1, step=30s, digits=6 (RFC 6238 padrão).
-
----
-
-#### `verify_totp_code`
-
-```typescript
-invoke("verify_totp_code", {
-  secretBase32: string,
-  code: string,           // 6 dígitos
-}) → Promise<boolean>
-```
-
-Aceita janela atual ± 1 para tolerância de clock skew (±30s).
-
----
-
-#### `generate_totp_secret`
-
-```typescript
-invoke("generate_totp_secret", {
-  issuer: string,         // Ex: "SSH Vault"
-  accountName: string,    // Ex: "user@servidor.com"
-}) → Promise<{
-  secret: string,         // Base32, 160 bits (20 bytes)
-  otpauth_url: string,    // "otpauth://totp/..."
-}>
-```
-
-A `otpauth_url` é usada para gerar QR code compatível com Google Authenticator, Authy, Bitwarden, etc.
-
----
-
-### `credentials.rs` — Keychain do SO
-
-```typescript
-invoke("save_credential",   { key: string, value: string }) // → Promise<void>
-invoke("get_credential",    { key: string })                // → Promise<string>
-invoke("delete_credential", { key: string })                // → Promise<void>
-```
-
-Usa a crate `keyring` (serviço: `"ssh-vault"`):
-
-- **Linux:** libsecret / GNOME Keyring / KWallet
-- **macOS:** Keychain
-- **Windows:** Credential Manager
-
----
-
-### `storage.rs` — Diretório de dados
-
-```typescript
-invoke("get_app_data_dir") // → Promise<string>
-```
-
-Retorna o diretório de dados da aplicação (criado se não existir):
-
-| SO | Caminho |
-| --- | --- |
-| Linux | `~/.local/share/ssh-vault/` |
-| macOS | `~/Library/Application Support/ssh-vault/` |
-| Windows | `%APPDATA%\ssh-vault\` |
-
----
-
-### `database.rs` — Banco SQLCipher
-
-Banco SQLite cifrado com SQLCipher. A chave de cifra (64 chars alfanuméricos aleatórios) é gerada na primeira inicialização e armazenada no keychain do SO via `keyring` (serviço: `"ssh-vault"`, entry: `"db-key"`).
-
-**Schema:** três tabelas com armazenamento em JSON blob:
-
-```sql
-CREATE TABLE IF NOT EXISTS hosts       (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS settings    (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS credentials (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-```
-
-**Comandos disponíveis:**
-
-```typescript
-invoke("db_get_hosts")                              // → Promise<SshHost[]>
-invoke("db_save_host",       { host })              // → Promise<void>
-invoke("db_delete_host",     { id: string })        // → Promise<void>
-invoke("db_clear_hosts")                            // → Promise<void>
-
-invoke("db_get_settings")                           // → Promise<AppSettings | null>
-invoke("db_save_settings",   { settings })          // → Promise<void>
-
-invoke("db_get_credentials")                        // → Promise<Credential[]>
-invoke("db_save_credential", { credential })        // → Promise<void>
-invoke("db_delete_credential",{ id: string })       // → Promise<void>
-invoke("db_clear_credentials")                      // → Promise<void>
-```
-
----
-
-### `sync.rs` — Sincronização remota
-
-Todos os comandos de sync recebem e retornam JSON serializado (`string`). O frontend monta o payload com `buildSyncPayload` e o interpreta com `parseSyncFile`/`applySyncPayload`.
-
-#### GitHub Gist
-
-```typescript
-invoke("sync_gist_push", {
-  token: string,
-  gistId?: string,     // Null/vazio = cria novo Gist privado
-  payload: string,     // JSON do SyncFile
-}) // → Promise<string>  Retorna o gistId (novo ou existente)
-
-invoke("sync_gist_pull", {
-  token: string,
-  gistId: string,
-}) // → Promise<string>  JSON do SyncFile
-```
-
-#### S3 / MinIO
-
-```typescript
-invoke("sync_s3_push", {
-  endpoint: string,    // Vazio = AWS S3; URL base para MinIO
-  bucket: string,
-  region: string,
-  accessKey: string,
-  secretKey: string,
-  payload: string,
-}) // → Promise<void>
-
-invoke("sync_s3_pull", { endpoint, bucket, region, accessKey, secretKey })
-// → Promise<string>  JSON do SyncFile
-```
-
-Autenticação via **AWS Signature V4** implementada manualmente (`sha2` + `hmac` + `hex`). Para MinIO, usa path-style URL (`endpoint/bucket/vault.json`).
-
-#### WebDAV / Nextcloud
-
-```typescript
-invoke("sync_webdav_push", {
-  url: string,         // URL base do servidor
-  username: string,
-  password: string,
-  path: string,        // Caminho remoto, ex: "ssh-vault/vault.json"
-  payload: string,
-}) // → Promise<void>
-
-invoke("sync_webdav_pull", { url, username, password, path })
-// → Promise<string>
-```
-
-#### Custom REST
-
-```typescript
-invoke("sync_custom_push", { url: string, payload: string }) // → Promise<void>
-invoke("sync_custom_pull", { url: string })                  // → Promise<string>
-```
-
-A URL deve aceitar `PUT` para upload e `GET` para download (resposta JSON).
-
----
-
-## 6. Páginas React
-
-### `Dashboard`
-
-**Rota:** `/`
-**Arquivo:** `src/pages/Dashboard.tsx`
-
-| Responsabilidade | Detalhe |
-| --- | --- |
-| Listar hosts | Grid responsivo, agrupado por `group` |
-| Busca | Filtra por `label`, `host`, `tags` |
-| Filtro por grupo | Chips clicáveis com contagem por grupo |
-| Filtro por tag | Chips pill (rounded-full) com lógica OR; botão "Limpar" condicional |
-| Ordenação | Seletor de 4 botões de ícone: A→Z, Z→A, mais recente, mais antigo |
-| Ações por host | Conectar, editar, duplicar, excluir (menu contextual) |
-| Badge MFA | Exibido quando `host.mfaEnabled === true` |
-| Estado vazio | Placeholder com botão para criar primeiro host |
-
-**Componentes internos:** `HostCard`, `SortSelector`, `ContextItem`, `EmptyState`
-
-**Estado de UI:** todo o estado de busca, filtros e ordenação é mantido em `useUIStore` (volátil — não persiste entre sessões).
-
----
-
-### `HostEditor`
-
-**Rotas:** `/hosts/new`, `/hosts/:id`
-**Arquivo:** `src/pages/HostEditor.tsx`
-
-Seções colapsáveis:
-
-| Seção | Campos |
-| --- | --- |
-| **Conexão** | label, host, port, username |
-| **Autenticação** | authMethod + campos condicionais (password / privateKeyPath + passphrase) |
-| **Avançado** | group, color, tags, jumpHostId, keepAliveInterval, connectionTimeout, notes |
-| **MFA** | mfaEnabled toggle, totpSecret, botão gerar, QR code, preview ao vivo |
-
-**Geração de segredo TOTP:**
-Chama `generate_totp_secret`, seta `form.totpSecret` e exibe QR code via `react-qr-code`.
-O preview ao vivo usa `<TotpDisplay secretBase32={form.totpSecret} />`.
-
----
-
-### `Settings`
-
-**Rota:** `/settings`
-**Arquivo:** `src/pages/Settings.tsx`
-
-| Seção | Configurações |
-| --- | --- |
-| Aparência | Seletor visual de tema (6 opções) |
-| Idioma | pt-BR / en-US |
-| Terminal | fontSize, fontFamily, cursorStyle, cursorBlink, scrollback |
-| Segurança | Definir / alterar / remover senha mestra; toggle syncCredentials |
-
-**Fluxo de senha mestra:**
-
-1. Primeira definição: hash via `encrypt_credentials` de payload de verificação → salvo em `settings.security.verificationPayload`
-2. Alteração: valida senha atual com `verify_master_password` antes de aceitar a nova
-3. Remoção: limpa `verificationPayload` e seta `masterPasswordSet = false`
-
----
-
-### `Sync`
-
-**Rota:** `/sync`
-**Arquivo:** `src/pages/Sync.tsx`
-
-Provedores suportados (configuração na UI):
-
-| Provedor | Campos |
-| --- | --- |
-| GitHub Gist | token (PAT), gistId (opcional — cria automaticamente) |
-| S3 / MinIO | endpoint (vazio = AWS S3), bucket, region, accessKey, secretKey |
-| WebDAV / Nextcloud | url, username, password, path |
-| Custom REST | url (aceita PUT/GET) |
-
-**Fluxo push (Enviar para Remoto):**
-
-1. Se `syncCredentials = true`, exibe modal de senha mestra
-2. Chama `buildSyncPayload(hosts, credentials, settings, masterPassword?)` → JSON
-3. Chama `pushToProvider(sync, payload)` de `src/lib/syncProviders.ts`
-4. Para Gist: salva o `gistId` retornado em `settings.sync.gist.gistId` (apenas quando criado)
-5. Atualiza `settings.sync.lastSyncAt`; dispara notificação nativa de sucesso ou erro
-
-**Fluxo pull (Importar do Remoto):**
-
-1. Chama `pullFromProvider(sync)` de `src/lib/syncProviders.ts` → JSON
-2. Chama `parseSyncFile(json)` para validar
-3. Se `syncCredentials = true`, exibe modal de senha mestra
-4. Chama `applySyncPayload(file, masterPassword?, mode, ...)` que chama `replaceHosts`/`replaceCredentials`
-5. Exibe resumo: hosts adicionados/atualizados, credenciais adicionadas/atualizadas; dispara notificação
-
-**Sync automático (`AutoSyncConfig`):**
-
-Seção exibida quando um provedor está configurado. Contém toggle on/off e seletor de intervalo (15 min / 30 min / 1 hora / 2 horas). A lógica do timer vive em `src/hooks/useAutoSync.ts`, não na página.
-
-**Separação de responsabilidades — `src/lib/syncProviders.ts`:**
-
-`pushToProvider` e `pullFromProvider` foram extraídas de `Sync.tsx` para este módulo a fim de serem reutilizadas pelo hook de sync automático sem criar dependência circular entre página e hook.
-
----
-
-### `Credentials`
-
-**Rota:** `/credentials`
-**Arquivo:** `src/pages/Credentials.tsx`
-
-Lista de credenciais reutilizáveis. Cada credencial pode ser associada a um ou mais hosts no `HostEditor`.
-
-| Ação | Detalhe |
-| --- | --- |
-| Listar | Cards com tipo (senha/chave/agente), username, contagem de hosts que usam |
-| Nova | Navega para `/credentials/new` |
-| Editar | Navega para `/credentials/:id` |
-| Excluir | Aviso se a credencial está em uso por hosts |
-
----
-
-### `CredentialEditor`
-
-**Rotas:** `/credentials/new`, `/credentials/:id`
-**Arquivo:** `src/pages/CredentialEditor.tsx`
-
-Formulário para criar/editar uma credencial reutilizável.
-
-| Campo | Condição |
-| --- | --- |
-| label, username | Sempre |
-| password | authMethod = "password" |
-| privateKeyPath, passphrase | authMethod = "privateKey" |
-| (informativo) | authMethod = "agent" |
-
----
-
-### `Backup`
-
-**Rota:** `/backup`
-**Arquivo:** `src/pages/Backup.tsx`
-
-**Exportação:**
-
-- Abre diálogo nativo de salvar (`.sshvault` / `.json`)
-- Opção "Incluir credenciais cifradas" → requer senha mestra
-- Hosts no JSON sempre sem campos sensíveis em claro
-
-**Importação:**
-
-- Abre diálogo nativo de abrir
-- Prévia: quantidade de hosts, data de exportação, presença de credenciais
-- Modos: **Adicionar aos existentes** (ignora duplicatas por ID) ou **Substituir tudo**
-- Toggle para restaurar ou ignorar as settings do backup
-
----
-
-### `TerminalPage`
-
-**Rota:** `/terminal/:tabId`
-**Arquivo:** `src/pages/TerminalPage.tsx`
-
-Renderiza um ou mais `SshPane` (split horizontal/vertical) com as configurações do store (`terminal.*`).
-
-**Addons xterm.js:**
-
-- `FitAddon` — redimensionamento responsivo
-- `WebLinksAddon` — links clicáveis no terminal
-
-**Callbacks de ciclo de vida e notificações:**
-
-| Callback | Disparado quando | Efeito |
-| --- | --- | --- |
-| `handleConnected` | SSH estabelecido (`status = "connected"`) | `setLastConnected`, `openLog`, notificação "Conectado: {label}" |
-| `handleDisconnected(error)` | Falha antes de conectar | Notificação "Falha ao conectar: {label}" |
-| `handleDisconnected(error)` | Queda após conectar | Notificação "Sessão encerrada inesperadamente: {label}", fecha aba |
-| `handleDisconnected(disconnected)` | Desconexão normal | Fecha aba (sem notificação) |
-
-`hostLabelRef` é um ref atualizado a cada render para evitar stale closure nos callbacks de `useCallback` sem adicionar `tab` nas dependências de `handleDisconnected`.
-
----
-
-## 7. Componentes reutilizáveis
-
-### `TotpDisplay`
-
-**Arquivo:** `src/components/TotpDisplay/TotpDisplay.tsx`
-
-```typescript
-interface TotpDisplayProps {
-  secretBase32: string;
-}
-```
-
-- Chama `generate_totp_code` a cada segundo
-- Anel SVG de contagem regressiva (30s → 0)
-- Código formatado como `"123 456"`
-- Muda para cor de perigo (`--danger`) nos últimos 5 segundos
-- Botão copiar com feedback visual (ícone muda para ✓ por 2s)
-
----
-
-### UI primitivos
-
-**Arquivo:** `src/components/ui/`
-
-#### `Button`
-
-```typescript
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "secondary" | "ghost" | "danger"; // padrão: "primary"
-  size?:    "sm" | "md" | "lg";                           // padrão: "md"
-}
-```
-
-#### `Input`
-
-```typescript
-interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
-  label?: string;
-  error?: string;  // Exibe texto de erro em vermelho abaixo do campo
-  hint?:  string;  // Texto de ajuda em cinza abaixo do campo
-}
-```
-
-#### `Select`
-
-```typescript
-interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
-  label?: string;
-  error?: string;
-}
-```
-
-#### `Textarea`
-
-```typescript
-interface TextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
-  label?: string;
-  error?: string;
-  hint?:  string;
-}
-```
-
-#### `Modal`
-
-```typescript
-interface ModalProps {
-  open:      boolean;
-  onClose:   () => void;
-  title?:    string;
-  children:  ReactNode;
-  size?:     "sm" | "md" | "lg" | "xl"; // padrão: "md"
-  className?: string;
-}
-```
-
-#### `Badge`
-
-```typescript
-interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
-  variant?: "default" | "success" | "warning" | "danger" | "accent";
-}
-```
-
----
-
-### Layout e navegação
-
-#### `AppLayout`
-
-**Arquivo:** `src/components/Layout/AppLayout.tsx`
-
-Shell principal: `<Sidebar>` + `<TabBar>` (quando há sessões abertas) + `<Outlet>` (conteúdo da rota ativa).
-
-#### `Sidebar`
-
-**Arquivo:** `src/components/Sidebar/Sidebar.tsx`
-
-- Links de navegação: Dashboard, Sync, Backup, Settings
-- Lista de hosts com busca, agrupamento e colapso por grupo
-- Botões de ação nos hosts (conectar, editar) ao passar o mouse
-- Indicador de status de conexão ativa (ponto verde)
-
-#### `TabBar`
-
-**Arquivo:** `src/components/TabBar/TabBar.tsx`
-
-- Exibido apenas quando `sessions.tabs.length > 0`
-- Ícone de status por tab: ⏳ connecting, ● connected, ○ disconnected, ✕ error
-- Botão fechar tab (X)
-
----
-
-## 8. Hooks
-
-### `useAutoSync`
-
-**Arquivo:** `src/hooks/useAutoSync.ts`
-
-Gerencia o ciclo de vida do sync automático periódico. Chamado uma única vez em `App.tsx` (componente raiz), antes do roteador.
-
-**Comportamento:**
-
-- Lê `sync.autoSync`, `sync.provider` e `sync.autoSyncIntervalMinutes` do `useSettingsStore`
-- Quando `autoSync = true` e um provedor está configurado, cria um `setInterval` com o intervalo configurado
-- O `setInterval` é destruído e recriado automaticamente via array de dependências do `useEffect` ao mudar qualquer uma das três configurações acima
-- No callback do interval, lê os dados mais recentes dos stores via **subscriptions Zustand** (não via closure, evitando stale data) e chama `buildSyncPayload` + `pushToProvider`
-- Em caso de erro dispara notificação nativa; em caso de sucesso atualiza `lastSyncAt` silenciosamente
-
-**Por que subscriptions em vez de deps no `useEffect`:**
-
-Incluir `hosts` e `credentials` no array de dependências causaria recriação do interval a cada mutação de host — dezenas de vezes por sessão. A solução usa `useHostsStore.subscribe` para manter refs sempre atualizadas sem recriar o timer.
-
-```typescript
-// Trecho simplificado
-useEffect(() => {
-  if (!sync.autoSync || !sync.provider) return;
-  const ms = (sync.autoSyncIntervalMinutes ?? 30) * 60_000;
-  const id = setInterval(runSync, ms);
-  return () => clearInterval(id);
-}, [sync.autoSync, sync.provider, sync.autoSyncIntervalMinutes]);
-```
-
-**Limitação intencional:** o sync automático não usa senha mestra. Se `syncCredentials = true`, as credenciais viajam sem a camada extra de criptografia AES-GCM (mas continuam protegidas pelo SQLCipher em disco). Para sync com credenciais cifradas, o usuário deve usar o botão "Sincronizar Agora".
-
----
-
-## 9. Módulo de notificações
-
-**Arquivo:** `src/lib/notifications.ts`
-
-Wrapper sobre `@tauri-apps/plugin-notification` com cache de permissão e falha silenciosa.
-
-```typescript
-async function notify(title: string, body: string): Promise<void>
-```
-
-- Na primeira chamada, verifica a permissão via `isPermissionGranted()` e, se necessário, solicita via `requestPermission()`
-- O resultado da verificação é cacheado em memória para chamadas subsequentes (sem overhead de IPC)
-- Qualquer exceção é capturada e descartada — notificações nunca bloqueiam o fluxo principal
-
-**Pontos de integração:**
-
-| Local | Evento | Mensagem |
-| --- | --- | --- |
-| `TerminalPage.tsx` — `handleConnected` | Sessão SSH estabelecida | `"Conectado: {hostLabel}"` |
-| `TerminalPage.tsx` — `handleDisconnected` (falha inicial) | `status === "error"` antes de conectar | `"Falha ao conectar: {hostLabel}"` |
-| `TerminalPage.tsx` — `handleDisconnected` (queda) | `status === "error"` após conectar | `"Sessão encerrada inesperadamente: {hostLabel}"` |
-| `Sync.tsx` — `doPush` | Push concluído | `"Sincronização enviada com sucesso"` |
-| `Sync.tsx` — `doPush` | Push com erro | `"Erro na sincronização"` |
-| `Sync.tsx` — `doPull` | Pull concluído | `"Dados importados com sucesso"` |
-| `Sync.tsx` — `doPull` | Pull com erro | `"Erro na sincronização"` |
-| `useAutoSync` — interval | Erro no push automático | `"Erro no sync automático: {mensagem}"` |
-
-Desconexões normais (usuário fecha a aba) **não** disparam notificação.
-
----
-
-## 10. Roteamento
-
-**Arquivo:** `src/App.tsx`
-
-```text
-/                        → Dashboard
-/hosts/new               → HostEditor (modo criação)
-/hosts/:id               → HostEditor (modo edição)
-/terminal/:tabId         → TerminalPage
-/settings                → Settings
-/sync                    → Sync
-/backup                  → Backup
-/credentials             → Credentials
-/credentials/new         → CredentialEditor (modo criação)
-/credentials/:id         → CredentialEditor (modo edição)
-/*                       → redireciona para /
-```
-
-Todas as rotas são filhas de `<AppLayout>` (Sidebar + TabBar sempre visíveis).
-Baseado em `BrowserRouter` (hash routing não utilizado).
-
----
-
-## 11. Internacionalização (i18n)
-
-**Arquivo:** `src/lib/i18n.ts`
-
-- **Biblioteca:** `react-i18next` + `i18next`
-- **Idiomas:** `pt-BR` (padrão), `en-US` (fallback)
-- **Recursos:** `src/locales/{pt-BR,en-US}/translation.json`
-
-```typescript
-type LocaleId = "pt-BR" | "en-US";
-
-const LOCALES: { id: LocaleId; label: string; flag: string }[] = [
-  { id: "pt-BR", label: "Português (BR)", flag: "🇧🇷" },
-  { id: "en-US", label: "English (US)",   flag: "🇺🇸" },
-];
-```
-
-**Namespace de tradução — estrutura de chaves:**
-
-```text
-app.*              Nome e tagline
-nav.*              Itens de navegação
-dashboard.*        Tela principal, cards de host, ordenação e filtros de tag
-hostEditor.*       Formulário de host (fields, sections, validation, mfa)
-terminal.*         Labels do terminal
-settings.*         Configurações (appearance, language, terminal, security)
-sync.*             Sincronização (providers, status, conflicts, autoSync)
-backup.*           Backup e restauração
-credentials.*      Lista e formulário de credenciais reutilizáveis
-notifications.*    Mensagens de notificações nativas do SO
-common.*           Labels genéricos (save, cancel, delete, etc.)
-```
-
-**Trocar idioma programaticamente:**
-
-```typescript
-import i18n from "@/lib/i18n";
-i18n.changeLanguage("en-US");
-```
-
----
-
-## 12. Módulo de backup
-
-**Arquivo:** `src/lib/backup.ts`
-
-### Tipos exportados
-
-```typescript
-interface BackupFile {
-  app: "ssh-vault";
-  version: 1;
-  exportedAt: string;        // ISO 8601
-  hosts: SshHost[];
-  settings: BackupSettings;
-  encryptedCredentials?: EncryptedCredentials;
-}
-
-interface BackupSettings {
-  themeId: string;
-  locale: string;
-  terminal: AppSettings["terminal"];
-}
-
-interface CredentialsMap {
-  [hostId: string]: {
-    password?:       string;
-    passphrase?:     string;
-    privateKeyPath?: string;
-    totpSecret?:     string;  // Segredo TOTP — cifrado junto
-  };
-}
-
-interface ImportResult {
-  backup: BackupFile;
-  credentials: CredentialsMap | null;
-  hasEncryptedCredentials: boolean;
-}
-```
-
-### Funções exportadas
-
-#### `exportBackup`
-
-```typescript
-async function exportBackup(
-  hosts: SshHost[],
-  settings: AppSettings,
-  masterPassword: string | null
-): Promise<void>
-```
-
-1. Monta `BackupSettings` sem dados sensíveis de sync
-2. Remove `passwordRef` e `passphrase` dos hosts no JSON em claro
-3. Se `masterPassword` fornecida, serializa `CredentialsMap` e chama `encrypt_credentials`
-4. Abre diálogo nativo de salvar (`.sshvault`)
-5. Grava JSON formatado via `writeTextFile`
-
-#### `importBackup`
-
-```typescript
-async function importBackup(
-  masterPassword: string | null
-): Promise<ImportResult | null>
-```
-
-1. Abre diálogo nativo de abrir
-2. Lê e valida estrutura (`app === "ssh-vault"`, `version === 1`)
-3. Se há `encryptedCredentials` e senha fornecida, chama `decrypt_credentials`
-4. Retorna `null` se usuário cancelar
-
-#### `mergeCredentials`
-
-```typescript
-function mergeCredentials(
-  hosts: SshHost[],
-  credentials: CredentialsMap
-): SshHost[]
-```
-
-Aplica `passwordRef`, `passphrase`, `privateKeyPath` e `totpSecret` de volta nos hosts após importação.
-
----
-
-## 13. Temas
-
-**Arquivos:** `src/themes/index.ts`, `src/themes/themes.css`
-
-```typescript
-type ThemeId = "dark" | "light" | "dracula" | "nord" | "catppuccin" | "solarized";
-
-interface Theme {
-  id: ThemeId;
-  name: string;
-  preview: { bg: string; accent: string; text: string };
-}
-```
-
-**Temas disponíveis:**
-
-| ID | Nome | Fundo | Destaque |
-| --- | --- | --- | --- |
-| `dark` | Dark | `#0f1117` | `#388bfd` |
-| `light` | Light | `#ffffff` | `#0969da` |
-| `dracula` | Dracula | `#282a36` | `#bd93f9` |
-| `nord` | Nord | `#2e3440` | `#88c0d0` |
-| `catppuccin` | Catppuccin | `#1e1e2e` | `#cba6f7` |
-| `solarized` | Solarized Dark | `#002b36` | `#268bd2` |
-
-**Aplicação:**
-
-```typescript
-function applyTheme(themeId: ThemeId): void
-// Define document.documentElement.setAttribute("data-theme", themeId)
-// O CSS em themes.css mapeia [data-theme="x"] para CSS variables
-```
-
-**CSS variables principais:**
-
-```css
---bg-primary      /* fundo principal */
---bg-secondary    /* fundo de cards/painéis */
---bg-tertiary     /* fundo de badges/inputs */
---bg-hover        /* fundo ao passar mouse */
---text-primary    /* texto principal */
---text-secondary  /* texto secundário */
---text-muted      /* texto de dica */
---border          /* borda padrão */
---border-focus    /* borda com foco */
---accent          /* cor de destaque */
---accent-subtle   /* destaque com baixa opacidade */
---danger          /* vermelho (erros, exclusão) */
---success         /* verde */
---warning         /* amarelo */
-```
-
----
-
-## 14. Configuração do Tauri
-
-**Arquivo:** `src-tauri/tauri.conf.json`
-
-```json
-{
-  "productName": "SSH Vault",
-  "version": "0.1.0",
-  "identifier": "com.fernando.ssh-vault",
-  "build": {
-    "beforeDevCommand": "npm run dev",
-    "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build",
-    "frontendDist": "../dist"
-  },
-  "app": {
-    "windows": [{
-      "title": "SSH Vault",
-      "width": 1200,
-      "height": 750,
-      "minWidth": 900,
-      "minHeight": 600,
-      "decorations": true
-    }],
-    "security": { "csp": null }
-  },
-  "bundle": {
-    "active": true,
-    "targets": "all",
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
-    ]
-  },
-  "plugins": {}
-}
-```
-
-**Plugins Tauri ativos:**
-
-| Plugin | Finalidade |
-| --- | --- |
-| `tauri-plugin-dialog` | Diálogos nativos de abrir/salvar arquivo |
-| `tauri-plugin-fs` | Leitura e escrita de arquivos |
-| `tauri-plugin-opener` | Abrir links externos no browser padrão |
-| `tauri-plugin-notification` | Notificações nativas do SO (permissão via `notification:default`) |
-
----
-
-## 15. Dependências Rust
-
-**Arquivo:** `src-tauri/Cargo.toml`
-
-| Crate | Versão | Finalidade |
-| --- | --- | --- |
-| `tauri` | 2 | Framework desktop |
-| `tauri-plugin-dialog` | 2 | Diálogos de arquivo nativos |
-| `tauri-plugin-fs` | 2 | I/O de arquivos |
-| `tauri-plugin-opener` | 2 | Abrir URLs externas |
-| `tauri-plugin-notification` | 2 | Notificações nativas do SO |
-| `serde` + `serde_json` | 1 | Serialização JSON |
-| `uuid` | 1 (v4) | Geração de UUIDs |
-| `chrono` | 0.4 | Timestamps ISO 8601 |
-| `keyring` | 3 | Keychain do SO (credenciais + chave do DB) |
-| `dirs` | 5 | Diretórios de dados do usuário |
-| `aes-gcm` | 0.10 | Cifra AES-256-GCM |
-| `argon2` | 0.5 | KDF Argon2id |
-| `rand` | 0.8 | Geração de bytes aleatórios seguros |
-| `base64` | 0.22 | Codificação Base64 |
-| `zeroize` | 1 | Zeroing de dados sensíveis na memória |
-| `totp-rs` | 5 (gen_secret, otpauth) | TOTP RFC 6238 |
-| `rusqlite` | 0.32 (bundled-sqlcipher-vendored-openssl) | Banco SQLCipher cifrado |
-| `reqwest` | 0.12 (rustls-tls, json) | HTTP client para sync remoto |
-| `sha2` | 0.10 | SHA-256 para AWS Signature V4 |
-| `hmac` | 0.12 | HMAC-SHA256 para AWS Signature V4 |
-| `hex` | 0.4 | Encoding hexadecimal para Sig V4 |
-
----
-
-## 16. Segurança — fluxo de dados sensíveis
-
-### Armazenamento local (fase 3+)
-
-```text
-Hosts, credenciais (metadados) e settings
-        │
-        ▼ SQLCipher (AES-256-CBC)
-  vault.db em ~/.local/share/ssh-vault/ (Linux)
-        │
-        ▼ Chave de cifra do DB
-  Gerada aleatoriamente (64 chars) → keyring (OS keychain)
-  Serviço: "ssh-vault", entry: "db-key"
-```
-
-```text
-Credenciais sensíveis: password, passphrase
-        │
-        ▼ Armazenadas no banco SQLCipher (campo "data" JSON)
-  O próprio SQLCipher cifra tudo — nenhum campo sensível em claro no disco
-```
-
-### Backup / Sync (quando syncCredentials = true)
-
-```text
-{ password, passphrase, privateKeyPath, totpSecret } por credencial
-        │
-        ▼ JSON serializado em memória (mapa credentialId → segredos)
-        │
-        ▼ Argon2id (m=64MB, t=3, p=1) derivação de chave da senha mestra
-        │
-        ▼ AES-256-GCM + salt e nonce aleatórios (16 + 12 bytes)
-        │
-        ▼ EncryptedCredentials { version, salt, nonce, ciphertext }
-        │
-        ├──► campo encryptedSecrets no arquivo .sshvault
-        └──► campo encryptedSecrets no SyncFile (provedor remoto)
-```
-
-### Separação de dados no SyncFile
-
-O payload de sync separa metadados de segredos:
-
-- **`credentials[]`** — `CredentialMeta` (sem `password`/`passphrase`) — viaja em claro
-- **`encryptedSecrets`** — `EncryptedCredentials` — bloco único cifrado com senha mestra
-
-Isso permite que o receptor importe metadados (label, username, tipo) sem a senha mestra, e opcionalmente decifre os segredos se tiver a senha.
-
-### Garantias
-
-- A **senha mestra nunca sai do dispositivo**
-- A **chave do banco SQLCipher** nunca é gravada em disco em claro (fica no keychain)
-- Salt e nonce são gerados frescos a cada cifragem (segurança semântica)
-- A tag GCM autentica os dados — adulteração é detectada
-- Chave AES e senha zeroizadas da memória após uso (`zeroize`)
-- Sem a senha mestra correta, os segredos remotos são computacionalmente irrecuperáveis
-
----
-
-## 17. Build e empacotamento
-
-### Scripts npm
-
-**Arquivo:** `package.json`
-
-```json
-"scripts": {
-  "dev":     "vite",
-  "build":   "tsc && vite build",
-  "preview": "vite preview",
-  "tauri":   "NO_STRIP=1 APPIMAGE_EXTRACT_AND_RUN=1 PATH=\"$HOME/.cargo/bin:$PATH\" tauri"
-}
-```
-
-> **`NO_STRIP=1`** — Desabilita o `strip` no linuxdeploy, necessário no Arch/CachyOS porque o `strip` empacotado no linuxdeploy AppImage não reconhece seções `.relr.dyn` (SHT_RELR) usadas pelas bibliotecas modernas.
-> **`APPIMAGE_EXTRACT_AND_RUN=1`** — Faz o linuxdeploy e appimagetool se auto-extraírem sem FUSE.
-> **`PATH`** — Garante que `cargo` e `rustc` sejam encontrados (necessário quando npm é invocado sem o shell de login do usuário).
-
-### Pacotes gerados por plataforma
-
-| Plataforma | Formato | Localização |
-| --- | --- | --- |
-| Linux | `.deb` | `bundle/deb/` |
-| Linux | `.rpm` | `bundle/rpm/` |
-| Linux | `.AppImage` | `bundle/appimage/` |
-| Windows | `.exe` (NSIS) | `bundle/nsis/` |
-| Windows | `.msi` | `bundle/msi/` |
-| macOS | `.dmg` | `bundle/dmg/` |
-| macOS | `.app` | `bundle/macos/` |
-
-Base: `src-tauri/target/release/bundle/`
-
-### CI/CD — GitHub Actions
-
-**Arquivo:** `.github/workflows/build.yml`
-
-Matrix de build: `ubuntu-22.04`, `windows-latest`, `macos-latest` em paralelo.
-
-**Disparar manualmente:**
-
-```bash
-git tag v0.1.0 && git push origin v0.1.0
-```
-
-Artifacts disponíveis em: **GitHub → Actions → build → Artifacts**
+Se este documento voltar a divergir do código, priorize sempre:
+
+1. [App.tsx](/home/fernando/Documentos/ssh_vault/src/App.tsx)
+2. [index.ts](/home/fernando/Documentos/ssh_vault/src/types/index.ts)
+3. [lib.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/lib.rs)
+4. [sync.ts](/home/fernando/Documentos/ssh_vault/src/lib/sync.ts)
+5. [backup.ts](/home/fernando/Documentos/ssh_vault/src/lib/backup.ts)
