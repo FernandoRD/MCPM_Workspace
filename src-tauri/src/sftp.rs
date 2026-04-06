@@ -613,9 +613,9 @@ pub async fn sftp_upload(
     };
     let conn = conn_arc.lock().await;
 
-    let file_name = local_path
-        .split('/')
-        .next_back()
+    let file_name = Path::new(&local_path)
+        .file_name()
+        .and_then(|name| name.to_str())
         .unwrap_or(&local_path)
         .to_string();
 

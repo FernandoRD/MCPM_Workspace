@@ -250,6 +250,7 @@
     "connected": "Connected",
     "disconnected": "Disconnected",
     "reconnect": "Reconnect",
+    "disconnect": "Disconnect",
     "loading": "Loading...",
     "emptyFolder": "Empty folder",
     "upload": "Upload",

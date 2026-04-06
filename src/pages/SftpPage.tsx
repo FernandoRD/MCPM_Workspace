@@ -19,6 +19,7 @@ import {
   Home,
   X,
   Terminal,
+  Unplug,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -65,6 +66,10 @@ function formatDate(ts?: number): string {
   return new Date(ts * 1000).toLocaleString();
 }
 
+function getPathBaseName(path: string): string {
+  return path.split(/[\\/]/).pop() ?? path;
+}
+
 export function SftpPage() {
   const { t } = useTranslation();
   const { tabId } = useParams<{ tabId: string }>();
@@ -74,6 +79,7 @@ export function SftpPage() {
   const tabs = useSessionsStore((s) => s.tabs);
   const ensureSession = useSessionsStore((s) => s.ensureSession);
   const updatePaneStatus = useSessionsStore((s) => s.updatePaneStatus);
+  const closeSession = useSessionsStore((s) => s.closeSession);
   const openSession = useSessionsStore((s) => s.openSession);
   const getHost = useHostsStore((s) => s.getHost);
   const setLastConnected = useHostsStore((s) => s.setLastConnected);
@@ -277,7 +283,7 @@ export function SftpPage() {
   const handleUpload = async () => {
     const filePath = await open({ multiple: false, directory: false });
     if (!filePath) return;
-    const fileName = (filePath as string).split("/").pop() ?? "upload";
+    const fileName = getPathBaseName(filePath as string) || "upload";
     const remotePath = currentPath.endsWith("/")
       ? `${currentPath}${fileName}`
       : `${currentPath}/${fileName}`;
@@ -321,6 +327,22 @@ export function SftpPage() {
       setError(String(err));
     }
   };
+
+  const handleDisconnect = useCallback(async () => {
+    setError(null);
+    try {
+      await invoke("sftp_disconnect", { sessionId });
+    } catch (err) {
+      console.error("Erro ao desconectar sessão SFTP:", err);
+    } finally {
+      if (logIdRef.current) {
+        closeLog(logIdRef.current, "disconnected");
+        logIdRef.current = null;
+      }
+      closeSession(sessionId);
+      navigate(withStandaloneQuery("/", bootstrap.standalone));
+    }
+  }, [bootstrap.standalone, closeLog, closeSession, navigate, sessionId]);
 
   const handleRename = async (entry: SftpEntry) => {
     if (!renameValue.trim() || renameValue === entry.name) {
@@ -492,6 +514,16 @@ export function SftpPage() {
           >
             <Terminal size={14} />
             {t("sftp.openTerminal")}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleDisconnect}
+            title={t("sftp.disconnect")}
+            className="gap-1.5 text-xs text-[var(--danger)] hover:text-[var(--danger)]"
+          >
+            <Unplug size={14} />
+            {t("sftp.disconnect")}
           </Button>
         </div>
       </div>
