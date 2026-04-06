@@ -80,6 +80,8 @@ export function SftpPage() {
   const ensureSession = useSessionsStore((s) => s.ensureSession);
   const updatePaneStatus = useSessionsStore((s) => s.updatePaneStatus);
   const closeSession = useSessionsStore((s) => s.closeSession);
+  const sftpSnapshot = useSessionsStore((s) => (tabId ? s.sftpSnapshots[tabId] : undefined));
+  const updateSftpSnapshot = useSessionsStore((s) => s.updateSftpSnapshot);
   const openSession = useSessionsStore((s) => s.openSession);
   const getHost = useHostsStore((s) => s.getHost);
   const setLastConnected = useHostsStore((s) => s.setLastConnected);
@@ -112,8 +114,8 @@ export function SftpPage() {
   }, [bootstrap.hostAddress, bootstrap.hostId, bootstrap.hostLabel, bootstrap.standalone, ensureSession, tab, tabId]);
 
   const [status, setStatus] = useState<Status>("connecting");
-  const [currentPath, setCurrentPath] = useState("/");
-  const [entries, setEntries] = useState<SftpEntry[]>([]);
+  const [currentPath, setCurrentPath] = useState(sftpSnapshot?.currentPath ?? "/");
+  const [entries, setEntries] = useState<SftpEntry[]>(sftpSnapshot?.entries ?? []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [transferProgress, setTransferProgress] = useState<TransferProgress | null>(null);
@@ -136,8 +138,32 @@ export function SftpPage() {
   const sessionId = tabId!;
   const logIdRef = useRef<string | null>(null);
 
+  const loadDir = useCallback(async (path: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await invoke<SftpEntry[]>("sftp_read_dir", { sessionId, path });
+      setEntries(result);
+      setCurrentPath(path);
+      updateSftpSnapshot(sessionId, { currentPath: path, entries: result });
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [sessionId, updateSftpSnapshot]);
+
   const connect = useCallback(async () => {
     if (!host) return;
+    const sessionExists = await invoke<boolean>("sftp_session_exists", { sessionId });
+    if (sessionExists) {
+      setStatus("connected");
+      setError(null);
+      updatePaneStatus(sessionId, "connected");
+      await loadDir(sftpSnapshot?.currentPath ?? currentPath ?? "/");
+      return;
+    }
+
     setStatus("connecting");
     setError(null);
 
@@ -196,31 +222,21 @@ export function SftpPage() {
       updatePaneStatus(sessionId, "error");
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, host]);
+  }, [currentPath, loadDir, sessionId, host, sftpSnapshot?.currentPath, updatePaneStatus]);
 
-  const loadDir = useCallback(async (path: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await invoke<SftpEntry[]>("sftp_read_dir", { sessionId, path });
-      setEntries(result);
-      setCurrentPath(path);
-    } catch (err) {
-      setError(String(err));
-    } finally {
-      setLoading(false);
-    }
-  }, [sessionId]);
-
-  // Conecta ao montar; desconecta ao desmontar
+  // Conecta ao montar; ao desmontar apenas remove a UI local.
   useEffect(() => {
-    connect();
-    return () => {
-      if (logIdRef.current) closeLog(logIdRef.current, "disconnected");
-      invoke("sftp_disconnect", { sessionId }).catch(() => {});
-    };
+    void connect();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabId]);
+
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      void invoke("sftp_disconnect", { sessionId }).catch(() => {});
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [sessionId]);
 
   // Listener de progresso de transferência
   useEffect(() => {

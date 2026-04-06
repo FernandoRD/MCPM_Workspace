@@ -6,6 +6,7 @@ import "@xterm/xterm/css/xterm.css";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { useSettingsStore } from "@/store/settings";
+import { useSessionsStore } from "@/store/sessions";
 
 interface SshPaneProps {
   paneId: string;
@@ -24,6 +25,16 @@ interface SshPaneProps {
 
 interface SshOutputEvent { tab_id: string; data: string }
 interface SshStatusEvent { tab_id: string; status: "connecting" | "connected" | "disconnected" | "error"; message?: string }
+
+function writeBase64Chunk(term: Terminal | null, chunk: string) {
+  if (!term) return;
+  try {
+    const bytes = Uint8Array.from(atob(chunk), (c) => c.charCodeAt(0));
+    term.write(bytes);
+  } catch {
+    term.write(chunk);
+  }
+}
 
 export function SshPane({
   paneId,
@@ -51,6 +62,7 @@ export function SshPane({
   const cancelRef = useRef<(() => void) | null>(null);
   const terminalSettings = useSettingsStore((s) => s.settings.terminal);
   const sshSettings = useSettingsStore((s) => s.settings.ssh);
+  const appendTerminalOutput = useSessionsStore((s) => s.appendTerminalOutput);
   const [pendingFingerprint, setPendingFingerprint] = useState<string | null>(null);
 
   const clearConnectionBindings = useCallback(() => {
@@ -108,6 +120,10 @@ export function SshPane({
       });
     }
 
+    for (const chunk of useSessionsStore.getState().terminalSnapshots[paneId]?.outputBase64Chunks ?? []) {
+      writeBase64Chunk(xtermRef.current, chunk);
+    }
+
     const fitAddon = fitRef.current!;
     const dims = fitAddon.proposeDimensions() ?? { cols: 80, rows: 24 };
 
@@ -120,12 +136,8 @@ export function SshPane({
 
     const ul1 = await listen<SshOutputEvent>("ssh-output", (event) => {
       if (event.payload.tab_id !== paneId) return;
-      try {
-        const bytes = Uint8Array.from(atob(event.payload.data), (c) => c.charCodeAt(0));
-        xtermRef.current?.write(bytes);
-      } catch {
-        xtermRef.current?.write(event.payload.data);
-      }
+      writeBase64Chunk(xtermRef.current, event.payload.data);
+      appendTerminalOutput(paneId, event.payload.data);
     });
     if (cancelled) { ul1(); dataDispose.dispose(); return; }
     registered.push(ul1);
@@ -148,7 +160,19 @@ export function SshPane({
     if (cancelled) { ul2(); dataDispose.dispose(); registered.forEach((f) => f()); return; }
     registered.push(ul2);
 
-    invoke("ssh_connect", {
+    const sessionExists = await invoke<boolean>("ssh_session_exists", { tabId: paneId });
+    if (cancelled) {
+      dataDispose.dispose();
+      registered.forEach((dispose) => dispose());
+      return;
+    }
+
+    if (sessionExists) {
+      statusRef.current = "connected";
+      onStatusChange(paneId, "connected");
+      xtermRef.current?.focus();
+    } else {
+      invoke("ssh_connect", {
       tabId: paneId,
       host,
       port,
@@ -162,17 +186,18 @@ export function SshPane({
       connectionTimeout: sshSettings?.inactivityTimeout ?? 0,
       cols: dims.cols ?? 80,
       rows: dims.rows ?? 24,
-    }).catch((err: string) => {
-      if (cancelled) return;
-      // Host desconhecido: pede confirmação de fingerprint antes de prosseguir
-      if (typeof err === "string" && err.startsWith("HOST_KEY_UNKNOWN:")) {
-        const fingerprint = err.slice("HOST_KEY_UNKNOWN:".length);
-        setPendingFingerprint(fingerprint);
-        return;
-      }
-      xtermRef.current?.writeln(`\r\n\x1b[1;31mErro: ${err}\x1b[0m\r\n`);
-      onStatusChange(paneId, "error");
-    });
+      }).catch((err: string) => {
+        if (cancelled) return;
+        // Host desconhecido: pede confirmação de fingerprint antes de prosseguir
+        if (typeof err === "string" && err.startsWith("HOST_KEY_UNKNOWN:")) {
+          const fingerprint = err.slice("HOST_KEY_UNKNOWN:".length);
+          setPendingFingerprint(fingerprint);
+          return;
+        }
+        xtermRef.current?.writeln(`\r\n\x1b[1;31mErro: ${err}\x1b[0m\r\n`);
+        onStatusChange(paneId, "error");
+      });
+    }
 
     const resizeObserver = new ResizeObserver(() => {
       fitAddon.fit();
@@ -189,12 +214,11 @@ export function SshPane({
       registered.forEach((f) => f());
       resizeObserver.disconnect();
       dataDispose.dispose();
-      invoke("ssh_disconnect", { tabId: paneId }).catch(() => {});
     };
 
     void wasConnected; // suppress unused warning
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clearConnectionBindings, paneId]);
+  }, [appendTerminalOutput, clearConnectionBindings, paneId]);
 
   const handleTrustHost = useCallback(async (accepted: boolean) => {
     if (!pendingFingerprint) return;
@@ -212,6 +236,14 @@ export function SshPane({
     setPendingFingerprint(null);
     connect();
   }, [pendingFingerprint, host, port, paneId, onStatusChange, connect]);
+
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      void invoke("ssh_disconnect", { tabId: paneId }).catch(() => {});
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [paneId]);
 
   useEffect(() => {
     connect();

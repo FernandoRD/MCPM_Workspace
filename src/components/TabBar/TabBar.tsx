@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useLocation, useNavigate } from "react-router-dom";
 import { X, Plus, Wifi, WifiOff, Loader2, FolderOpen } from "lucide-react";
@@ -33,10 +34,19 @@ export function TabBar() {
     navigate(tabRoute(tab));
   };
 
-  const handleClose = async (e: React.MouseEvent, tabId: string) => {
+  const handleClose = async (e: React.MouseEvent, tab: SessionTab) => {
     e.stopPropagation();
-    const remaining = tabs.filter((t) => t.id !== tabId);
-    closeSession(tabId);
+    const remaining = tabs.filter((t) => t.id !== tab.id);
+
+    if (tab.type === "terminal") {
+      await Promise.all(
+        tab.panes.map((pane) => invoke("ssh_disconnect", { tabId: pane.id }).catch(() => {}))
+      );
+    } else {
+      await invoke("sftp_disconnect", { sessionId: tab.id }).catch(() => {});
+    }
+
+    closeSession(tab.id);
     if (remaining.length === 0) {
       if (standalone) {
         await getCurrentWindow().close().catch(() => {
@@ -45,8 +55,8 @@ export function TabBar() {
         return;
       }
       navigate("/");
-    } else if (tabId === activeTabId) {
-      const idx = tabs.findIndex((t) => t.id === tabId);
+    } else if (tab.id === activeTabId) {
+      const idx = tabs.findIndex((t) => t.id === tab.id);
       const next = remaining[idx] ?? remaining[idx - 1];
       if (next) navigate(tabRoute(next));
     }
@@ -69,7 +79,7 @@ export function TabBar() {
           {tab.type === "sftp" && <FolderOpen size={10} className="text-[var(--accent)] shrink-0" />}
           <span className="truncate">{tab.hostLabel}</span>
           <span
-            onClick={(e) => handleClose(e, tab.id)}
+            onClick={(e) => void handleClose(e, tab)}
             className="ml-1 flex h-4 w-4 items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-[var(--bg-hover)] transition-opacity"
             title={t("terminal.close")}
           >

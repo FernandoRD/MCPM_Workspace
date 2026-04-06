@@ -120,6 +120,12 @@ export function TerminalPage() {
   const hostLabelRef = useRef<string>(tab?.hostLabel ?? "");
   hostLabelRef.current = tab?.hostLabel ?? "";
 
+  useEffect(() => {
+    if (tab?.status === "connected") {
+      everConnectedRef.current = true;
+    }
+  }, [tab?.status]);
+
   const handleDisconnected = useCallback((status: "disconnected" | "error" = "disconnected") => {
     if (logIdRef.current) closeLog(logIdRef.current, status);
     if (!everConnectedRef.current) {
@@ -208,6 +214,11 @@ export function TerminalPage() {
     );
   };
 
+  const handleClosePane = async (targetPaneId: string) => {
+    await invoke("ssh_disconnect", { tabId: targetPaneId }).catch(() => {});
+    closePane(tab.id, targetPaneId);
+  };
+
   return (
     <div className="flex flex-col h-full">
       {/* Split toolbar */}
@@ -262,7 +273,7 @@ export function TerminalPage() {
             {tab.panes.length > 1 && (
               <button
                 className="absolute top-1 right-1 z-20 p-0.5 rounded bg-[var(--bg-secondary)] text-[var(--text-muted)] opacity-40 hover:opacity-100 transition-opacity"
-                onClick={() => closePane(tab.id, pane.id)}
+                onClick={() => void handleClosePane(pane.id)}
                 title={t("common.close")}
               >
                 <X size={12} />

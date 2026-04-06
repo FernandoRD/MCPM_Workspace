@@ -748,6 +748,14 @@ pub async fn ssh_disconnect(
     Ok(())
 }
 
+#[tauri::command]
+pub async fn ssh_session_exists(
+    state: tauri::State<'_, crate::AppState>,
+    tab_id: String,
+) -> Result<bool, String> {
+    Ok(state.ssh.lock().await.sessions.contains_key(&tab_id))
+}
+
 // ─── ssh-copy-id ──────────────────────────────────────────────────────────────
 
 /// Instala uma chave pública no `~/.ssh/authorized_keys` do servidor remoto.

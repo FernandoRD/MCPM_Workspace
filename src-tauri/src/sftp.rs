@@ -743,3 +743,11 @@ pub async fn sftp_disconnect(
     state.sftp.lock().await.sessions.remove(&session_id);
     Ok(())
 }
+
+#[tauri::command]
+pub async fn sftp_session_exists(
+    state: State<'_, AppState>,
+    session_id: String,
+) -> Result<bool, String> {
+    Ok(state.sftp.lock().await.sessions.contains_key(&session_id))
+}

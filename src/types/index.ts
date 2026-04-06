@@ -62,6 +62,14 @@ export interface SshPane {
   status: "connecting" | "connected" | "disconnected" | "error";
 }
 
+export interface SftpEntrySnapshot {
+  name: string;
+  path: string;
+  is_dir: boolean;
+  size: number;
+  modified?: number;
+}
+
 export interface SessionConnection {
   source: "saved-host" | "quick-connect";
   host: string;
@@ -86,6 +94,15 @@ export interface SessionTab {
   panes: SshPane[];
   splitDirection: SplitDirection;
   createdAt: string;
+}
+
+export interface TerminalPaneSnapshot {
+  outputBase64Chunks: string[];
+}
+
+export interface SftpTabSnapshot {
+  currentPath: string;
+  entries: SftpEntrySnapshot[];
 }
 
 export type SyncProvider = "githubGist" | "s3" | "webdav" | "custom" | null;

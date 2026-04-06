@@ -1,10 +1,12 @@
 import { create } from "zustand";
-import { SessionConnection, SessionTab, SplitDirection } from "@/types";
+import { SessionConnection, SessionTab, SplitDirection, SftpTabSnapshot, TerminalPaneSnapshot } from "@/types";
 import { v4 as uuidv4 } from "uuid";
 
 interface SessionsStore {
   tabs: SessionTab[];
   activeTabId: string | null;
+  terminalSnapshots: Record<string, TerminalPaneSnapshot>;
+  sftpSnapshots: Record<string, SftpTabSnapshot>;
   /** Abre uma aba de terminal. O primeiro pane.id === tab.id (compat. retroativa). */
   openSession: (hostId: string, hostLabel: string, hostAddress: string) => string;
   /** Abre uma aba de terminal temporária sem host salvo. */
@@ -23,11 +25,19 @@ interface SessionsStore {
   addPane: (tabId: string, direction: SplitDirection) => string;
   /** Remove um pane do tab. Se for o último, fecha o tab. */
   closePane: (tabId: string, paneId: string) => void;
+  appendTerminalOutput: (paneId: string, chunkBase64: string) => void;
+  clearTerminalSnapshot: (paneId: string) => void;
+  updateSftpSnapshot: (tabId: string, snapshot: Partial<SftpTabSnapshot>) => void;
+  clearSftpSnapshot: (tabId: string) => void;
 }
+
+const MAX_TERMINAL_SNAPSHOT_CHARS = 1_000_000;
 
 export const useSessionsStore = create<SessionsStore>()((set, get) => ({
   tabs: [],
   activeTabId: null,
+  terminalSnapshots: {},
+  sftpSnapshots: {},
 
   openSession: (hostId, hostLabel, hostAddress) => {
     const id = uuidv4();
@@ -91,13 +101,24 @@ export const useSessionsStore = create<SessionsStore>()((set, get) => ({
 
   closeSession: (tabId) => {
     const { tabs, activeTabId } = get();
+    const closingTab = tabs.find((t) => t.id === tabId);
     const remaining = tabs.filter((t) => t.id !== tabId);
     let nextActive = activeTabId;
     if (activeTabId === tabId) {
       const idx = tabs.findIndex((t) => t.id === tabId);
       nextActive = remaining[idx]?.id ?? remaining[idx - 1]?.id ?? null;
     }
-    set({ tabs: remaining, activeTabId: nextActive });
+    set((s) => {
+      const terminalSnapshots = { ...s.terminalSnapshots };
+      const sftpSnapshots = { ...s.sftpSnapshots };
+      if (closingTab?.type === "terminal") {
+        for (const pane of closingTab.panes) {
+          delete terminalSnapshots[pane.id];
+        }
+      }
+      delete sftpSnapshots[tabId];
+      return { tabs: remaining, activeTabId: nextActive, terminalSnapshots, sftpSnapshots };
+    });
   },
 
   setActiveTab: (tabId) => set({ activeTabId: tabId }),
@@ -148,6 +169,54 @@ export const useSessionsStore = create<SessionsStore>()((set, get) => ({
         const panes = t.panes.filter((p) => p.id !== paneId);
         return { ...t, panes, status: panes[0]?.status ?? "disconnected" };
       }),
+      terminalSnapshots: Object.fromEntries(
+        Object.entries(s.terminalSnapshots).filter(([id]) => id !== paneId)
+      ),
     }));
   },
+
+  appendTerminalOutput: (paneId, chunkBase64) =>
+    set((s) => {
+      const currentChunks = s.terminalSnapshots[paneId]?.outputBase64Chunks ?? [];
+      const nextChunks = [...currentChunks, chunkBase64];
+      let totalChars = nextChunks.reduce((sum, chunk) => sum + chunk.length, 0);
+      while (totalChars > MAX_TERMINAL_SNAPSHOT_CHARS && nextChunks.length > 1) {
+        const removed = nextChunks.shift();
+        totalChars -= removed?.length ?? 0;
+      }
+
+      return {
+        terminalSnapshots: {
+          ...s.terminalSnapshots,
+          [paneId]: {
+            outputBase64Chunks: nextChunks,
+          },
+        },
+      };
+    }),
+
+  clearTerminalSnapshot: (paneId) =>
+    set((s) => ({
+      terminalSnapshots: Object.fromEntries(
+        Object.entries(s.terminalSnapshots).filter(([id]) => id !== paneId)
+      ),
+    })),
+
+  updateSftpSnapshot: (tabId, snapshot) =>
+    set((s) => ({
+      sftpSnapshots: {
+        ...s.sftpSnapshots,
+        [tabId]: {
+          currentPath: snapshot.currentPath ?? s.sftpSnapshots[tabId]?.currentPath ?? "/",
+          entries: snapshot.entries ?? s.sftpSnapshots[tabId]?.entries ?? [],
+        },
+      },
+    })),
+
+  clearSftpSnapshot: (tabId) =>
+    set((s) => ({
+      sftpSnapshots: Object.fromEntries(
+        Object.entries(s.sftpSnapshots).filter(([id]) => id !== tabId)
+      ),
+    })),
 }));
