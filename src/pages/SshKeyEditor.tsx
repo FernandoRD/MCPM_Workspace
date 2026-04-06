@@ -136,14 +136,16 @@ export function SshKeyEditor() {
   };
 
   const handleDeploy = async () => {
-    if (!form.publicKeyContent?.trim()) return;
+    const sanitizedHost = deployForm.host.trim();
+    const sanitizedUsername = deployForm.username.trim();
+    if (!form.publicKeyContent?.trim() || !sanitizedHost || !sanitizedUsername) return;
     setDeployStatus("deploying");
     setDeployError(null);
     try {
       await invoke("ssh_copy_id", {
-        host: deployForm.host,
+        host: sanitizedHost,
         port: parseInt(deployForm.port, 10) || 22,
-        username: deployForm.username,
+        username: sanitizedUsername,
         password: deployForm.password,
         publicKeyContent: form.publicKeyContent.trim(),
       });

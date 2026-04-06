@@ -44,6 +44,7 @@ import {
   startTunnel,
   stopTunnel,
 } from "@/lib/productivity";
+import { sanitizeTunnelProfileInput } from "@/lib/inputSanitizers";
 import { matchesHostSearch } from "@/lib/hostSearch";
 import { launchTerminalSession } from "@/lib/sessionLauncher";
 import { cn, formatDate } from "@/lib/utils";
@@ -515,15 +516,16 @@ export function Operations() {
   };
 
   const saveTunnelProfile = () => {
-    if (!tunnelDraft.label.trim() || !tunnelDraft.hostId || !tunnelDraft.bindAddress || !tunnelDraft.bindPort) {
+    const sanitizedDraft = sanitizeTunnelProfileInput(tunnelDraft);
+    if (!sanitizedDraft.label || !sanitizedDraft.hostId || !sanitizedDraft.bindAddress || !sanitizedDraft.bindPort) {
       showFeedback("error", text.tunnel.fillRequired);
       return;
     }
-    if (tunnelDraft.kind === "local" && (!tunnelDraft.destinationHost || !tunnelDraft.destinationPort)) {
+    if (sanitizedDraft.kind === "local" && (!sanitizedDraft.destinationHost || !sanitizedDraft.destinationPort)) {
       showFeedback("error", text.tunnel.localNeedsDestination);
       return;
     }
-    if (tunnelDraft.kind === "remote" && (!tunnelDraft.localHost || !tunnelDraft.localPort)) {
+    if (sanitizedDraft.kind === "remote" && (!sanitizedDraft.localHost || !sanitizedDraft.localPort)) {
       showFeedback("error", text.tunnel.remoteNeedsDestination);
       return;
     }
@@ -533,8 +535,7 @@ export function Operations() {
       id: editingTunnelId ?? uuidv4(),
       createdAt: tunnels.find((entry) => entry.id === editingTunnelId)?.createdAt ?? now,
       updatedAt: now,
-      ...tunnelDraft,
-      label: tunnelDraft.label.trim(),
+      ...sanitizedDraft,
     };
 
     const nextTunnels = editingTunnelId

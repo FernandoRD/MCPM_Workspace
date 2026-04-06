@@ -8,6 +8,7 @@ import { Credential } from "@/types";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
+import { sanitizeCredentialInput } from "@/lib/inputSanitizers";
 import { cn } from "@/lib/utils";
 
 type FormData = Omit<Credential, "id" | "createdAt" | "updatedAt">;
@@ -88,13 +89,14 @@ export function CredentialEditor() {
     setForm((prev) => ({ ...prev, [key]: value }));
 
   const validate = (): boolean => {
+    const sanitizedForm = sanitizeCredentialInput(form);
     const errs: ValidationErrors = {};
-    if (!form.label.trim()) errs.label = t("credentials.validation.labelRequired");
-    if (!form.username.trim()) errs.username = t("credentials.validation.usernameRequired");
-    if (form.authMethod === "password" && !form.password?.trim()) {
+    if (!sanitizedForm.label) errs.label = t("credentials.validation.labelRequired");
+    if (!sanitizedForm.username) errs.username = t("credentials.validation.usernameRequired");
+    if (sanitizedForm.authMethod === "password" && !sanitizedForm.password?.trim()) {
       errs.password = t("credentials.validation.passwordRequired");
     }
-    if (form.authMethod === "privateKey" && !form.keyId) {
+    if (sanitizedForm.authMethod === "privateKey" && !sanitizedForm.keyId) {
       errs.keyId = t("credentials.validation.keyRequired");
     }
     setErrors(errs);
@@ -103,10 +105,11 @@ export function CredentialEditor() {
 
   const handleSave = () => {
     if (!validate()) return;
+    const sanitizedForm = sanitizeCredentialInput(form);
     if (isNew) {
-      addCredential(form);
+      addCredential(sanitizedForm);
     } else if (id) {
-      updateCredential(id, form);
+      updateCredential(id, sanitizedForm);
     }
     navigate("/credentials");
   };

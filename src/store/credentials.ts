@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
 import { Credential } from "@/types";
+import { sanitizeCredentialInput, sanitizeCredentials } from "@/lib/inputSanitizers";
 import { v4 as uuidv4 } from "uuid";
 
 interface CredentialsStore {
@@ -21,7 +22,7 @@ export const useCredentialsStore = create<CredentialsStore>()((set, get) => ({
 
   init: async () => {
     try {
-      const credentials = await invoke<Credential[]>("db_get_credentials");
+      const credentials = sanitizeCredentials(await invoke<Credential[]>("db_get_credentials"));
 
       if (credentials.length === 0) {
         // Migra do localStorage se existir
@@ -29,7 +30,7 @@ export const useCredentialsStore = create<CredentialsStore>()((set, get) => ({
         if (legacy) {
           try {
             const parsed = JSON.parse(legacy);
-            const legacyCredentials: Credential[] = parsed.state?.credentials ?? [];
+            const legacyCredentials = sanitizeCredentials(parsed.state?.credentials ?? []);
             if (legacyCredentials.length > 0) {
               for (const credential of legacyCredentials) {
                 await invoke("db_save_credential", { credential });
@@ -54,7 +55,7 @@ export const useCredentialsStore = create<CredentialsStore>()((set, get) => ({
   addCredential: (data) => {
     const id = uuidv4();
     const now = new Date().toISOString();
-    const credential: Credential = { ...data, id, createdAt: now, updatedAt: now };
+    const credential = sanitizeCredentialInput<Credential>({ ...data, id, createdAt: now, updatedAt: now });
     set((s) => ({ credentials: [...s.credentials, credential] }));
     invoke("db_save_credential", { credential }).catch(console.error);
     return id;
@@ -63,7 +64,9 @@ export const useCredentialsStore = create<CredentialsStore>()((set, get) => ({
   updateCredential: (id, data) =>
     set((s) => {
       const credentials = s.credentials.map((c) =>
-        c.id === id ? { ...c, ...data, updatedAt: new Date().toISOString() } : c
+        c.id === id
+          ? sanitizeCredentialInput({ ...c, ...data, updatedAt: new Date().toISOString() })
+          : c
       );
       const updated = credentials.find((c) => c.id === id);
       if (updated) invoke("db_save_credential", { credential: updated }).catch(console.error);
@@ -79,9 +82,10 @@ export const useCredentialsStore = create<CredentialsStore>()((set, get) => ({
 
   /** Substitui todas as credenciais (usado pelo sync remoto) */
   replaceCredentials: (credentials) => {
-    set({ credentials });
+    const sanitizedCredentials = sanitizeCredentials(credentials);
+    set({ credentials: sanitizedCredentials });
     invoke("db_clear_credentials")
-      .then(() => Promise.all(credentials.map((credential) => invoke("db_save_credential", { credential }))))
+      .then(() => Promise.all(sanitizedCredentials.map((credential) => invoke("db_save_credential", { credential }))))
       .catch(console.error);
   },
 }));

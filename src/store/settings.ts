@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
 import { AppSettings } from "@/types";
+import { sanitizeSettingsInput } from "@/lib/inputSanitizers";
 import { applyTheme, ThemeId } from "@/themes";
 import i18n from "@/lib/i18n";
 
@@ -53,7 +54,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 };
 
 function normalizeSettings(settings?: Partial<AppSettings> | null): AppSettings {
-  return {
+  return sanitizeSettingsInput({
     ...DEFAULT_SETTINGS,
     ...settings,
     terminal: {
@@ -80,7 +81,7 @@ function normalizeSettings(settings?: Partial<AppSettings> | null): AppSettings 
       tunnels: settings?.productivity?.tunnels ?? DEFAULT_SETTINGS.productivity.tunnels,
       workspaces: settings?.productivity?.workspaces ?? DEFAULT_SETTINGS.productivity.workspaces,
     },
-  };
+  });
 }
 
 function persistSettings(settings: AppSettings) {

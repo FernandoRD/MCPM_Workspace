@@ -5,6 +5,7 @@ import { AppSettings, SessionConnection } from "@/types";
 import { buildSessionRoute } from "@/lib/windowMode";
 import { notify } from "@/lib/notifications";
 import { APP_NAME } from "@/lib/appInfo";
+import { sanitizeSessionConnection } from "@/lib/inputSanitizers";
 
 interface LaunchTerminalSessionParams {
   hostId: string;
@@ -52,19 +53,20 @@ async function storeQuickConnectBootstrap(
   hostLabel: string,
   hostAddress: string,
 ): Promise<void> {
+  const sanitizedConnection = sanitizeSessionConnection(connection);
   await invoke("store_quick_connect_bootstrap", {
     bootstrapId,
     payload: {
       host_id: hostId,
       host_label: hostLabel,
       host_address: hostAddress,
-      connection_host: connection.host,
-      connection_port: connection.port,
-      connection_username: connection.username,
-      connection_auth_method: connection.authMethod,
-      connection_password: connection.password ?? null,
-      connection_private_key_content: connection.privateKeyContent ?? null,
-      connection_passphrase: connection.passphrase ?? null,
+      connection_host: sanitizedConnection.host,
+      connection_port: sanitizedConnection.port,
+      connection_username: sanitizedConnection.username,
+      connection_auth_method: sanitizedConnection.authMethod,
+      connection_password: sanitizedConnection.password ?? null,
+      connection_private_key_content: sanitizedConnection.privateKeyContent ?? null,
+      connection_passphrase: sanitizedConnection.passphrase ?? null,
     },
   });
 }
@@ -111,6 +113,7 @@ export async function launchQuickConnectSession({
   openQuickConnectSession,
   standaloneWindow = false,
 }: LaunchQuickConnectSessionParams): Promise<string | null> {
+  const sanitizedConnection = sanitizeSessionConnection(connection);
   const needsBootstrap = openMode === "window" || standaloneWindow;
   const bootstrapId = needsBootstrap ? uuidv4() : undefined;
 
@@ -119,7 +122,7 @@ export async function launchQuickConnectSession({
 
     await storeQuickConnectBootstrap(
       bootstrapId,
-      { ...connection, bootstrapId },
+      { ...sanitizedConnection, bootstrapId },
       quickConnectHostId,
       hostLabel,
       hostAddress,
@@ -140,7 +143,7 @@ export async function launchQuickConnectSession({
     notify(APP_NAME, `Nao foi possivel abrir janela separada para ${hostLabel}. Abrindo em aba.`);
   }
 
-  const sessionId = openQuickConnectSession({ ...connection, bootstrapId }, hostLabel, hostAddress);
+  const sessionId = openQuickConnectSession({ ...sanitizedConnection, bootstrapId }, hostLabel, hostAddress);
   return buildSessionRoute("terminal", sessionId, {
     standalone: standaloneWindow,
     quickConnect: standaloneWindow,

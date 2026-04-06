@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
 import { SshHost } from "@/types";
+import { sanitizeHostInput, sanitizeHosts } from "@/lib/inputSanitizers";
 import { v4 as uuidv4 } from "uuid";
 
 interface HostsStore {
@@ -24,7 +25,7 @@ export const useHostsStore = create<HostsStore>()((set, get) => ({
 
   init: async () => {
     try {
-      const hosts = await invoke<SshHost[]>("db_get_hosts");
+      const hosts = sanitizeHosts(await invoke<SshHost[]>("db_get_hosts"));
 
       if (hosts.length === 0) {
         // Migra dados do localStorage se existirem
@@ -32,7 +33,7 @@ export const useHostsStore = create<HostsStore>()((set, get) => ({
         if (legacy) {
           try {
             const parsed = JSON.parse(legacy);
-            const legacyHosts: SshHost[] = parsed.state?.hosts ?? [];
+            const legacyHosts = sanitizeHosts(parsed.state?.hosts ?? []);
             if (legacyHosts.length > 0) {
               for (const host of legacyHosts) {
                 await invoke("db_save_host", { host });
@@ -56,13 +57,13 @@ export const useHostsStore = create<HostsStore>()((set, get) => ({
 
   addHost: (data) => {
     const now = new Date().toISOString();
-    const newHost: SshHost = {
+    const newHost = sanitizeHostInput<SshHost>({
       ...data,
       id: uuidv4(),
       tags: [],
       createdAt: now,
       updatedAt: now,
-    };
+    });
     set((s) => ({ hosts: [...s.hosts, newHost] }));
     invoke("db_save_host", { host: newHost }).catch(console.error);
     return newHost;
@@ -71,7 +72,9 @@ export const useHostsStore = create<HostsStore>()((set, get) => ({
   updateHost: (id, data) =>
     set((s) => {
       const hosts = s.hosts.map((h) =>
-        h.id === id ? { ...h, ...data, updatedAt: new Date().toISOString() } : h
+        h.id === id
+          ? sanitizeHostInput({ ...h, ...data, updatedAt: new Date().toISOString() })
+          : h
       );
       const updated = hosts.find((h) => h.id === id);
       if (updated) invoke("db_save_host", { host: updated }).catch(console.error);
@@ -87,14 +90,14 @@ export const useHostsStore = create<HostsStore>()((set, get) => ({
     const original = get().hosts.find((h) => h.id === id);
     if (!original) return;
     const now = new Date().toISOString();
-    const copy: SshHost = {
+    const copy = sanitizeHostInput<SshHost>({
       ...original,
       id: uuidv4(),
       label: `${original.label} (cópia)`,
       createdAt: now,
       updatedAt: now,
       lastConnectedAt: undefined,
-    };
+    });
     set((s) => ({ hosts: [...s.hosts, copy] }));
     invoke("db_save_host", { host: copy }).catch(console.error);
   },
@@ -119,9 +122,10 @@ export const useHostsStore = create<HostsStore>()((set, get) => ({
   },
 
   replaceHosts: (hosts) => {
-    set({ hosts });
+    const sanitizedHosts = sanitizeHosts(hosts);
+    set({ hosts: sanitizedHosts });
     invoke("db_clear_hosts")
-      .then(() => Promise.all(hosts.map((host) => invoke("db_save_host", { host }))))
+      .then(() => Promise.all(sanitizedHosts.map((host) => invoke("db_save_host", { host }))))
       .catch(console.error);
   },
 }));

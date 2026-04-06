@@ -241,6 +241,21 @@ fn format_host_key(host: &str, port: u16) -> String {
     format!("[{}]:{}", host, port)
 }
 
+fn trim_owned(value: String) -> String {
+    value.trim().to_string()
+}
+
+fn trim_optional_owned(value: Option<String>) -> Option<String> {
+    value.and_then(|value| {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
+}
+
 async fn fetch_server_fingerprint(
     host: &str,
     port: u16,
@@ -296,6 +311,7 @@ pub fn ssh_trust_host(
     port: u16,
     fingerprint: String,
 ) -> Result<(), String> {
+    let host = trim_owned(host);
     let data_dir = state.storage.lock().unwrap().data_dir.clone();
     let mut known_hosts = load_known_hosts(&data_dir);
     known_hosts.insert(format_host_key(&host, port), fingerprint);
@@ -311,6 +327,7 @@ pub async fn ssh_health_check(
     timeout_ms: Option<u64>,
     ssh_compat_preset: Option<String>,
 ) -> Result<SshHealthCheckResult, String> {
+    let host = trim_owned(host);
     let timeout_duration = Duration::from_millis(timeout_ms.unwrap_or(4000));
     let host_key = format_host_key(&host, port);
     let data_dir = state.storage.lock().unwrap().data_dir.clone();
@@ -475,6 +492,8 @@ pub async fn ssh_connect(
     cols: u16,
     rows: u16,
 ) -> Result<(), String> {
+    let host = trim_owned(host);
+    let username = trim_owned(username);
     state.rate_limiter.check("ssh_connect", 10, std::time::Duration::from_secs(60))?;
     let _ = app.emit(
         "ssh-status",
@@ -744,6 +763,8 @@ pub async fn ssh_copy_id(
     password: String,
     public_key_content: String,
 ) -> Result<(), String> {
+    let host = trim_owned(host);
+    let username = trim_owned(username);
     state.rate_limiter.check("ssh_copy_id", 5, std::time::Duration::from_secs(60))?;
     // Zeroiza credenciais sensíveis ao sair de escopo
     let password = Zeroizing::new(password);
@@ -1255,6 +1276,14 @@ pub async fn ssh_start_tunnel(
     connection_timeout: Option<u32>,
     spec: TunnelSpec,
 ) -> Result<(), String> {
+    let host = trim_owned(host);
+    let username = trim_owned(username);
+    let spec = TunnelSpec {
+        bind_address: trim_owned(spec.bind_address),
+        destination_host: trim_owned(spec.destination_host),
+        local_host: trim_optional_owned(spec.local_host),
+        ..spec
+    };
     // Zeroiza credenciais sensíveis ao sair de escopo
     let password = password.map(Zeroizing::new);
     let private_key_content = private_key_content.map(Zeroizing::new);

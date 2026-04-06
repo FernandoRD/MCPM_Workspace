@@ -73,6 +73,21 @@ fn known_hosts_path(data_dir: &Path) -> PathBuf {
     data_dir.join("known_hosts.json")
 }
 
+fn trim_owned(value: String) -> String {
+    value.trim().to_string()
+}
+
+fn trim_optional_owned(value: Option<String>) -> Option<String> {
+    value.and_then(|value| {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
+}
+
 fn load_known_hosts(data_dir: &Path) -> HashMap<String, String> {
     let path = known_hosts_path(data_dir);
     std::fs::read_to_string(&path)
@@ -327,6 +342,10 @@ pub async fn sftp_connect(
     jump_private_key_content: Option<String>,
     jump_private_key_passphrase: Option<String>,
 ) -> Result<(), String> {
+    let host = trim_owned(host);
+    let username = trim_owned(username);
+    let jump_host = trim_optional_owned(jump_host);
+    let jump_username = trim_optional_owned(jump_username);
     let data_dir = state.storage.lock().unwrap().data_dir.clone();
     let known_hosts_map = load_known_hosts(&data_dir);
     let known_hosts = Arc::new(std::sync::Mutex::new(known_hosts_map));

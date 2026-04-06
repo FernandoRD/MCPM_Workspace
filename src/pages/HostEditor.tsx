@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/Textarea";
 import { Button } from "@/components/ui/Button";
 import { TagBadge } from "@/components/ui/TagBadge";
 import { TotpDisplay } from "@/components/TotpDisplay/TotpDisplay";
+import { sanitizeHostInput } from "@/lib/inputSanitizers";
 import { cn } from "@/lib/utils";
 
 type FormData = Omit<SshHost, "id" | "createdAt" | "updatedAt" | "authMethod" | "passwordRef" | "privateKeyContent" | "passphrase" | "username">;
@@ -94,16 +95,17 @@ export function HostEditor() {
   };
 
   const handleCopyId = async (credential: Credential) => {
-    if (!form.host || !credential.keyId) return;
+    const sanitizedHost = form.host.trim();
+    if (!sanitizedHost || !credential.keyId) return;
     const key = getSshKey(credential.keyId);
     if (!key?.publicKeyContent) return;
     setCopyIdStatus("loading");
     setCopyIdError(null);
     try {
       await invoke("ssh_copy_id", {
-        host: form.host,
+        host: sanitizedHost,
         port: form.port,
-        username: credential.username,
+        username: credential.username.trim(),
         password: copyIdPassword,
         publicKeyContent: key.publicKeyContent.trim(),
       });
@@ -126,28 +128,29 @@ export function HostEditor() {
     setForm((prev) => ({ ...prev, [key]: value }));
 
   const validate = (): boolean => {
+    const sanitizedForm = sanitizeHostInput({ ...form, tags: parsedTags });
     const errs: ValidationErrors = {};
-    if (!form.label.trim()) errs.label = t("hostEditor.validation.labelRequired");
-    if (!form.host.trim()) errs.host = t("hostEditor.validation.hostRequired");
-    if (form.port < 1 || form.port > 65535) errs.port = t("hostEditor.validation.portInvalid");
+    if (!sanitizedForm.label) errs.label = t("hostEditor.validation.labelRequired");
+    if (!sanitizedForm.host) errs.host = t("hostEditor.validation.hostRequired");
+    if ((sanitizedForm.port ?? 0) < 1 || (sanitizedForm.port ?? 0) > 65535) errs.port = t("hostEditor.validation.portInvalid");
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
 
   const handleSave = () => {
     if (!validate()) return;
-    const tags = parsedTags;
+    const sanitizedForm = sanitizeHostInput({ ...form, tags: parsedTags });
     if (isNew) {
       // Para hosts novos, deriva authMethod da credencial selecionada (se houver)
-      const selectedCred = form.credentialId
-        ? credentials.find((c) => c.id === form.credentialId)
+      const selectedCred = sanitizedForm.credentialId
+        ? credentials.find((c) => c.id === sanitizedForm.credentialId)
         : undefined;
       const authMethod = selectedCred?.authMethod ?? "password";
-      const newHostData = { ...form, tags, authMethod };
+      const newHostData = { ...sanitizedForm, authMethod };
       addHost(newHostData);
     } else if (id) {
       // Ao editar, não sobrescreve authMethod — preserva o valor existente no host
-      const editData = { ...form, tags };
+      const editData = { ...sanitizedForm };
       updateHost(id, editData);
     }
     navigate("/");
