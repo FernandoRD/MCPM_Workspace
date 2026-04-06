@@ -4,6 +4,17 @@ MPCM Workspace é um `Multi-Protocol Connection Manager` local-first para organi
 
 Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `Tailwind CSS`.
 
+## Versão atual
+
+`0.1.1`
+
+## Correções da 0.1.1
+
+- Sanitização de entradas de conexão para evitar falhas causadas por espaços antes ou depois de `host`, IP, `username` e campos relacionados
+- Ajuste no upload do SFTP para salvar no servidor remoto apenas o nome do arquivo, sem enviar o caminho completo da máquina local
+- Inclusão do botão de desconectar no SFTP com retorno direto para a dashboard principal
+- Correção da duplicação de caracteres no terminal SSH ao autorizar a fingerprint na primeira conexão com um host novo
+
 ## O que o app faz hoje
 
 - Cadastro de hosts com `grupos`, `tags`, `notas`, `cores`, `jump host` e presets de compatibilidade SSH
