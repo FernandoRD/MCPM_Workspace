@@ -53,8 +53,19 @@ export function SshPane({
   const sshSettings = useSettingsStore((s) => s.settings.ssh);
   const [pendingFingerprint, setPendingFingerprint] = useState<string | null>(null);
 
+  const clearConnectionBindings = useCallback(() => {
+    cancelRef.current?.();
+    cleanupRef.current?.();
+    cancelRef.current = null;
+    cleanupRef.current = null;
+  }, []);
+
   const connect = useCallback(async () => {
     if (!termRef.current) return;
+
+    // Uma nova tentativa de conexão (ex.: após confiar na fingerprint)
+    // precisa remover listeners/handlers anteriores para não duplicar input.
+    clearConnectionBindings();
 
     // Registra canceller imediatamente (antes de qualquer await) para que o
     // cleanup do useEffect consiga abortar mesmo que connect() ainda esteja
@@ -183,7 +194,7 @@ export function SshPane({
 
     void wasConnected; // suppress unused warning
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paneId]);
+  }, [clearConnectionBindings, paneId]);
 
   const handleTrustHost = useCallback(async (accepted: boolean) => {
     if (!pendingFingerprint) return;
@@ -207,16 +218,13 @@ export function SshPane({
     return () => {
       // cancelRef para abortar connect() que ainda esteja aguardando listen() resolver.
       // cleanupRef para encerrar uma conexão já estabelecida.
-      cancelRef.current?.();
-      cleanupRef.current?.();
-      cancelRef.current = null;
-      cleanupRef.current = null;
+      clearConnectionBindings();
       xtermRef.current?.dispose();
       xtermRef.current = null;
       fitRef.current = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paneId]);
+  }, [clearConnectionBindings, paneId]);
 
   return (
     <div className="relative h-full w-full" style={{ backgroundColor: "var(--terminal-bg)" }}>
