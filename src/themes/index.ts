@@ -1,4 +1,19 @@
-export type ThemeId = "dark" | "light" | "dracula" | "nord" | "catppuccin" | "solarized";
+export const THEME_IDS = [
+  "dark",
+  "light",
+  "dracula",
+  "nord",
+  "catppuccin",
+  "solarized",
+  "tokyo-night",
+  "gruvbox",
+  "rose-pine",
+  "everforest",
+  "kanagawa",
+  "one-dark",
+] as const;
+
+export type ThemeId = (typeof THEME_IDS)[number];
 
 export interface Theme {
   id: ThemeId;
@@ -41,7 +56,41 @@ export const THEMES: Theme[] = [
     name: "Solarized Dark",
     preview: { bg: "#002b36", accent: "#268bd2", text: "#fdf6e3" },
   },
+  {
+    id: "tokyo-night",
+    name: "Tokyo Night",
+    preview: { bg: "#1a1b26", accent: "#7aa2f7", text: "#c0caf5" },
+  },
+  {
+    id: "gruvbox",
+    name: "Gruvbox Dark",
+    preview: { bg: "#282828", accent: "#d79921", text: "#ebdbb2" },
+  },
+  {
+    id: "rose-pine",
+    name: "Rose Pine",
+    preview: { bg: "#191724", accent: "#c4a7e7", text: "#e0def4" },
+  },
+  {
+    id: "everforest",
+    name: "Everforest",
+    preview: { bg: "#2b3339", accent: "#a7c080", text: "#d3c6aa" },
+  },
+  {
+    id: "kanagawa",
+    name: "Kanagawa",
+    preview: { bg: "#1f1f28", accent: "#7e9cd8", text: "#dcd7ba" },
+  },
+  {
+    id: "one-dark",
+    name: "One Dark",
+    preview: { bg: "#282c34", accent: "#61afef", text: "#abb2bf" },
+  },
 ];
+
+export function isThemeId(value: string): value is ThemeId {
+  return THEME_IDS.includes(value as ThemeId);
+}
 
 export function applyTheme(themeId: ThemeId) {
   document.documentElement.setAttribute("data-theme", themeId);

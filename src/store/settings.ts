@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
 import { AppSettings } from "@/types";
 import { sanitizeSettingsInput } from "@/lib/inputSanitizers";
-import { applyTheme, ThemeId } from "@/themes";
+import { applyTheme, isThemeId, ThemeId } from "@/themes";
 import i18n from "@/lib/i18n";
 
 interface SettingsStore {
@@ -54,7 +54,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 };
 
 function normalizeSettings(settings?: Partial<AppSettings> | null): AppSettings {
-  return sanitizeSettingsInput({
+  const normalized = sanitizeSettingsInput({
     ...DEFAULT_SETTINGS,
     ...settings,
     terminal: {
@@ -82,6 +82,11 @@ function normalizeSettings(settings?: Partial<AppSettings> | null): AppSettings 
       workspaces: settings?.productivity?.workspaces ?? DEFAULT_SETTINGS.productivity.workspaces,
     },
   });
+
+  return {
+    ...normalized,
+    themeId: isThemeId(normalized.themeId) ? normalized.themeId : DEFAULT_SETTINGS.themeId,
+  };
 }
 
 function persistSettings(settings: AppSettings) {

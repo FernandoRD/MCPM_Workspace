@@ -66,7 +66,7 @@ export function Settings() {
               <p className="text-sm text-[var(--text-secondary)]">
                 {t("settings.appearance.themeDescription")}
               </p>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
                 {THEMES.map((theme) => (
                   <button
                     key={theme.id}
