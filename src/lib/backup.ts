@@ -22,7 +22,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { save, open } from "@tauri-apps/plugin-dialog";
 import { writeTextFile, readTextFile } from "@tauri-apps/plugin-fs";
-import { SshHost, AppSettings, EncryptedCredentials, Credential, SshKey } from "@/types";
+import { HostEntry, AppSettings, EncryptedCredentials, Credential, SshKey } from "@/types";
 import {
   buildPortableSettings,
   buildTransferSecretsPayload,
@@ -43,7 +43,7 @@ export interface BackupFile {
   app: "ssh-vault";
   version: 1;
   exportedAt: string;
-  hosts: SshHost[];
+  hosts: HostEntry[];
   credentials: Credential[];
   sshKeys: SshKey[];
   settings: BackupSettings;
@@ -65,7 +65,7 @@ export interface ImportResult {
  * Se `masterPassword` for fornecida, cifra as credenciais de cada host.
  */
 export async function exportBackup(
-  hosts: SshHost[],
+  hosts: HostEntry[],
   credentials: Credential[],
   sshKeys: SshKey[],
   settings: AppSettings,
@@ -188,7 +188,7 @@ export function hydrateBackupData(
   backup: BackupFile,
   secrets: TransferSecretsPayload | null
 ): {
-  hosts: SshHost[];
+  hosts: HostEntry[];
   credentials: Credential[];
   sshKeys: SshKey[];
   settings: AppSettings | null;

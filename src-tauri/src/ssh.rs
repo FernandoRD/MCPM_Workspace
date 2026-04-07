@@ -87,13 +87,13 @@ static LEGACY_COMPRESSION: &[compression::Name] = &[compression::NONE];
 // ─── Eventos emitidos ao frontend ─────────────────────────────────────────────
 
 #[derive(Clone, Serialize)]
-pub struct SshOutputEvent {
+pub struct TerminalOutputEvent {
     pub tab_id: String,
     pub data: String, // base64
 }
 
 #[derive(Clone, Serialize)]
-pub struct SshStatusEvent {
+pub struct TerminalStatusEvent {
     pub tab_id: String,
     pub status: String,
     pub message: Option<String>,
@@ -496,8 +496,8 @@ pub async fn ssh_connect(
     let username = trim_owned(username);
     state.rate_limiter.check("ssh_connect", 10, std::time::Duration::from_secs(60))?;
     let _ = app.emit(
-        "ssh-status",
-        SshStatusEvent {
+        "terminal-status",
+        TerminalStatusEvent {
             tab_id: tab_id.clone(),
             status: "connecting".into(),
             message: None,
@@ -596,8 +596,8 @@ pub async fn ssh_connect(
 
     if !ok {
         let _ = app.emit(
-            "ssh-status",
-            SshStatusEvent {
+            "terminal-status",
+            TerminalStatusEvent {
                 tab_id: tab_id.clone(),
                 status: "error".into(),
                 message: Some("Autenticação falhou. Verifique as credenciais.".into()),
@@ -640,8 +640,8 @@ pub async fn ssh_connect(
     }
 
     let _ = app.emit(
-        "ssh-status",
-        SshStatusEvent {
+        "terminal-status",
+        TerminalStatusEvent {
             tab_id: tab_id.clone(),
             status: "connected".into(),
             message: None,
@@ -659,7 +659,7 @@ pub async fn ssh_connect(
                     match msg {
                         Some(ChannelMsg::Data { ref data }) |
                         Some(ChannelMsg::ExtendedData { ref data, .. }) => {
-                            let _ = app_task.emit("ssh-output", SshOutputEvent {
+                            let _ = app_task.emit("terminal-output", TerminalOutputEvent {
                                 tab_id: tab_id_task.clone(),
                                 data: B64.encode(data.as_ref()),
                             });
@@ -689,8 +689,8 @@ pub async fn ssh_connect(
 
         ssh_arc.lock().await.sessions.remove(&tab_id_task);
         let _ = app_task.emit(
-            "ssh-status",
-            SshStatusEvent {
+            "terminal-status",
+            TerminalStatusEvent {
                 tab_id: tab_id_task,
                 status: "disconnected".into(),
                 message: None,

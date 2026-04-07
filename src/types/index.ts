@@ -1,4 +1,5 @@
 export type AuthMethod = "password" | "privateKey" | "agent";
+export type ConnectionProtocol = "ssh" | "telnet";
 
 export type SshCompatPreset = "modern" | "legacy" | "very-legacy";
 
@@ -27,11 +28,12 @@ export interface Credential {
   updatedAt: string;
 }
 
-export interface SshHost {
+export interface HostEntry {
   id: string;
   label: string;
   host: string;
   port: number;
+  protocol: ConnectionProtocol;
   username?: string;
   credentialId?: string;
   authMethod: AuthMethod;
@@ -54,13 +56,19 @@ export interface SshHost {
   connectionTimeout?: number;
 }
 
+/** @deprecated Use HostEntry. */
+export type SshHost = HostEntry;
+
 export type TabType = "terminal" | "sftp";
 export type SplitDirection = "horizontal" | "vertical";
 
-export interface SshPane {
+export interface TerminalPaneState {
   id: string; // used as the SSH session ID in the backend
   status: "connecting" | "connected" | "disconnected" | "error";
 }
+
+/** @deprecated Use TerminalPaneState. */
+export type SshPane = TerminalPaneState;
 
 export interface SftpEntrySnapshot {
   name: string;
@@ -72,6 +80,7 @@ export interface SftpEntrySnapshot {
 
 export interface SessionConnection {
   source: "saved-host" | "quick-connect";
+  protocol: ConnectionProtocol;
   host: string;
   port: number;
   username: string;
@@ -91,7 +100,7 @@ export interface SessionTab {
   hostAddress: string;
   connection?: SessionConnection;
   status: "connecting" | "connected" | "disconnected" | "error";
-  panes: SshPane[];
+  panes: TerminalPaneState[];
   splitDirection: SplitDirection;
   createdAt: string;
 }
@@ -187,7 +196,7 @@ export interface EncryptedCredentials {
 export interface SyncPackage {
   version: 1;
   exportedAt: string;
-  hosts: import("./index").SshHost[];
+  hosts: import("./index").HostEntry[];
   encryptedCredentials?: EncryptedCredentials;
 }
 

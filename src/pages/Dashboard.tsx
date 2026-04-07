@@ -30,7 +30,7 @@ import { useUIStore, DashboardSortBy } from "@/store/uiStore";
 import { useSessionsStore } from "@/store/sessions";
 import { useCredentialsStore } from "@/store/credentials";
 import { useSettingsStore } from "@/store/settings";
-import { Credential, SshHost } from "@/types";
+import { Credential, HostEntry } from "@/types";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { TagBadge } from "@/components/ui/TagBadge";
@@ -107,6 +107,7 @@ export function Dashboard() {
       const matchSearch =
         host.label.toLowerCase().includes(search.toLowerCase()) ||
         host.host.toLowerCase().includes(search.toLowerCase()) ||
+        host.protocol.toLowerCase().includes(search.toLowerCase()) ||
         host.tags.some((tag) => tag.toLowerCase().includes(search.toLowerCase()));
       const matchGroup = selectedGroup === null || host.group === selectedGroup;
       const matchTag = selectedTags.length === 0 || selectedTags.some((tag) => host.tags.includes(tag));
@@ -145,7 +146,7 @@ export function Dashboard() {
     [hosts, selectedHostIds]
   );
 
-  const handleConnect = async (host: SshHost) => {
+  const handleConnect = async (host: HostEntry) => {
     const credential = host.credentialId ? getCredential(host.credentialId) : undefined;
     const username = credential?.username ?? host.username ?? "";
     const hostAddress = username ? `${username}@${host.host}` : host.host;
@@ -160,7 +161,8 @@ export function Dashboard() {
     if (route) navigate(route);
   };
 
-  const handleOpenSftp = (host: SshHost) => {
+  const handleOpenSftp = (host: HostEntry) => {
+    if (host.protocol !== "ssh") return;
     const credential = host.credentialId ? getCredential(host.credentialId) : undefined;
     const username = credential?.username ?? host.username ?? "";
     const hostAddress = username ? `${username}@${host.host}` : host.host;
@@ -202,7 +204,7 @@ export function Dashboard() {
         ? credentials.find((credential) => credential.id === changes.credentialId)
         : undefined;
 
-      const payload: Partial<SshHost> = {
+      const payload: Partial<HostEntry> = {
         tags: applyTagMode(host.tags, changes.tagsMode, changes.tags),
       };
 
@@ -458,15 +460,15 @@ function HostCard({
   onDelete,
   onDuplicate,
 }: {
-  host: SshHost;
+  host: HostEntry;
   locale: string;
   menuOpen: boolean;
   selected: boolean;
   onMenuToggle: (id: string) => void;
   onToggleSelected: (id: string) => void;
-  onConnect: (host: SshHost) => void;
-  onOpenSftp: (host: SshHost) => void;
-  onEdit: (host: SshHost) => void;
+  onConnect: (host: HostEntry) => void;
+  onOpenSftp: (host: HostEntry) => void;
+  onEdit: (host: HostEntry) => void;
   onDelete: (id: string) => void;
   onDuplicate: (id: string) => void;
 }) {
@@ -505,9 +507,14 @@ function HostCard({
             <p className="font-medium text-[var(--text-primary)] leading-tight truncate max-w-[130px]">
               {host.label}
             </p>
-            <p className="text-xs text-[var(--text-muted)] truncate max-w-[130px]">
-              {host.host}:{host.port}
-            </p>
+            <div className="flex items-center gap-2 min-w-0">
+              <p className="text-xs text-[var(--text-muted)] truncate max-w-[130px]">
+                {host.host}:{host.port}
+              </p>
+              <Badge variant={host.protocol === "telnet" ? "warning" : "accent"}>
+                {t(`protocols.${host.protocol}`)}
+              </Badge>
+            </div>
           </div>
         </div>
 
@@ -524,7 +531,9 @@ function HostCard({
           {menuOpen && (
             <div className="absolute right-0 top-8 z-20 w-40 rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] shadow-xl py-1">
               <ContextItem icon={Terminal} label={t("dashboard.host.connect")} onClick={() => onConnect(host)} />
-              <ContextItem icon={FolderOpen} label={t("dashboard.host.openSftp")} onClick={() => onOpenSftp(host)} />
+              {host.protocol === "ssh" && (
+                <ContextItem icon={FolderOpen} label={t("dashboard.host.openSftp")} onClick={() => onOpenSftp(host)} />
+              )}
               <ContextItem icon={Edit2} label={t("dashboard.host.edit")} onClick={() => onEdit(host)} />
               <ContextItem icon={Copy} label={t("dashboard.host.duplicate")} onClick={() => onDuplicate(host.id)} />
               <div className="my-1 border-t border-[var(--border)]" />

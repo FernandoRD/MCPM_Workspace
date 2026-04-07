@@ -15,8 +15,10 @@ import {
 } from "lucide-react";
 import { useHostsStore } from "@/store/hosts";
 import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
 import { listKnownHosts, runHealthCheck, formatHostKey, HealthCheckResult } from "@/lib/health";
-import { SshHost } from "@/types";
+import { HostEntry } from "@/types";
+import { isSshHost } from "@/lib/productivity";
 import { cn } from "@/lib/utils";
 
 interface HostHealthRecord {
@@ -38,16 +40,21 @@ export function Health() {
     const query = search.trim().toLowerCase();
     if (!query) return hosts;
     return hosts.filter((host) =>
-      [host.label, host.host, host.group ?? "", ...(host.tags ?? [])]
+      [host.label, host.host, host.protocol, host.group ?? "", ...(host.tags ?? [])]
         .join(" ")
         .toLowerCase()
         .includes(query)
     );
   }, [hosts, search]);
 
+  const visibleSshHosts = useMemo(
+    () => visibleHosts.filter((host) => isSshHost(host)),
+    [visibleHosts]
+  );
+
   const inventoryHostKeys = useMemo(() => {
     const keys = new Set<string>();
-    for (const host of hosts) {
+    for (const host of hosts.filter((entry) => isSshHost(entry))) {
       keys.add(formatHostKey(host.host, host.port));
     }
     return keys;
@@ -86,7 +93,7 @@ export function Health() {
       );
       setRecords((current) => {
         const next = { ...current };
-        for (const host of hosts) {
+        for (const host of hosts.filter((entry) => isSshHost(entry))) {
           const hostKey = formatHostKey(host.host, host.port);
           const inventoryEntry = knownHosts.find((entry) => entry.host_key === hostKey);
           if (!inventoryEntry) continue;
@@ -112,7 +119,8 @@ export function Health() {
     }
   };
 
-  const runCheck = async (host: SshHost) => {
+  const runCheck = async (host: HostEntry) => {
+    if (!isSshHost(host)) return;
     setRecords((current) => ({
       ...current,
       [host.id]: { ...current[host.id], loading: true },
@@ -150,7 +158,7 @@ export function Health() {
   const runAllChecks = async () => {
     setRunningAll(true);
     try {
-      for (const host of visibleHosts) {
+      for (const host of visibleSshHosts) {
         // Mantemos sequencial para não saturar a rede local nem o provider DNS.
         // A lista costuma ser pequena o bastante para uma rodada manual.
         // eslint-disable-next-line no-await-in-loop
@@ -173,7 +181,7 @@ export function Health() {
             {inventoryLoading ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
             {t("health.actions.loadInventory")}
           </Button>
-          <Button onClick={runAllChecks} disabled={runningAll || visibleHosts.length === 0}>
+          <Button onClick={runAllChecks} disabled={runningAll || visibleSshHosts.length === 0}>
             {runningAll ? <Loader2 size={14} className="animate-spin" /> : <Activity size={14} />}
             {t("health.actions.runAll")}
           </Button>
@@ -182,17 +190,17 @@ export function Health() {
 
       <div className="flex-1 overflow-auto">
         <div className="max-w-6xl mx-auto px-6 py-6 flex flex-col gap-6">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
             <SummaryCard
               icon={CheckCircle2}
               label={t("health.summary.online")}
-              value={`${onlineCount}/${hosts.length}`}
+              value={`${onlineCount}/${visibleSshHosts.length}`}
               tone="success"
             />
             <SummaryCard
               icon={ShieldCheck}
               label={t("health.summary.inventory")}
-              value={`${inventoryCount}/${hosts.length}`}
+              value={`${inventoryCount}/${visibleSshHosts.length}`}
               tone="accent"
             />
             <SummaryCard
@@ -201,6 +209,16 @@ export function Health() {
               value={String(issueCount)}
               tone={issueCount > 0 ? "danger" : "muted"}
             />
+            <SummaryCard
+              icon={ShieldQuestion}
+              label={t("health.summary.unsupported")}
+              value={String(visibleHosts.length - visibleSshHosts.length)}
+              tone={visibleHosts.length - visibleSshHosts.length > 0 ? "muted" : "accent"}
+            />
+          </div>
+
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] px-4 py-3 text-sm text-[var(--text-muted)]">
+            {t("health.sshOnlyHint")}
           </div>
 
           <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] p-4">
@@ -229,8 +247,9 @@ export function Health() {
           )}
 
           <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] overflow-hidden">
-            <div className="grid grid-cols-[minmax(0,2fr)_100px_120px_140px_minmax(0,1.1fr)_minmax(0,1.1fr)_110px] gap-3 border-b border-[var(--border)] px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+            <div className="grid grid-cols-[minmax(0,1.8fr)_100px_100px_120px_140px_minmax(0,1.1fr)_minmax(0,1.1fr)_110px] gap-3 border-b border-[var(--border)] px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
               <span>{t("health.table.host")}</span>
+              <span>{t("health.table.protocol")}</span>
               <span>{t("health.table.status")}</span>
               <span>{t("health.table.latency")}</span>
               <span>{t("health.table.fingerprint")}</span>
@@ -292,13 +311,14 @@ function HealthRow({
   record,
   onRun,
 }: {
-  host: SshHost;
+  host: HostEntry;
   record?: HostHealthRecord;
   onRun: () => void;
 }) {
   const { t } = useTranslation();
+  const sshHost = isSshHost(host);
   const result = record?.result;
-  const status = result?.fingerprint_status ?? "unknown";
+  const status = sshHost ? result?.fingerprint_status ?? "unknown" : "unsupported";
 
   const handleCopy = async (value?: string | null) => {
     if (!value) return;
@@ -306,12 +326,18 @@ function HealthRow({
   };
 
   return (
-    <div className="grid grid-cols-[minmax(0,2fr)_100px_120px_140px_minmax(0,1.1fr)_minmax(0,1.1fr)_110px] gap-3 border-b border-[var(--border)] px-4 py-3 last:border-b-0">
+    <div className="grid grid-cols-[minmax(0,1.8fr)_100px_100px_120px_140px_minmax(0,1.1fr)_minmax(0,1.1fr)_110px] gap-3 border-b border-[var(--border)] px-4 py-3 last:border-b-0">
       <div className="min-w-0">
         <p className="text-sm font-medium text-[var(--text-primary)] truncate">{host.label}</p>
         <p className="text-xs text-[var(--text-muted)] truncate">
           {host.host}:{host.port}
         </p>
+      </div>
+
+      <div className="flex items-center">
+        <Badge variant={host.protocol === "ssh" ? "accent" : "warning"}>
+          {host.protocol.toUpperCase()}
+        </Badge>
       </div>
 
       <div className="flex items-center">
@@ -321,6 +347,8 @@ function HealthRow({
       <div className="flex items-center text-sm text-[var(--text-secondary)]">
         {record?.loading ? (
           <Loader2 size={14} className="animate-spin" />
+        ) : !sshHost ? (
+          "—"
         ) : result?.latency_ms ? (
           `${result.latency_ms} ms`
         ) : (
@@ -335,24 +363,24 @@ function HealthRow({
       <FingerprintCell
         value={result?.fingerprint}
         onCopy={handleCopy}
-        emptyLabel={result?.reachable ? t("health.fingerprint.notRead") : "—"}
+        emptyLabel={!sshHost ? t("health.fingerprint.unsupported") : result?.reachable ? t("health.fingerprint.notRead") : "—"}
       />
 
       <FingerprintCell
         value={result?.stored_fingerprint}
         onCopy={handleCopy}
-        emptyLabel={t("health.fingerprint.notStored")}
+        emptyLabel={!sshHost ? t("health.fingerprint.unsupported") : t("health.fingerprint.notStored")}
       />
 
       <div className="flex items-center justify-end gap-2">
-        <Button size="sm" variant="ghost" onClick={onRun} disabled={record?.loading}>
+        <Button size="sm" variant="ghost" onClick={onRun} disabled={record?.loading || !sshHost}>
           {record?.loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-          {t("health.actions.check")}
+          {sshHost ? t("health.actions.check") : t("health.actions.unsupported")}
         </Button>
       </div>
 
       {result?.error && (
-        <div className="col-span-7 rounded-lg bg-[var(--danger)]/8 px-3 py-2 text-xs text-[var(--danger)]">
+        <div className="col-span-8 rounded-lg bg-[var(--danger)]/8 px-3 py-2 text-xs text-[var(--danger)]">
           {result.error}
         </div>
       )}
@@ -385,7 +413,7 @@ function FingerprintCell({
   );
 }
 
-function StatusBadge({ status }: { status: HealthCheckResult["fingerprint_status"] | "unknown" }) {
+function StatusBadge({ status }: { status: HealthCheckResult["fingerprint_status"] | "unknown" | "unsupported" }) {
   const { t } = useTranslation();
 
   const config = {
@@ -418,6 +446,11 @@ function StatusBadge({ status }: { status: HealthCheckResult["fingerprint_status
       label: t("health.status.unreachable"),
       className: "bg-[var(--danger)]/10 text-[var(--danger)] border-[var(--danger)]/20",
       icon: WifiOff,
+    },
+    unsupported: {
+      label: t("health.status.unsupported"),
+      className: "bg-[var(--warning)]/10 text-[var(--warning)] border-[var(--warning)]/20",
+      icon: ShieldQuestion,
     },
   }[status];
 

@@ -1,4 +1,4 @@
-import { AppSettings, Credential, SshHost, SshKey } from "@/types";
+import { AppSettings, Credential, HostEntry, SshKey } from "@/types";
 
 export interface PortableSyncSettings {
   themeId: string;
@@ -35,8 +35,8 @@ export interface TransferSecretsPayload {
   };
 }
 
-export function sanitizeHosts(hosts: SshHost[]): SshHost[] {
-  return hosts.map(({ passwordRef: _passwordRef, totpSecret: _totpSecret, ...rest }) => rest as SshHost);
+export function sanitizeHosts(hosts: HostEntry[]): HostEntry[] {
+  return hosts.map(({ passwordRef: _passwordRef, totpSecret: _totpSecret, ...rest }) => rest as HostEntry);
 }
 
 export function sanitizeCredentials(credentials: Credential[]): Credential[] {
@@ -85,7 +85,7 @@ export function buildPortableSettings(settings: AppSettings): PortableSyncSettin
 }
 
 export function buildTransferSecretsPayload(
-  hosts: SshHost[],
+  hosts: HostEntry[],
   credentials: Credential[],
   sshKeys: SshKey[],
   settings: AppSettings
@@ -170,10 +170,10 @@ export function hydrateCredentials(
 }
 
 export function hydrateHosts(
-  hosts: SshHost[],
+  hosts: HostEntry[],
   secrets?: TransferSecretsPayload["hosts"],
-  currentHosts: SshHost[] = []
-): SshHost[] {
+  currentHosts: HostEntry[] = []
+): HostEntry[] {
   const currentById = new Map(currentHosts.map((host) => [host.id, host]));
   return hosts.map((host) => ({
     ...host,

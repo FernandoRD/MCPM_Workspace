@@ -30,7 +30,7 @@ async function createStandaloneTerminalWindow(route: string, hostLabel: string, 
   // e resulta em janela em branco. Prefixar com window.location.origin resolve
   // corretamente tanto em dev (http://localhost:1420) quanto em prod (tauri://localhost).
   const absoluteUrl = `${window.location.origin}${route}`;
-  const webview = new WebviewWindow(`ssh-session-${sessionId}`, {
+  const webview = new WebviewWindow(`terminal-session-${sessionId}`, {
     url: absoluteUrl,
     title: `${APP_NAME} - ${hostLabel}`,
     width: 1200,
@@ -60,6 +60,7 @@ async function storeQuickConnectBootstrap(
       host_id: hostId,
       host_label: hostLabel,
       host_address: hostAddress,
+      connection_protocol: sanitizedConnection.protocol,
       connection_host: sanitizedConnection.host,
       connection_port: sanitizedConnection.port,
       connection_username: sanitizedConnection.username,

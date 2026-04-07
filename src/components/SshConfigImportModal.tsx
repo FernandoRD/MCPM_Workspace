@@ -5,6 +5,7 @@ import { useHostsStore } from "@/store/hosts";
 import { useCredentialsStore } from "@/store/credentials";
 import { useSshKeysStore } from "@/store/sshKeys";
 import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
 import { importSshConfigToVault, loadSshConfigPreview, SshConfigImportPreview, SshConfigImportResult } from "@/lib/sshConfigImport";
 
@@ -85,9 +86,13 @@ export function SshConfigImportModal({
               <div className="flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
                 <FileCode2 size={15} className="text-[var(--accent)]" />
                 {preview.source_path ?? "~/.ssh/config"}
+                <Badge variant="accent">SSH</Badge>
               </div>
               <p className="mt-1 text-xs text-[var(--text-muted)]">
                 {t("sshConfigImport.description")}
+              </p>
+              <p className="mt-2 text-xs text-[var(--text-muted)]">
+                {t("sshConfigImport.sshOnlyHint")}
               </p>
             </div>
 

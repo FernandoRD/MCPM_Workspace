@@ -28,8 +28,16 @@
     },
     "protocols": {
       "ssh": "SSH",
-      "sftp": "SFTP",
-      "future": "Telnet and more"
+      "sftp": "SFTP (over SSH)",
+      "telnet": "Telnet",
+      "future": "Future extensions"
+    },
+    "protocolStatusTitle": "Current protocol status",
+    "protocolStatus": {
+      "ssh": "SSH with authentication, fingerprint inventory, snippets, tunnels, and health checks.",
+      "sftp": "SFTP available only for SSH hosts.",
+      "telnet": "Telnet with interactive sessions and tab/workspace management.",
+      "future": "Other protocols will build on the same multi-protocol foundation."
     },
     "highlightsTitle": "Highlights",
     "highlights": {
@@ -107,20 +115,24 @@
   "health": {
     "title": "Health Check and Fingerprints",
     "description": "Check reachability, latency, and compare the current fingerprint against the stored inventory.",
+    "sshOnlyHint": "The current fingerprint inventory and health check cover SSH hosts only. Other protocols remain visible for context.",
     "searchPlaceholder": "Filter hosts...",
     "empty": "No hosts match the current filters.",
     "actions": {
       "loadInventory": "Load inventory",
       "runAll": "Run all",
-      "check": "Check"
+      "check": "Check",
+      "unsupported": "Unavailable"
     },
     "summary": {
       "online": "Reachable hosts",
       "inventory": "Inventoried fingerprints",
-      "issues": "Issues found"
+      "issues": "Issues found",
+      "unsupported": "Outside SSH scope"
     },
     "table": {
       "host": "Host",
+      "protocol": "Protocol",
       "status": "Status",
       "latency": "Latency",
       "fingerprint": "Key",
@@ -134,11 +146,13 @@
       "new": "New",
       "storedOnly": "Stored only",
       "unknown": "Unknown",
-      "unreachable": "Unreachable"
+      "unreachable": "Unreachable",
+      "unsupported": "Unsupported"
     },
     "fingerprint": {
       "notRead": "Not read",
-      "notStored": "Not stored"
+      "notStored": "Not stored",
+      "unsupported": "N/A for this protocol"
     },
     "orphaned": {
       "title": "Inventory has orphaned entries",
@@ -156,6 +170,7 @@
     "fields": {
       "label": "Name / Label",
       "labelPlaceholder": "E.g.: Production Server",
+      "protocol": "Protocol",
       "host": "Host / IP",
       "hostPlaceholder": "E.g.: 192.168.1.10 or myserver.com",
       "port": "Port",
@@ -194,6 +209,9 @@
       "copying": "Copying...",
       "success": "Key successfully installed! You can now connect using your private key."
     },
+    "telnet": {
+      "authenticationHint": "Telnet hosts use interactive authentication inside the session itself. In this first step, SSH credentials, jump host, SSH compatibility and MFA stay disabled for this protocol."
+    },
     "sshCompat": {
       "section": "SSH Compatibility",
       "description": "Configure the algorithms accepted when connecting. Use 'Legacy' for older servers that don't support modern algorithms.",
@@ -228,6 +246,10 @@
       "portInvalid": "Port must be between 1 and 65535",
       "usernameRequired": "Username is required"
     }
+  },
+  "protocols": {
+    "ssh": "SSH",
+    "telnet": "Telnet"
   },
   "terminal": {
     "connecting": "Connecting to {{host}}...",
@@ -267,6 +289,7 @@
     "uploadSuccess": "Upload completed",
     "downloadSuccess": "Download completed",
     "openTerminal": "Open Terminal",
+    "sshOnly": "SFTP is available only for SSH hosts.",
     "columns": {
       "name": "Name",
       "size": "Size",
@@ -435,25 +458,28 @@
   },
   "backup": {
     "title": "Backup",
-    "description": "Export and import your settings and credentials",
+    "description": "Export and import hosts, protocols, settings, and credentials",
     "export": {
       "title": "Export Backup",
-      "description": "Saves all hosts and settings to a .sshvault file",
+      "description": "Saves all hosts, protocols, and settings to a .sshvault file",
       "button": "Export Backup",
       "withCredentials": "Include encrypted credentials",
       "withCredentialsHint": "Requires master password. Passwords and keys will be encrypted with AES-256-GCM.",
       "noMasterPassword": "Set a master password in Settings → Security to export encrypted credentials.",
       "success": "Backup exported successfully!",
       "cancelled": "Export cancelled.",
-      "hostsCount": "{{count}} host(s)"
+      "hostsCount": "{{count}} host(s)",
+      "protocolsPreserved": "Each host protocol is preserved in the backup.",
+      "protocolBreakdown": "SSH: {{ssh}} • Telnet: {{telnet}}"
     },
     "import": {
       "title": "Import Backup",
-      "description": "Restores hosts and settings from a .sshvault file",
+      "description": "Restores hosts, protocols, and settings from a .sshvault file",
       "button": "Select file...",
       "preview": "Backup preview",
       "exportedAt": "Exported at: {{date}}",
       "hostsFound": "{{count}} host(s) found",
+      "protocolBreakdown": "SSH: {{ssh}} • Telnet: {{telnet}}",
       "hasCredentials": "Contains encrypted credentials",
       "noCredentials": "No encrypted credentials",
       "enterPassword": "Enter the master password used during export to decrypt credentials.",
@@ -619,7 +645,8 @@
   "sshConfigImport": {
     "title": "Import ~/.ssh/config",
     "loading": "Reading SSH config file...",
-    "description": "Hosts detected in the config file. Duplicates (same alias, host, port, and user) are automatically skipped.",
+    "description": "Hosts detected in the SSH config file. Duplicates (same alias, host, port, and user) are automatically skipped.",
+    "sshOnlyHint": "This import flow is SSH-only. Every host created here is saved with the SSH protocol.",
     "summary": {
       "title": "Import summary",
       "hostsNew": "New hosts",
@@ -639,11 +666,12 @@
     "importToVault": "Import to Vault"
   },
   "commandPalette": {
-    "searchPlaceholder": "Search hosts, screens, or use user@host:port",
+    "searchPlaceholder": "Search hosts or use user@host:port / telnet://host:port",
     "quickActions": "Quick actions",
     "quickConnect": "Hosts",
     "directConnect": "Quick Connect",
     "directConnectHint": "Connects without saving the host and lets you choose password, private key or SSH agent.",
+    "directConnectTelnetHint": "Opens a Telnet session without saving the host. Authentication, when required, happens inside the remote session itself.",
     "directConnectPasswordRequired": "Enter a password to use this method in Quick Connect.",
     "directConnectKeyRequired": "Paste the private key to use this method in Quick Connect.",
     "directConnectAction": "Connect",
@@ -675,9 +703,9 @@
     "noResults": "No results found"
   },
   "notifications": {
-    "sshConnected": "Connected: {{host}}",
-    "sshError": "Failed to connect: {{host}}",
-    "sshDropped": "Session dropped unexpectedly: {{host}}",
+    "terminalConnected": "Connected: {{host}}",
+    "terminalError": "Failed to connect: {{host}}",
+    "terminalDropped": "Session dropped unexpectedly: {{host}}",
     "syncPushSuccess": "Sync sent successfully",
     "syncPullSuccess": "Data imported successfully",
     "syncError": "Sync error"

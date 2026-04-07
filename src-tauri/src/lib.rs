@@ -8,6 +8,7 @@ mod ssh;
 mod ssh_config;
 mod storage;
 mod sync;
+mod telnet;
 mod totp;
 
 use database::Database;
@@ -15,6 +16,7 @@ use session_bootstrap::QuickConnectBootstrapPayload;
 use sftp::SftpManager;
 use ssh::SshManager;
 use storage::Storage;
+use telnet::TelnetManager;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -23,6 +25,7 @@ pub struct AppState {
     pub database: Database,
     pub quick_connect_bootstraps: Mutex<HashMap<String, QuickConnectBootstrapPayload>>,
     pub ssh: Arc<tokio::sync::Mutex<SshManager>>,
+    pub telnet: Arc<tokio::sync::Mutex<TelnetManager>>,
     pub sftp: Arc<tokio::sync::Mutex<SftpManager>>,
     pub rate_limiter: rate_limit::RateLimiter,
 }
@@ -43,6 +46,7 @@ pub fn run() {
             database,
             quick_connect_bootstraps: Mutex::new(HashMap::new()),
             ssh: Arc::new(tokio::sync::Mutex::new(SshManager::new())),
+            telnet: Arc::new(tokio::sync::Mutex::new(TelnetManager::new())),
             sftp: Arc::new(tokio::sync::Mutex::new(SftpManager::new())),
             rate_limiter: rate_limit::RateLimiter::new(),
         })
@@ -72,6 +76,11 @@ pub fn run() {
             ssh::ssh_stop_tunnel,
             ssh::ssh_list_known_hosts,
             ssh::ssh_health_check,
+            telnet::telnet_connect,
+            telnet::telnet_send_input,
+            telnet::telnet_resize,
+            telnet::telnet_disconnect,
+            telnet::telnet_session_exists,
             ssh_config::ssh_import_config,
             ssh_config::ssh_apply_imported_config,
             ssh_config::ssh_probe_host,

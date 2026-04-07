@@ -4,6 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useLocation, useNavigate } from "react-router-dom";
 import { X, Plus, Wifi, WifiOff, Loader2, FolderOpen } from "lucide-react";
 import { useSessionsStore } from "@/store/sessions";
+import { useHostsStore } from "@/store/hosts";
 import { cn } from "@/lib/utils";
 import { SessionTab } from "@/types";
 import { buildSessionRoute, isStandaloneWindow, withStandaloneQuery } from "@/lib/windowMode";
@@ -13,6 +14,7 @@ export function TabBar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { tabs, activeTabId, closeSession, setActiveTab } = useSessionsStore();
+  const getHost = useHostsStore((s) => s.getHost);
   const standalone = isStandaloneWindow(location.search);
 
   if (tabs.length === 0) return null;
@@ -37,10 +39,13 @@ export function TabBar() {
   const handleClose = async (e: React.MouseEvent, tab: SessionTab) => {
     e.stopPropagation();
     const remaining = tabs.filter((t) => t.id !== tab.id);
+    const protocol = tab.connection?.protocol ?? getHost(tab.hostId)?.protocol ?? "ssh";
 
     if (tab.type === "terminal") {
       await Promise.all(
-        tab.panes.map((pane) => invoke("ssh_disconnect", { tabId: pane.id }).catch(() => {}))
+        tab.panes.map((pane) =>
+          invoke(protocol === "telnet" ? "telnet_disconnect" : "ssh_disconnect", { tabId: pane.id }).catch(() => {})
+        )
       );
     } else {
       await invoke("sftp_disconnect", { sessionId: tab.id }).catch(() => {});

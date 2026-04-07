@@ -8,6 +8,7 @@ pub struct QuickConnectBootstrapPayload {
     pub host_id: String,
     pub host_label: String,
     pub host_address: String,
+    pub connection_protocol: String,
     pub connection_host: String,
     pub connection_port: u16,
     pub connection_username: String,

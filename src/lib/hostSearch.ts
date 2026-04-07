@@ -1,11 +1,11 @@
-import { Credential, SshHost } from "@/types";
+import { Credential, HostEntry } from "@/types";
 
-export function getHostUsername(host: SshHost, credential?: Credential): string {
+export function getHostUsername(host: HostEntry, credential?: Credential): string {
   return credential?.username ?? host.username ?? "";
 }
 
 export function matchesHostSearch(
-  host: SshHost,
+  host: HostEntry,
   search: string,
   credential?: Credential
 ): boolean {
@@ -16,6 +16,7 @@ export function matchesHostSearch(
   const haystack = [
     host.label,
     host.host,
+    host.protocol,
     host.group,
     host.notes,
     username,
@@ -29,10 +30,10 @@ export function matchesHostSearch(
 }
 
 export function sortHosts(
-  hosts: SshHost[],
+  hosts: HostEntry[],
   getCredential: (credentialId: string) => Credential | undefined,
   mode: "recent" | "alphabetical"
-): SshHost[] {
+): HostEntry[] {
   return [...hosts].sort((left, right) => {
     const leftUsername = getHostUsername(left, left.credentialId ? getCredential(left.credentialId) : undefined);
     const rightUsername = getHostUsername(right, right.credentialId ? getCredential(right.credentialId) : undefined);

@@ -20,10 +20,10 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import {
-  SshHost,
   AppSettings,
   Credential,
   EncryptedCredentials,
+  HostEntry,
   SshKey,
 } from "@/types";
 import {
@@ -46,7 +46,7 @@ export interface SyncFile {
   app: "ssh-vault";
   version: 1;
   syncedAt: string;
-  hosts: SshHost[];
+  hosts: HostEntry[];
   /** Credenciais sem segredos sensíveis */
   credentials: Credential[];
   /** Chaves SSH sem material privado */
@@ -73,7 +73,7 @@ export interface SyncResult {
  * - Com senha mestra: credenciais vão sem segredos + `encryptedSecrets` cifrado.
  */
 export async function buildSyncPayload(
-  hosts: SshHost[],
+  hosts: HostEntry[],
   credentials: Credential[],
   sshKeys: SshKey[],
   settings: AppSettings,
@@ -138,11 +138,11 @@ export async function applySyncPayload(
   file: SyncFile,
   masterPassword: string | null,
   mode: "merge" | "replace",
-  currentHosts: SshHost[],
+  currentHosts: HostEntry[],
   currentCredentials: Credential[],
   currentSshKeys: SshKey[],
   currentSettings: AppSettings,
-  replaceHosts: (hosts: SshHost[]) => void,
+  replaceHosts: (hosts: HostEntry[]) => void,
   replaceCredentials: (credentials: Credential[]) => void,
   replaceSshKeys: (sshKeys: SshKey[]) => void,
   replaceSettings: (settings: AppSettings) => void
@@ -160,7 +160,7 @@ export async function applySyncPayload(
   const remoteCredentials = hydrateCredentials(file.credentials ?? [], secretsPayload.credentials, currentCredentials);
   const remoteSshKeys = hydrateSshKeys(file.sshKeys ?? [], secretsPayload.sshKeys, currentSshKeys);
 
-  let finalHosts: SshHost[];
+  let finalHosts: HostEntry[];
   let finalCredentials: Credential[];
   let finalSshKeys: SshKey[];
   let hostsAdded = 0;

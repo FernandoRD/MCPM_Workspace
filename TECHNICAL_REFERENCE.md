@@ -20,16 +20,16 @@ Documento de referência para desenvolvimento e manutenção do MPCM Workspace n
 
 O MPCM Workspace é uma aplicação desktop Tauri com frontend React e backend Rust para gerenciar:
 
-- hosts SSH
+- hosts `SSH` e `Telnet`
 - credenciais reutilizáveis
 - chaves SSH
-- sessões de terminal e SFTP
+- sessões de terminal multi-protocolo e SFTP
 - snippets, túneis e workspaces
 - sincronização remota
 - backup/restore
 - health check e inventário de fingerprints
 
-O posicionamento atual do produto é `Multi-Protocol Connection Manager`, embora o núcleo implementado hoje ainda esteja concentrado em SSH/SFTP.
+O posicionamento atual do produto é `Multi-Protocol Connection Manager` e isso já se reflete na arquitetura de sessão: `SSH` e `Telnet` compartilham a camada de terminal, enquanto recursos específicos como `SFTP`, túneis, inventário de fingerprints, `~/.ssh/config` e MFA/TOTP continuam restritos a `SSH`.
 
 O app segue uma abordagem `local-first`:
 
@@ -78,7 +78,7 @@ src/
     Sidebar/Sidebar.tsx
     SshConfigImportModal.tsx
     TabBar/TabBar.tsx
-    Terminal/SshPane.tsx
+    Terminal/TerminalPane.tsx
     TotpDisplay/TotpDisplay.tsx
     ui/
   hooks/
@@ -140,6 +140,7 @@ src-tauri/
     ssh_config.rs
     storage.rs
     sync.rs
+    telnet.rs
     totp.rs
 ```
 
@@ -149,14 +150,16 @@ Arquivo-base: [index.ts](/home/fernando/Documentos/ssh_vault/src/types/index.ts)
 
 ### Entidades principais
 
-- `SshHost`
-  Host salvo no vault, com grupo, tags, notas, cor, TOTP, `jumpHostId`, preset SSH e vínculo opcional com `credentialId`.
+- `HostEntry`
+  Host salvo no vault, com `protocol`, grupo, tags, notas, cor, TOTP, `jumpHostId`, preset SSH e vínculo opcional com `credentialId`.
 - `Credential`
   Credencial reutilizável com `username`, `authMethod`, `password?` e `keyId?`.
 - `SshKey`
   Chave SSH persistida separadamente com `privateKeyContent`, `publicKeyContent?` e `passphrase?`.
 - `SessionTab`
   Estado volátil de sessão de terminal ou SFTP na janela atual.
+- `TerminalPaneState`
+  Estado de cada pane de terminal, compartilhado por sessões `SSH` e `Telnet`.
 - `AppSettings`
   Tema, idioma, terminal, SSH, segurança, sync, grupos e produtividade.
 
@@ -195,6 +198,8 @@ Ele sanitiza e reidrata:
 - chaves SSH
 - settings portáveis
 - segredos de sync e backup
+
+O campo `protocol` do host é parte desse estado portátil e é preservado em sync, backup e restore.
 
 ## 5. Stores Zustand
 
@@ -261,6 +266,15 @@ Rotas atuais:
 - O subtítulo usado na documentação e na página `About` é `Multi-Protocol Connection Manager`
 - Identificadores internos legados como `ssh-vault` foram mantidos em storage, sync e backup para evitar migrações destrutivas de dados existentes
 
+### Consciência de protocolo
+
+- [productivity.ts](/home/fernando/Documentos/ssh_vault/src/lib/productivity.ts)
+  Centraliza capacidades por protocolo para snippets, workspaces, batch execution e túneis.
+- [portableState.ts](/home/fernando/Documentos/ssh_vault/src/lib/portableState.ts)
+  Normaliza e preserva `protocol` durante import/export e sync.
+- [sessionLauncher.ts](/home/fernando/Documentos/ssh_vault/src/lib/sessionLauncher.ts)
+  Lança janelas dedicadas de sessão usando nomenclatura neutra de terminal.
+
 ### Sync / backup / estado portátil
 
 - [sync.ts](/home/fernando/Documentos/ssh_vault/src/lib/sync.ts)
@@ -305,6 +319,8 @@ Arquivo-base: [lib.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/lib.rs)
 - `ssh_send_input`
 - `ssh_resize`
 - `ssh_disconnect`
+- `ssh_session_exists`
+- `ssh_trust_host`
 - `ssh_copy_id`
 - `ssh_generate_key`
 - `ssh_exec`
@@ -313,9 +329,18 @@ Arquivo-base: [lib.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/lib.rs)
 - `ssh_list_known_hosts`
 - `ssh_health_check`
 
+### Telnet
+
+- `telnet_connect`
+- `telnet_send_input`
+- `telnet_resize`
+- `telnet_disconnect`
+- `telnet_session_exists`
+
 ### SSH config
 
 - `ssh_import_config`
+- `ssh_apply_imported_config`
 - `ssh_probe_host`
 
 ### SFTP
@@ -328,6 +353,14 @@ Arquivo-base: [lib.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/lib.rs)
 - `sftp_delete`
 - `sftp_rename`
 - `sftp_disconnect`
+- `sftp_session_exists`
+
+### Eventos de terminal
+
+- `terminal-output`
+  Canal compartilhado de saída para sessões `SSH` e `Telnet`.
+- `terminal-status`
+  Canal compartilhado de status para sessões `SSH` e `Telnet`, usado para `connecting`, `connected`, `error` e `disconnected`.
 
 ### Banco
 
@@ -378,6 +411,8 @@ O pacote de sync atual inclui:
 - `settings` portáveis
 - `encryptedSecrets?`
 
+O `protocol` de cada host faz parte desse pacote e é preservado durante `push`, `pull` e merge local.
+
 Observações:
 
 - `push` envia snapshot local atual
@@ -399,6 +434,8 @@ O arquivo `.sshvault` hoje pode transportar:
 - chaves SSH
 - settings portáveis
 - segredos cifrados opcionais
+
+O campo `protocol` do host também é preservado no backup, então restores mantêm a diferenciação entre `SSH` e `Telnet`.
 
 O restore preserva IDs e restaura entidades com `replace*`, evitando perder vínculos entre host, credencial e chave.
 
@@ -424,6 +461,8 @@ O backend mantém inventário TOFU em `known_hosts.json` e agora expõe leitura 
 - fingerprint atual do host
 - fingerprint armazenada localmente
 
+Esse fluxo continua sendo específico de `SSH`; hosts `Telnet` ficam fora do inventário e do health check de fingerprint.
+
 Arquivo principal: [ssh.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/ssh.rs)
 
 ## 11. Fluxos importantes
@@ -443,6 +482,7 @@ Arquivo principal: [ssh.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/ss
 
 - Página: [Health.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Health.tsx)
 - Backend: [ssh.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/ssh.rs)
+- Escopo atual: somente hosts `SSH`
 
 ### Edição em massa de hosts
 

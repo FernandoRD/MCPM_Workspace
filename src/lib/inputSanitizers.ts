@@ -1,8 +1,9 @@
 import {
   AppSettings,
+  ConnectionProtocol,
   Credential,
+  HostEntry,
   SessionConnection,
-  SshHost,
   TunnelProfile,
 } from "@/types";
 
@@ -21,9 +22,14 @@ function sanitizeTags(tags: string[] | undefined): string[] | undefined {
   return tags.map((tag) => tag.trim()).filter(Boolean);
 }
 
-export function sanitizeHostInput<T extends Partial<SshHost>>(host: T): T {
+function sanitizeProtocol(protocol: ConnectionProtocol | string | undefined): ConnectionProtocol {
+  return protocol === "telnet" ? "telnet" : "ssh";
+}
+
+export function sanitizeHostInput<T extends Partial<HostEntry>>(host: T): T {
   return {
     ...host,
+    protocol: sanitizeProtocol(host.protocol) as T["protocol"],
     label: trimRequired(host.label) as T["label"],
     host: trimRequired(host.host) as T["host"],
     username: trimOptional(host.username) as T["username"],
@@ -35,7 +41,7 @@ export function sanitizeHostInput<T extends Partial<SshHost>>(host: T): T {
   };
 }
 
-export function sanitizeHosts(hosts: SshHost[]): SshHost[] {
+export function sanitizeHosts(hosts: HostEntry[]): HostEntry[] {
   return hosts.map((host) => sanitizeHostInput(host));
 }
 
@@ -55,6 +61,7 @@ export function sanitizeCredentials(credentials: Credential[]): Credential[] {
 export function sanitizeSessionConnection(connection: SessionConnection): SessionConnection {
   return {
     ...connection,
+    protocol: sanitizeProtocol(connection.protocol),
     host: connection.host.trim(),
     username: connection.username.trim(),
   };

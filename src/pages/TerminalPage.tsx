@@ -10,9 +10,9 @@ import { useHostsStore } from "@/store/hosts";
 import { useCredentialsStore } from "@/store/credentials";
 import { useSshKeysStore } from "@/store/sshKeys";
 import { useConnectionLogsStore } from "@/store/connectionLogs";
-import { SshPane } from "@/components/Terminal/SshPane";
+import { TerminalPane } from "@/components/Terminal/TerminalPane";
 import { Button } from "@/components/ui/Button";
-import { SessionConnection } from "@/types";
+import { ConnectionProtocol, SessionConnection } from "@/types";
 import { buildSessionRoute, readSessionBootstrap, withStandaloneQuery } from "@/lib/windowMode";
 import { APP_NAME } from "@/lib/appInfo";
 
@@ -54,6 +54,7 @@ export function TerminalPage() {
           host_id: string;
           host_label: string;
           host_address: string;
+          connection_protocol: ConnectionProtocol;
           connection_host: string;
           connection_port: number;
           connection_username: string;
@@ -76,6 +77,7 @@ export function TerminalPage() {
           connection: {
             source: "quick-connect",
             bootstrapId: bootstrap.quickConnectBootstrapId,
+            protocol: payload.connection_protocol,
             host: payload.connection_host,
             port: payload.connection_port,
             username: payload.connection_username,
@@ -131,12 +133,12 @@ export function TerminalPage() {
     if (!everConnectedRef.current) {
       // Falha na conexão inicial — erro já aparece no terminal, notifica apenas se for erro
       if (status === "error") {
-        notify(APP_NAME, t("notifications.sshError", { host: hostLabelRef.current }));
+        notify(APP_NAME, t("notifications.terminalError", { host: hostLabelRef.current }));
       }
       return;
     }
     if (status === "error") {
-      notify(APP_NAME, t("notifications.sshDropped", { host: hostLabelRef.current }));
+      notify(APP_NAME, t("notifications.terminalDropped", { host: hostLabelRef.current }));
     }
     if (tabId) closeSession(tabId);
     if (bootstrap.standalone) {
@@ -162,7 +164,7 @@ export function TerminalPage() {
         connectedAt: new Date().toISOString(),
         status: "connected",
       });
-      notify(APP_NAME, t("notifications.sshConnected", { host: tab.hostLabel }));
+      notify(APP_NAME, t("notifications.terminalConnected", { host: tab.hostLabel }));
     }
   }, [tab, setLastConnected, openLog, t]);
 
@@ -189,6 +191,7 @@ export function TerminalPage() {
   }
 
   const credential = host?.credentialId ? getCredential(host.credentialId) : undefined;
+  const protocol = sessionConnection?.protocol ?? host?.protocol ?? "ssh";
   const authMethod = sessionConnection?.authMethod ?? credential?.authMethod ?? host?.authMethod ?? "password";
   const username = sessionConnection?.username ?? credential?.username ?? host?.username ?? "";
   const password = sessionConnection?.password ?? credential?.password ?? host?.passwordRef ?? null;
@@ -202,7 +205,7 @@ export function TerminalPage() {
   const isVertical = tab.splitDirection === "vertical";
 
   const handleOpenSftp = () => {
-    if (!host) return;
+    if (!host || protocol !== "ssh") return;
     const sftpTabId = openSftpTab(host.id, host.label, tab.hostAddress);
     navigate(
       buildSessionRoute("sftp", sftpTabId, {
@@ -215,7 +218,8 @@ export function TerminalPage() {
   };
 
   const handleClosePane = async (targetPaneId: string) => {
-    await invoke("ssh_disconnect", { tabId: targetPaneId }).catch(() => {});
+    const disconnectCommand = protocol === "telnet" ? "telnet_disconnect" : "ssh_disconnect";
+    await invoke(disconnectCommand, { tabId: targetPaneId }).catch(() => {});
     closePane(tab.id, targetPaneId);
   };
 
@@ -247,7 +251,7 @@ export function TerminalPage() {
           onClick={handleOpenSftp}
           title={t("terminal.openSftp")}
           className="gap-1.5 text-xs"
-          disabled={!host}
+          disabled={!host || protocol !== "ssh"}
         >
           <FolderOpen size={14} />
           {t("terminal.openSftp")}
@@ -280,8 +284,9 @@ export function TerminalPage() {
               </button>
             )}
 
-            <SshPane
+            <TerminalPane
               paneId={pane.id}
+              protocol={protocol}
               host={targetHost}
               port={targetPort}
               authMethod={authMethod}

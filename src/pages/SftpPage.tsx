@@ -155,6 +155,13 @@ export function SftpPage() {
 
   const connect = useCallback(async () => {
     if (!host) return;
+    if (host.protocol !== "ssh") {
+      const message = t("sftp.sshOnly");
+      setStatus("error");
+      setError(message);
+      updatePaneStatus(sessionId, "error");
+      return;
+    }
     const sessionExists = await invoke<boolean>("sftp_session_exists", { sessionId });
     if (sessionExists) {
       setStatus("connected");

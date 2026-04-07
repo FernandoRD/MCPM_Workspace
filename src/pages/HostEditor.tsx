@@ -8,7 +8,7 @@ import { useHostsStore } from "@/store/hosts";
 import { useCredentialsStore } from "@/store/credentials";
 import { useSshKeysStore } from "@/store/sshKeys";
 import { useSettingsStore } from "@/store/settings";
-import { SshHost, Credential, SshCompatPreset } from "@/types";
+import { HostEntry, Credential, SshCompatPreset, ConnectionProtocol } from "@/types";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
@@ -18,11 +18,12 @@ import { TotpDisplay } from "@/components/TotpDisplay/TotpDisplay";
 import { sanitizeHostInput } from "@/lib/inputSanitizers";
 import { cn } from "@/lib/utils";
 
-type FormData = Omit<SshHost, "id" | "createdAt" | "updatedAt" | "authMethod" | "passwordRef" | "privateKeyContent" | "passphrase" | "username">;
+type FormData = Omit<HostEntry, "id" | "createdAt" | "updatedAt" | "authMethod" | "passwordRef" | "privateKeyContent" | "passphrase" | "username">;
 
 const DEFAULT_FORM: FormData = {
   label: "",
   host: "",
+  protocol: "ssh",
   port: 22,
   tags: [],
   sshCompat: { preset: "modern" },
@@ -67,6 +68,7 @@ export function HostEditor() {
     .split(",")
     .map((tag) => tag.trim())
     .filter(Boolean);
+  const isTelnet = form.protocol === "telnet";
 
   useEffect(() => {
     if (!isNew && id) {
@@ -126,6 +128,17 @@ export function HostEditor() {
 
   const set = <K extends keyof FormData>(key: K, value: FormData[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
+
+  const handleProtocolChange = (protocol: ConnectionProtocol) => {
+    setForm((prev) => ({
+      ...prev,
+      protocol,
+      port:
+        protocol === "telnet"
+          ? prev.port === 22 ? 23 : prev.port
+          : prev.port === 23 ? 22 : prev.port,
+    }));
+  };
 
   const validate = (): boolean => {
     const sanitizedForm = sanitizeHostInput({ ...form, tags: parsedTags });
@@ -191,6 +204,17 @@ export function HostEditor() {
                 />
               </div>
               <div className="sm:col-span-2">
+                <Select
+                  id="protocol"
+                  label={t("hostEditor.fields.protocol")}
+                  value={form.protocol}
+                  onChange={(e) => handleProtocolChange(e.target.value as ConnectionProtocol)}
+                >
+                  <option value="ssh">{t("protocols.ssh")}</option>
+                  <option value="telnet">{t("protocols.telnet")}</option>
+                </Select>
+              </div>
+              <div className="sm:col-span-2">
                 <Input
                   id="host"
                   label={t("hostEditor.fields.host")}
@@ -221,7 +245,11 @@ export function HostEditor() {
             onToggle={toggleSection}
           >
             <div className="flex flex-col gap-3 mt-1">
-              {credentials.length === 0 ? (
+              {isTelnet ? (
+                <div className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-primary)] px-4 py-4 text-sm text-[var(--text-muted)]">
+                  {t("hostEditor.telnet.authenticationHint")}
+                </div>
+              ) : credentials.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 py-6 text-center rounded-lg border border-dashed border-[var(--border)]">
                   <p className="text-sm text-[var(--text-muted)]">
                     {t("credentials.noCredentials")}
@@ -374,7 +402,7 @@ export function HostEditor() {
                   ))}
                 </div>
               )}
-              {otherHosts.length > 0 && (
+              {!isTelnet && otherHosts.length > 0 && (
                 <Select
                   id="jumpHost"
                   label={t("hostEditor.fields.jumpHost")}
@@ -401,143 +429,143 @@ export function HostEditor() {
           </Section>
 
           {/* SSH Compat Section */}
-          <Section
-            id="sshCompat"
-            title={t("hostEditor.sshCompat.section")}
-            open={openSections.has("sshCompat")}
-            onToggle={toggleSection}
-          >
-            <div className="flex flex-col gap-3">
-              <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-                {t("hostEditor.sshCompat.description")}
-              </p>
-              <div className="flex flex-col gap-2">
-                {(["modern", "legacy", "very-legacy"] as SshCompatPreset[]).map((preset) => {
-                  const selected = (form.sshCompat?.preset ?? "modern") === preset;
-                  return (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => set("sshCompat", { preset })}
-                      className={cn(
-                        "flex flex-col gap-1 rounded-lg border px-4 py-3 text-left transition-colors",
-                        selected
-                          ? "border-[var(--accent)] bg-[var(--accent-subtle)]"
-                          : "border-[var(--border)] bg-[var(--bg-primary)] hover:border-[var(--border-focus)] hover:bg-[var(--bg-hover)]"
-                      )}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className={cn(
-                          "text-sm font-semibold",
-                          selected ? "text-[var(--accent)]" : "text-[var(--text-primary)]"
-                        )}>
-                          {t(`hostEditor.sshCompat.${preset === "very-legacy" ? "veryLegacy" : preset}`)}
-                        </span>
-                        {preset === "modern" && (
-                          <span className="rounded-full bg-[var(--success-subtle,#d1fae5)] px-2 py-0.5 text-[10px] font-medium text-[var(--success,#10b981)]">
-                            Recomendado
-                          </span>
+          {!isTelnet && (
+            <Section
+              id="sshCompat"
+              title={t("hostEditor.sshCompat.section")}
+              open={openSections.has("sshCompat")}
+              onToggle={toggleSection}
+            >
+              <div className="flex flex-col gap-3">
+                <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+                  {t("hostEditor.sshCompat.description")}
+                </p>
+                <div className="flex flex-col gap-2">
+                  {(["modern", "legacy", "very-legacy"] as SshCompatPreset[]).map((preset) => {
+                    const selected = (form.sshCompat?.preset ?? "modern") === preset;
+                    return (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => set("sshCompat", { preset })}
+                        className={cn(
+                          "flex flex-col gap-1 rounded-lg border px-4 py-3 text-left transition-colors",
+                          selected
+                            ? "border-[var(--accent)] bg-[var(--accent-subtle)]"
+                            : "border-[var(--border)] bg-[var(--bg-primary)] hover:border-[var(--border-focus)] hover:bg-[var(--bg-hover)]"
                         )}
-                      </div>
-                      <p className="text-xs text-[var(--text-muted)]">
-                        {t(`hostEditor.sshCompat.${preset === "very-legacy" ? "veryLegacyDesc" : preset + "Desc"}`)}
-                      </p>
-                      <p className="text-[11px] font-mono text-[var(--text-muted)] opacity-70">
-                        {t(`hostEditor.sshCompat.${preset === "very-legacy" ? "veryLegacyAlgos" : preset + "Algos"}`)}
-                      </p>
-                    </button>
-                  );
-                })}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className={cn(
+                            "text-sm font-semibold",
+                            selected ? "text-[var(--accent)]" : "text-[var(--text-primary)]"
+                          )}>
+                            {t(`hostEditor.sshCompat.${preset === "very-legacy" ? "veryLegacy" : preset}`)}
+                          </span>
+                          {preset === "modern" && (
+                            <span className="rounded-full bg-[var(--success-subtle,#d1fae5)] px-2 py-0.5 text-[10px] font-medium text-[var(--success,#10b981)]">
+                              Recomendado
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-[var(--text-muted)]">
+                          {t(`hostEditor.sshCompat.${preset === "very-legacy" ? "veryLegacyDesc" : preset + "Desc"}`)}
+                        </p>
+                        <p className="text-[11px] font-mono text-[var(--text-muted)] opacity-70">
+                          {t(`hostEditor.sshCompat.${preset === "very-legacy" ? "veryLegacyAlgos" : preset + "Algos"}`)}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          </Section>
+            </Section>
+          )}
 
           {/* MFA Section */}
-          <Section
-            id="mfa"
-            title={t("hostEditor.mfa.section")}
-            open={openSections.has("mfa")}
-            onToggle={toggleSection}
-          >
-            <div className="flex flex-col gap-4">
-              {/* Enable toggle */}
-              <label className="flex items-start gap-3 cursor-pointer">
-                <div className="relative mt-0.5">
-                  <input
-                    type="checkbox"
-                    className="sr-only peer"
-                    checked={form.mfaEnabled ?? false}
-                    onChange={(e) => {
-                      set("mfaEnabled", e.target.checked);
-                      if (!e.target.checked) {
-                        set("totpSecret", undefined);
-                        set("totpAlgorithm", undefined);
-                        setTotpOtpauthUrl(null);
-                      }
-                    }}
-                  />
-                  <div className="h-5 w-9 rounded-full bg-[var(--border)] peer-checked:bg-[var(--accent)] transition-colors" />
-                  <div className="absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform peer-checked:translate-x-4" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-[var(--text-primary)]">
-                    {t("hostEditor.mfa.enable")}
-                  </p>
-                  <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                    {t("hostEditor.mfa.enableDescription")}
-                  </p>
-                </div>
-              </label>
-
-              {form.mfaEnabled && (
-                <>
-                  {/* Secret input + generate button */}
-                  <div className="flex gap-2 items-end">
-                    <div className="flex-1">
-                      <Input
-                        id="totpSecret"
-                        label={t("hostEditor.mfa.secret")}
-                        placeholder={t("hostEditor.mfa.secretPlaceholder")}
-                        value={form.totpSecret ?? ""}
-                        onChange={(e) => {
-                          const value = e.target.value.toUpperCase();
-                          set("totpSecret", value || undefined);
-                          set("totpAlgorithm", value ? (form.totpAlgorithm ?? "SHA256") : undefined);
+          {!isTelnet && (
+            <Section
+              id="mfa"
+              title={t("hostEditor.mfa.section")}
+              open={openSections.has("mfa")}
+              onToggle={toggleSection}
+            >
+              <div className="flex flex-col gap-4">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <div className="relative mt-0.5">
+                    <input
+                      type="checkbox"
+                      className="sr-only peer"
+                      checked={form.mfaEnabled ?? false}
+                      onChange={(e) => {
+                        set("mfaEnabled", e.target.checked);
+                        if (!e.target.checked) {
+                          set("totpSecret", undefined);
+                          set("totpAlgorithm", undefined);
                           setTotpOtpauthUrl(null);
-                        }}
-                        className="font-mono"
-                      />
-                    </div>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="mb-0.5 flex-shrink-0"
-                      onClick={generateTotpSecret}
-                      disabled={generatingTotp}
-                    >
-                      <RefreshCw size={13} className={generatingTotp ? "animate-spin" : ""} />
-                      {t("hostEditor.mfa.generateSecret")}
-                    </Button>
+                        }
+                      }}
+                    />
+                    <div className="h-5 w-9 rounded-full bg-[var(--border)] peer-checked:bg-[var(--accent)] transition-colors" />
+                    <div className="absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform peer-checked:translate-x-4" />
                   </div>
+                  <div>
+                    <p className="text-sm font-medium text-[var(--text-primary)]">
+                      {t("hostEditor.mfa.enable")}
+                    </p>
+                    <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                      {t("hostEditor.mfa.enableDescription")}
+                    </p>
+                  </div>
+                </label>
 
-                  {/* QR Code */}
-                  {totpOtpauthUrl && (
-                    <div className="flex flex-col items-center gap-3 rounded-lg border border-[var(--border)] bg-white p-4">
-                      <QRCode value={totpOtpauthUrl} size={160} />
-                      <p className="text-xs text-center text-[var(--text-muted)] leading-relaxed" style={{color: "#555"}}>
-                        {t("hostEditor.mfa.scanQr")}
-                      </p>
+                {form.mfaEnabled && (
+                  <>
+                    <div className="flex gap-2 items-end">
+                      <div className="flex-1">
+                        <Input
+                          id="totpSecret"
+                          label={t("hostEditor.mfa.secret")}
+                          placeholder={t("hostEditor.mfa.secretPlaceholder")}
+                          value={form.totpSecret ?? ""}
+                          onChange={(e) => {
+                            const value = e.target.value.toUpperCase();
+                            set("totpSecret", value || undefined);
+                            set("totpAlgorithm", value ? (form.totpAlgorithm ?? "SHA256") : undefined);
+                            setTotpOtpauthUrl(null);
+                          }}
+                          className="font-mono"
+                        />
+                      </div>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="mb-0.5 flex-shrink-0"
+                        onClick={generateTotpSecret}
+                        disabled={generatingTotp}
+                      >
+                        <RefreshCw size={13} className={generatingTotp ? "animate-spin" : ""} />
+                        {t("hostEditor.mfa.generateSecret")}
+                      </Button>
                     </div>
-                  )}
 
-                  {/* Live TOTP preview */}
-                  {form.totpSecret && form.totpSecret.length >= 8 && (
-                    <TotpDisplay secretBase32={form.totpSecret} secretAlgorithm={form.totpAlgorithm} />
-                  )}
-                </>
-              )}
-            </div>
-          </Section>
+                    {totpOtpauthUrl && (
+                      <div className="flex flex-col items-center gap-3 rounded-lg border border-[var(--border)] bg-white p-4">
+                        <QRCode value={totpOtpauthUrl} size={160} />
+                        <p className="text-xs text-center text-[var(--text-muted)] leading-relaxed" style={{color: "#555"}}>
+                          {t("hostEditor.mfa.scanQr")}
+                        </p>
+                      </div>
+                    )}
+
+                    {form.totpSecret && form.totpSecret.length >= 8 && (
+                      <TotpDisplay secretBase32={form.totpSecret} secretAlgorithm={form.totpAlgorithm} />
+                    )}
+                  </>
+                )}
+              </div>
+            </Section>
+          )}
 
           {/* Actions */}
           <div className="flex items-center justify-end gap-3 pt-2">

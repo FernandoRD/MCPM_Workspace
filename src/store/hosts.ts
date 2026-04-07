@@ -1,22 +1,22 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
-import { SshHost } from "@/types";
+import { HostEntry } from "@/types";
 import { sanitizeHostInput, sanitizeHosts } from "@/lib/inputSanitizers";
 import { v4 as uuidv4 } from "uuid";
 
 interface HostsStore {
-  hosts: SshHost[];
+  hosts: HostEntry[];
   initialized: boolean;
   init: () => Promise<void>;
-  addHost: (host: Omit<SshHost, "id" | "createdAt" | "updatedAt" | "tags">) => SshHost;
-  updateHost: (id: string, data: Partial<SshHost>) => void;
+  addHost: (host: Omit<HostEntry, "id" | "createdAt" | "updatedAt" | "tags">) => HostEntry;
+  updateHost: (id: string, data: Partial<HostEntry>) => void;
   deleteHost: (id: string) => void;
   duplicateHost: (id: string) => void;
   setLastConnected: (id: string) => void;
-  getHost: (id: string) => SshHost | undefined;
+  getHost: (id: string) => HostEntry | undefined;
   getGroups: () => string[];
   /** Substitui todos os hosts (usado pelo sync remoto) */
-  replaceHosts: (hosts: SshHost[]) => void;
+  replaceHosts: (hosts: HostEntry[]) => void;
 }
 
 export const useHostsStore = create<HostsStore>()((set, get) => ({
@@ -25,7 +25,7 @@ export const useHostsStore = create<HostsStore>()((set, get) => ({
 
   init: async () => {
     try {
-      const hosts = sanitizeHosts(await invoke<SshHost[]>("db_get_hosts"));
+      const hosts = sanitizeHosts(await invoke<HostEntry[]>("db_get_hosts"));
 
       if (hosts.length === 0) {
         // Migra dados do localStorage se existirem
@@ -57,7 +57,7 @@ export const useHostsStore = create<HostsStore>()((set, get) => ({
 
   addHost: (data) => {
     const now = new Date().toISOString();
-    const newHost = sanitizeHostInput<SshHost>({
+    const newHost = sanitizeHostInput<HostEntry>({
       ...data,
       id: uuidv4(),
       tags: [],
@@ -90,7 +90,7 @@ export const useHostsStore = create<HostsStore>()((set, get) => ({
     const original = get().hosts.find((h) => h.id === id);
     if (!original) return;
     const now = new Date().toISOString();
-    const copy = sanitizeHostInput<SshHost>({
+    const copy = sanitizeHostInput<HostEntry>({
       ...original,
       id: uuidv4(),
       label: `${original.label} (cópia)`,

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { v4 as uuidv4 } from "uuid";
 import {
@@ -39,7 +39,11 @@ import {
 import {
   createEmptySnippet,
   createEmptyTunnelProfile,
+  formatHostAddress,
   getSnippetScopeLabel,
+  supportsRemoteExec,
+  supportsSftp,
+  supportsTunnels,
   runRemoteCommand,
   startTunnel,
   stopTunnel,
@@ -96,6 +100,7 @@ export function Operations() {
           title: "Workspaces",
           description: "Salve o conjunto atual de abas e restaure depois com um clique.",
           openTabs: "{{count}} abas abertas",
+          supportedTabs: "{{count}} item(ns) compatíveis agora",
           nameLabel: "Nome do workspace",
           namePlaceholder: "Ex.: Operação produção",
           saveCurrent: "Salvar abas atuais",
@@ -105,6 +110,10 @@ export function Operations() {
           update: "Atualizar",
           open: "Abrir",
           deletedHost: "Host removido",
+          incompatibleItem: "Incompatível com o protocolo atual",
+          openSummary: "Workspace aberto com {{count}} item(ns).",
+          openSkipped: "{{count}} item(ns) do workspace foram pulados por incompatibilidade de protocolo.",
+          nothingToOpen: "Nenhum item compatível deste workspace pôde ser aberto.",
           requireTabs: "Abra pelo menos uma sessão para salvar um workspace.",
           saved: "Workspace salvo.",
           updated: "Workspace atualizado.",
@@ -113,6 +122,7 @@ export function Operations() {
         snippet: {
           title: "Snippets",
           description: "Comandos reutilizáveis com variáveis como ${host}, ${user}, ${port} e ${cwd}.",
+          sshOnlyHint: "Nesta etapa, snippets operacionais executam apenas em hosts SSH.",
           nameLabel: "Nome do snippet",
           namePlaceholder: "Ex.: Reiniciar serviço",
           commandLabel: "Comando",
@@ -134,6 +144,7 @@ export function Operations() {
           edit: "Editar",
           requireFields: "Informe nome e comando do snippet.",
           requireScope: "Selecione o host ou grupo do escopo do snippet.",
+          unsupportedScope: "Snippets operacionais só podem apontar para hosts SSH ou grupos com ao menos um host SSH.",
           saved: "Snippet salvo.",
           updated: "Snippet atualizado.",
           scopeFallbackHost: "Host específico",
@@ -141,6 +152,7 @@ export function Operations() {
         tunnel: {
           title: "Túneis e port forwarding",
           description: "Perfis persistidos para LocalForward, RemoteForward e DynamicForward (SOCKS5).",
+          sshOnlyHint: "Túneis ainda estão disponíveis apenas para hosts SSH.",
           nameLabel: "Nome do túnel",
           namePlaceholder: "Ex.: Banco produção",
           hostLabel: "Host",
@@ -178,12 +190,15 @@ export function Operations() {
           saved: "Túnel salvo.",
           updated: "Túnel atualizado.",
           hostNotFound: "Host do túnel não encontrado.",
+          hostUnsupported: "O host selecionado não suporta túneis neste protocolo.",
+          unsupportedBadge: "Somente SSH",
           started: "Túnel {{label}} iniciado.",
           stoppedFeedback: "Túnel {{label}} finalizado.",
         },
         batch: {
           title: "Execução em lote",
           description: "Rode comandos em vários hosts e acompanhe a saída segmentada por servidor.",
+          sshOnlyHint: "A execução em lote usa apenas hosts SSH nesta etapa.",
           selectFiltered: "Selecionar filtrados",
           clearSelection: "Limpar seleção",
           searchLabel: "Busca",
@@ -205,6 +220,7 @@ export function Operations() {
           ok: "OK",
           error: "Erro",
           viewHost: "Ver host",
+          incompatibleHost: "Execução remota indisponível para este protocolo",
           stdout: "STDOUT",
           stderr: "STDERR",
           requireSnippet: "Selecione um snippet para a execução em lote.",
@@ -220,6 +236,7 @@ export function Operations() {
           title: "Workspaces",
           description: "Save the current set of tabs and restore it later with one click.",
           openTabs: "{{count}} open tabs",
+          supportedTabs: "{{count}} compatible item(s) right now",
           nameLabel: "Workspace name",
           namePlaceholder: "Ex.: Production operations",
           saveCurrent: "Save current tabs",
@@ -229,6 +246,10 @@ export function Operations() {
           update: "Update",
           open: "Open",
           deletedHost: "Removed host",
+          incompatibleItem: "Incompatible with the current protocol",
+          openSummary: "Workspace opened with {{count}} item(s).",
+          openSkipped: "{{count}} workspace item(s) were skipped due to protocol incompatibility.",
+          nothingToOpen: "No compatible item from this workspace could be opened.",
           requireTabs: "Open at least one session to save a workspace.",
           saved: "Workspace saved.",
           updated: "Workspace updated.",
@@ -237,6 +258,7 @@ export function Operations() {
         snippet: {
           title: "Snippets",
           description: "Reusable commands with variables like ${host}, ${user}, ${port}, and ${cwd}.",
+          sshOnlyHint: "At this stage, operational snippets run only on SSH hosts.",
           nameLabel: "Snippet name",
           namePlaceholder: "Ex.: Restart service",
           commandLabel: "Command",
@@ -258,6 +280,7 @@ export function Operations() {
           edit: "Edit",
           requireFields: "Provide a snippet name and command.",
           requireScope: "Select the host or group scope for the snippet.",
+          unsupportedScope: "Operational snippets can only target SSH hosts or groups with at least one SSH host.",
           saved: "Snippet saved.",
           updated: "Snippet updated.",
           scopeFallbackHost: "Specific host",
@@ -265,6 +288,7 @@ export function Operations() {
         tunnel: {
           title: "Tunnels and port forwarding",
           description: "Persistent profiles for LocalForward, RemoteForward, and DynamicForward (SOCKS5).",
+          sshOnlyHint: "Tunnels are still available only for SSH hosts.",
           nameLabel: "Tunnel name",
           namePlaceholder: "Ex.: Production database",
           hostLabel: "Host",
@@ -302,12 +326,15 @@ export function Operations() {
           saved: "Tunnel saved.",
           updated: "Tunnel updated.",
           hostNotFound: "Tunnel host not found.",
+          hostUnsupported: "The selected host does not support tunnels on this protocol.",
+          unsupportedBadge: "SSH only",
           started: "Tunnel {{label}} started.",
           stoppedFeedback: "Tunnel {{label}} stopped.",
         },
         batch: {
           title: "Batch execution",
           description: "Run commands across multiple hosts and follow output segmented by server.",
+          sshOnlyHint: "Batch execution uses only SSH hosts at this stage.",
           selectFiltered: "Select filtered",
           clearSelection: "Clear selection",
           searchLabel: "Search",
@@ -329,6 +356,7 @@ export function Operations() {
           ok: "OK",
           error: "Error",
           viewHost: "View host",
+          incompatibleHost: "Remote execution unavailable for this protocol",
           stdout: "STDOUT",
           stderr: "STDERR",
           requireSnippet: "Select a snippet for batch execution.",
@@ -339,7 +367,7 @@ export function Operations() {
   const [workspaceName, setWorkspaceName] = useState("");
   const [snippetDraft, setSnippetDraft] = useState<SnippetDraft>(createEmptySnippet());
   const [editingSnippetId, setEditingSnippetId] = useState<string | null>(null);
-  const [tunnelDraft, setTunnelDraft] = useState<TunnelDraft>(createEmptyTunnelProfile(hosts[0]?.id ?? ""));
+  const [tunnelDraft, setTunnelDraft] = useState<TunnelDraft>(createEmptyTunnelProfile(""));
   const [editingTunnelId, setEditingTunnelId] = useState<string | null>(null);
   const [batchSnippetId, setBatchSnippetId] = useState("");
   const [batchSelectedHostIds, setBatchSelectedHostIds] = useState<string[]>([]);
@@ -353,26 +381,68 @@ export function Operations() {
   const snippets = settings.productivity.snippets;
   const workspaces = settings.productivity.workspaces;
   const tunnels = settings.productivity.tunnels;
-  const groups = [...new Set(hosts.map((host) => host.group).filter((group): group is string => !!group))].sort();
-  const tags = [...new Set(hosts.flatMap((host) => host.tags ?? []).filter(Boolean))].sort();
+  const sshHosts = useMemo(() => hosts.filter((host) => host.protocol === "ssh"), [hosts]);
+  const groups = [...new Set(sshHosts.map((host) => host.group).filter((group): group is string => !!group))].sort();
+  const tags = [...new Set(sshHosts.flatMap((host) => host.tags ?? []).filter(Boolean))].sort();
+  const execGroups = useMemo(
+    () => [...new Set(sshHosts.map((host) => host.group).filter((group): group is string => !!group))].sort(),
+    [sshHosts]
+  );
 
   const hostNameResolver = (hostId: string) => hosts.find((host) => host.id === hostId)?.label;
   const selectedBatchSnippet = snippets.find((snippet) => snippet.id === batchSnippetId) ?? null;
+  const snippetScopeHostOptions = useMemo(() => {
+    if (!snippetDraft.scopeValue || snippetDraft.scopeType !== "host") return sshHosts;
+    const selectedHost = hosts.find((host) => host.id === snippetDraft.scopeValue);
+    if (!selectedHost || sshHosts.some((host) => host.id === selectedHost.id)) return sshHosts;
+    return [selectedHost, ...sshHosts];
+  }, [hosts, snippetDraft.scopeType, snippetDraft.scopeValue, sshHosts]);
+  const snippetScopeGroupOptions = useMemo(() => {
+    if (!snippetDraft.scopeValue || snippetDraft.scopeType !== "group" || execGroups.includes(snippetDraft.scopeValue)) {
+      return execGroups;
+    }
+    return [snippetDraft.scopeValue, ...execGroups];
+  }, [execGroups, snippetDraft.scopeType, snippetDraft.scopeValue]);
 
   const visibleBatchHosts = useMemo(
-    () => hosts.filter((host) => {
+    () => sshHosts.filter((host) => {
       const credential = host.credentialId ? getCredential(host.credentialId) : undefined;
       const matchesSearch = matchesHostSearch(host, batchSearch, credential);
       const matchesGroup = !batchGroupFilter || host.group === batchGroupFilter;
       const matchesTag = !batchTagFilter || host.tags.includes(batchTagFilter);
       return matchesSearch && matchesGroup && matchesTag;
     }),
-    [hosts, getCredential, batchSearch, batchGroupFilter, batchTagFilter]
+    [sshHosts, getCredential, batchSearch, batchGroupFilter, batchTagFilter]
   );
 
   const activeSessionsSnapshot = tabs
     .filter((tab) => (tab.type === "terminal" || tab.type === "sftp") && tab.connection?.source !== "quick-connect")
     .map((tab) => ({ hostId: tab.hostId, type: tab.type }));
+
+  const supportedWorkspaceItemCount = useMemo(
+    () =>
+      activeSessionsSnapshot.filter((item) => {
+        const host = hosts.find((entry) => entry.id === item.hostId);
+        if (!host) return false;
+        if (item.type === "sftp") return supportsSftp(host);
+        return true;
+      }).length,
+    [activeSessionsSnapshot, hosts]
+  );
+
+  useEffect(() => {
+    setBatchSelectedHostIds((current) => current.filter((id) => sshHosts.some((host) => host.id === id)));
+  }, [sshHosts]);
+
+  useEffect(() => {
+    if (editingTunnelId) return;
+    setTunnelDraft((current) => {
+      if (current.hostId && sshHosts.some((host) => host.id === current.hostId)) {
+        return current;
+      }
+      return createEmptyTunnelProfile(sshHosts[0]?.id ?? "");
+    });
+  }, [editingTunnelId, sshHosts]);
 
   const setProductivity = (next: Partial<typeof settings.productivity>) => {
     updateProductivity({
@@ -392,7 +462,7 @@ export function Operations() {
   };
 
   const resetTunnelDraft = () => {
-    setTunnelDraft(createEmptyTunnelProfile(hosts[0]?.id ?? ""));
+    setTunnelDraft(createEmptyTunnelProfile(sshHosts[0]?.id ?? ""));
     setEditingTunnelId(null);
   };
 
@@ -426,13 +496,16 @@ export function Operations() {
 
   const openWorkspace = async (workspace: Workspace) => {
     const createdRoutes: string[] = [];
+    let skippedItems = 0;
 
     for (const item of workspace.items) {
       const host = hosts.find((entry) => entry.id === item.hostId);
-      if (!host) continue;
+      if (!host) {
+        skippedItems += 1;
+        continue;
+      }
       const credential = host.credentialId ? getCredential(host.credentialId) : undefined;
-      const username = credential?.username ?? host.username ?? "";
-      const hostAddress = username ? `${username}@${host.host}` : host.host;
+      const hostAddress = formatHostAddress(host, credential);
 
       if (item.type === "terminal") {
         const route = await launchTerminalSession({
@@ -447,6 +520,10 @@ export function Operations() {
         continue;
       }
 
+      if (!supportsSftp(host)) {
+        skippedItems += 1;
+        continue;
+      }
       const id = openSftpTab(host.id, host.label, hostAddress);
       createdRoutes.push(
         buildSessionRoute("sftp", id, {
@@ -456,6 +533,17 @@ export function Operations() {
           hostAddress: standaloneWindow ? hostAddress : undefined,
         })
       );
+    }
+
+    if (createdRoutes.length === 0) {
+      showFeedback("error", text.workspace.nothingToOpen);
+      return;
+    }
+
+    if (skippedItems > 0) {
+      showFeedback("error", text.workspace.openSkipped.replace("{{count}}", String(skippedItems)));
+    } else {
+      showFeedback("success", text.workspace.openSummary.replace("{{count}}", String(createdRoutes.length)));
     }
 
     if (createdRoutes[0]) {
@@ -475,6 +563,20 @@ export function Operations() {
     if (snippetDraft.scopeType !== "global" && !snippetDraft.scopeValue) {
       showFeedback("error", text.snippet.requireScope);
       return;
+    }
+    if (snippetDraft.scopeType === "host") {
+      const scopeHost = hosts.find((host) => host.id === snippetDraft.scopeValue);
+      if (!scopeHost || !supportsRemoteExec(scopeHost)) {
+        showFeedback("error", text.snippet.unsupportedScope);
+        return;
+      }
+    }
+    if (snippetDraft.scopeType === "group") {
+      const hasExecCapableHost = sshHosts.some((host) => host.group === snippetDraft.scopeValue);
+      if (!hasExecCapableHost) {
+        showFeedback("error", text.snippet.unsupportedScope);
+        return;
+      }
     }
 
     const now = new Date().toISOString();
@@ -519,6 +621,11 @@ export function Operations() {
     const sanitizedDraft = sanitizeTunnelProfileInput(tunnelDraft);
     if (!sanitizedDraft.label || !sanitizedDraft.hostId || !sanitizedDraft.bindAddress || !sanitizedDraft.bindPort) {
       showFeedback("error", text.tunnel.fillRequired);
+      return;
+    }
+    const tunnelHost = hosts.find((entry) => entry.id === sanitizedDraft.hostId);
+    if (!tunnelHost || !supportsTunnels(tunnelHost)) {
+      showFeedback("error", text.tunnel.hostUnsupported);
       return;
     }
     if (sanitizedDraft.kind === "local" && (!sanitizedDraft.destinationHost || !sanitizedDraft.destinationPort)) {
@@ -575,6 +682,10 @@ export function Operations() {
       showFeedback("error", text.tunnel.hostNotFound);
       return;
     }
+    if (!supportsTunnels(host)) {
+      showFeedback("error", text.tunnel.hostUnsupported);
+      return;
+    }
     const credential = host.credentialId ? getCredential(host.credentialId) : undefined;
     const sshKey = credential?.keyId ? getSshKey(credential.keyId) : undefined;
     try {
@@ -612,7 +723,7 @@ export function Operations() {
       return;
     }
 
-    const selectedHosts = hosts.filter((host) => batchSelectedHostIds.includes(host.id));
+    const selectedHosts = hosts.filter((host) => batchSelectedHostIds.includes(host.id) && supportsRemoteExec(host));
     if (selectedHosts.length === 0) {
       showFeedback("error", text.batch.requireHosts);
       return;
@@ -630,6 +741,7 @@ export function Operations() {
     for (const host of selectedHosts) {
       try {
         const result = await runRemoteCommand({
+          host,
           hostId: host.id,
           snippetId: batchSnippetId,
           cwd: "~",
@@ -732,7 +844,10 @@ export function Operations() {
                 </h2>
                 <p className="text-sm text-[var(--text-muted)] mt-1">{text.workspace.description}</p>
               </div>
-              <Badge variant="default">{text.workspace.openTabs.replace("{{count}}", String(activeSessionsSnapshot.length))}</Badge>
+              <div className="flex items-center gap-2 flex-wrap justify-end">
+                <Badge variant="default">{text.workspace.openTabs.replace("{{count}}", String(activeSessionsSnapshot.length))}</Badge>
+                <Badge variant="accent">{text.workspace.supportedTabs.replace("{{count}}", String(supportedWorkspaceItemCount))}</Badge>
+              </div>
             </div>
 
             <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
@@ -755,7 +870,13 @@ export function Operations() {
                   description={text.workspace.emptyDescription}
                 />
               ) : (
-                workspaces.map((workspace) => (
+                workspaces.map((workspace) => {
+                  const compatibleCount = workspace.items.filter((item) => {
+                    const host = hosts.find((entry) => entry.id === item.hostId);
+                    if (!host) return false;
+                    return item.type === "sftp" ? supportsSftp(host) : true;
+                  }).length;
+                  return (
                   <div key={workspace.id} className="rounded-xl border border-[var(--border)] bg-[var(--bg-primary)] p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -765,13 +886,18 @@ export function Operations() {
                             .replace("{{count}}", String(workspace.items.length))
                             .replace("{{date}}", formatDate(workspace.updatedAt, locale))}
                         </p>
+                        <div className="mt-2">
+                          <Badge variant={compatibleCount > 0 ? "accent" : "warning"}>
+                            {text.workspace.supportedTabs.replace("{{count}}", String(compatibleCount))}
+                          </Badge>
+                        </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <Button variant="secondary" size="sm" onClick={() => saveWorkspaceFromTabs(workspace.id)}>
                           <Save size={13} />
                           {text.workspace.update}
                         </Button>
-                        <Button size="sm" onClick={() => openWorkspace(workspace)}>
+                        <Button size="sm" onClick={() => openWorkspace(workspace)} disabled={compatibleCount === 0}>
                           <Play size={13} />
                           {text.workspace.open}
                         </Button>
@@ -783,19 +909,27 @@ export function Operations() {
                     <div className="mt-3 flex flex-wrap gap-2">
                       {workspace.items.map((item, index) => {
                         const host = hosts.find((entry) => entry.id === item.hostId);
+                        const incompatible = !!host && item.type === "sftp" && !supportsSftp(host);
                         return (
                           <span
                             key={`${workspace.id}:${item.hostId}:${index}`}
-                            className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] px-2 py-1 text-xs text-[var(--text-secondary)]"
+                            className={cn(
+                              "inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs",
+                              incompatible
+                                ? "border-[var(--warning)]/40 bg-[var(--warning)]/10 text-[var(--warning)]"
+                                : "border-[var(--border)] text-[var(--text-secondary)]"
+                            )}
+                            title={incompatible ? text.workspace.incompatibleItem : undefined}
                           >
                             {item.type === "sftp" ? <Layers3 size={11} /> : <TerminalSquare size={11} />}
                             {host?.label ?? text.workspace.deletedHost}
+                            {host && <Badge variant={host.protocol === "ssh" ? "accent" : "warning"}>{host.protocol.toUpperCase()}</Badge>}
                           </span>
                         );
                       })}
                     </div>
                   </div>
-                ))
+                )})
               )}
             </div>
           </div>
@@ -807,6 +941,7 @@ export function Operations() {
                 {text.snippet.title}
               </h2>
               <p className="text-sm text-[var(--text-muted)] mt-1">{text.snippet.description}</p>
+              <p className="text-xs text-[var(--text-muted)] mt-2">{text.snippet.sshOnlyHint}</p>
             </div>
 
             <div className="grid gap-3">
@@ -851,8 +986,8 @@ export function Operations() {
                   >
                     <option value="">{text.snippet.selectPlaceholder}</option>
                     {snippetDraft.scopeType === "group"
-                      ? groups.map((group) => <option key={group} value={group}>{group}</option>)
-                      : hosts.map((host) => <option key={host.id} value={host.id}>{host.label}</option>)}
+                      ? snippetScopeGroupOptions.map((group) => <option key={group} value={group}>{group}</option>)
+                      : snippetScopeHostOptions.map((host) => <option key={host.id} value={host.id}>{host.label}</option>)}
                   </Select>
                 )}
               </div>
@@ -934,6 +1069,7 @@ export function Operations() {
                 {text.tunnel.title}
               </h2>
               <p className="text-sm text-[var(--text-muted)] mt-1">{text.tunnel.description}</p>
+              <p className="text-xs text-[var(--text-muted)] mt-2">{text.tunnel.sshOnlyHint}</p>
             </div>
 
             <div className="grid gap-3">
@@ -950,7 +1086,7 @@ export function Operations() {
                   onChange={(event) => setTunnelDraft((current) => ({ ...current, hostId: event.target.value }))}
                 >
                   <option value="">{text.tunnel.hostPlaceholder}</option>
-                  {hosts.map((host) => (
+                  {sshHosts.map((host) => (
                     <option key={host.id} value={host.id}>{host.label}</option>
                   ))}
                 </Select>
@@ -1039,6 +1175,7 @@ export function Operations() {
                 tunnels.map((profile) => {
                   const host = hosts.find((entry) => entry.id === profile.hostId);
                   const runtime = runtimes[profile.id];
+                  const hostSupportsTunnel = !!host && supportsTunnels(host);
                   const isRunning = runtime?.status === "running" || runtime?.status === "starting";
                   return (
                     <div key={profile.id} className="rounded-xl border border-[var(--border)] bg-[var(--bg-primary)] p-4">
@@ -1048,6 +1185,8 @@ export function Operations() {
                             <p className="text-sm font-semibold text-[var(--text-primary)]">{profile.label}</p>
                             {renderRuntimeBadge(profile.id)}
                             <Badge variant="default">{tunnelKindLabel(profile.kind)}</Badge>
+                            {host && <Badge variant={host.protocol === "ssh" ? "accent" : "warning"}>{host.protocol.toUpperCase()}</Badge>}
+                            {host && !hostSupportsTunnel && <Badge variant="warning">{text.tunnel.unsupportedBadge}</Badge>}
                           </div>
                           <p className="text-xs text-[var(--text-muted)] mt-1">
                             {host?.label ?? text.tunnel.hostRemoved} • {profile.bindAddress}:{profile.bindPort}
@@ -1065,7 +1204,7 @@ export function Operations() {
                               {text.tunnel.stop}
                             </Button>
                           ) : (
-                            <Button size="sm" onClick={() => handleStartTunnel(profile)}>
+                            <Button size="sm" onClick={() => handleStartTunnel(profile)} disabled={!hostSupportsTunnel}>
                               <Play size={12} />
                               {text.tunnel.start}
                             </Button>
@@ -1095,6 +1234,7 @@ export function Operations() {
                 {text.batch.title}
               </h2>
               <p className="text-sm text-[var(--text-muted)] mt-1">{text.batch.description}</p>
+              <p className="text-xs text-[var(--text-muted)] mt-2">{text.batch.sshOnlyHint}</p>
             </div>
             <div className="flex items-center gap-2">
               <Button variant="secondary" size="sm" onClick={() => setBatchSelectedHostIds(visibleBatchHosts.map((host) => host.id))}>
@@ -1154,6 +1294,7 @@ export function Operations() {
                             <div className="flex items-center gap-2 flex-wrap">
                               <p className="text-sm font-medium text-[var(--text-primary)]">{host.label}</p>
                               {host.group && <Badge>{host.group}</Badge>}
+                              <Badge variant="accent">{host.protocol.toUpperCase()}</Badge>
                             </div>
                             <p className="text-xs text-[var(--text-muted)] mt-1">{host.host}:{host.port}</p>
                             {host.tags.length > 0 && (

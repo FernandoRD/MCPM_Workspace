@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { APP_CLASSIFICATION, APP_NAME, APP_VERSION } from "@/lib/appInfo";
+import { Badge } from "@/components/ui/Badge";
 
 export function About() {
   const { t } = useTranslation();
@@ -14,7 +15,15 @@ export function About() {
   const protocols = [
     t("about.protocols.ssh"),
     t("about.protocols.sftp"),
+    t("about.protocols.telnet"),
     t("about.protocols.future"),
+  ];
+
+  const protocolStatus = [
+    { key: "ssh", variant: "accent" as const },
+    { key: "sftp", variant: "accent" as const },
+    { key: "telnet", variant: "warning" as const },
+    { key: "future", variant: "default" as const },
   ];
 
   return (
@@ -54,6 +63,25 @@ export function About() {
         <p className="mt-3 text-sm text-[var(--text-secondary)]">
           {t("about.stackDescription")}
         </p>
+      </section>
+
+      <section className="rounded-2xl border border-[var(--border)] bg-[var(--bg-primary)] p-6">
+        <h2 className="text-lg font-semibold text-[var(--text-primary)]">{t("about.protocolStatusTitle")}</h2>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {protocolStatus.map(({ key, variant }) => (
+            <div
+              key={key}
+              className="rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] px-4 py-4"
+            >
+              <div className="flex items-center gap-2">
+                <Badge variant={variant}>{t(`about.protocols.${key}`)}</Badge>
+              </div>
+              <p className="mt-3 text-sm text-[var(--text-secondary)]">
+                {t(`about.protocolStatus.${key}`)}
+              </p>
+            </div>
+          ))}
+        </div>
       </section>
 
       <section className="rounded-2xl border border-[var(--accent)]/25 bg-[var(--accent-subtle)] p-6">

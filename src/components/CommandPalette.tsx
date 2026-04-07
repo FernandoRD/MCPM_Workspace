@@ -10,7 +10,7 @@ import { Modal } from "@/components/ui/Modal";
 import { matchesHostSearch, sortHosts } from "@/lib/hostSearch";
 import { launchQuickConnectSession, launchTerminalSession } from "@/lib/sessionLauncher";
 import { buildAppRoute, buildSessionRoute, isStandaloneWindow } from "@/lib/windowMode";
-import { SessionConnection } from "@/types";
+import { ConnectionProtocol, SessionConnection } from "@/types";
 
 interface CommandPaletteProps {
   open: boolean;
@@ -18,6 +18,7 @@ interface CommandPaletteProps {
 }
 
 interface ParsedQuickConnect {
+  protocol: ConnectionProtocol;
   username: string;
   host: string;
   port: number;
@@ -25,17 +26,9 @@ interface ParsedQuickConnect {
   label: string;
 }
 
-function parseQuickConnect(value: string): ParsedQuickConnect | null {
-  const input = value.trim();
-  if (!input || !input.includes("@") || /\s/.test(input)) return null;
-
-  const atIndex = input.lastIndexOf("@");
-  const username = input.slice(0, atIndex).trim();
-  const target = input.slice(atIndex + 1).trim();
-  if (!username || !target) return null;
-
+function parseTargetHost(target: string, defaultPort: number): Omit<ParsedQuickConnect, "protocol" | "username" | "hostAddress" | "label"> | null {
   let host = target;
-  let port = 22;
+  let port = defaultPort;
 
   if (target.startsWith("[")) {
     const closingBracket = target.indexOf("]");
@@ -63,15 +56,58 @@ function parseQuickConnect(value: string): ParsedQuickConnect | null {
   }
 
   if (!host) return null;
+  return { host, port };
+}
 
-  const displayHost = target.startsWith("[") ? `[${host}]` : host;
+function parseSshQuickConnect(value: string): ParsedQuickConnect | null {
+  const input = value.trim();
+  if (!input || !input.includes("@") || /\s/.test(input)) return null;
+
+  const atIndex = input.lastIndexOf("@");
+  const username = input.slice(0, atIndex).trim();
+  const target = input.slice(atIndex + 1).trim();
+  if (!username || !target) return null;
+
+  const parsedTarget = parseTargetHost(target, 22);
+  if (!parsedTarget) return null;
+
+  const displayHost = target.startsWith("[") ? `[${parsedTarget.host}]` : parsedTarget.host;
   return {
+    protocol: "ssh",
     username,
-    host,
-    port,
+    host: parsedTarget.host,
+    port: parsedTarget.port,
     hostAddress: `${username}@${displayHost}`,
-    label: `${username}@${displayHost}:${port}`,
+    label: `${username}@${displayHost}:${parsedTarget.port}`,
   };
+}
+
+function parseTelnetQuickConnect(value: string): ParsedQuickConnect | null {
+  const input = value.trim();
+  const lowerInput = input.toLowerCase();
+  if (!lowerInput.startsWith("telnet://") && !lowerInput.startsWith("telnet ")) return null;
+
+  const target = lowerInput.startsWith("telnet://")
+    ? input.slice("telnet://".length).trim()
+    : input.slice("telnet".length).trim();
+  if (!target || /\s/.test(target)) return null;
+
+  const parsedTarget = parseTargetHost(target, 23);
+  if (!parsedTarget) return null;
+  const displayHost = target.startsWith("[") ? `[${parsedTarget.host}]` : parsedTarget.host;
+
+  return {
+    protocol: "telnet",
+    username: "",
+    host: parsedTarget.host,
+    port: parsedTarget.port,
+    hostAddress: displayHost,
+    label: `telnet ${displayHost}:${parsedTarget.port}`,
+  };
+}
+
+function parseQuickConnect(value: string): ParsedQuickConnect | null {
+  return parseTelnetQuickConnect(value) ?? parseSshQuickConnect(value);
 }
 
 export function CommandPalette({ open, onClose }: CommandPaletteProps) {
@@ -155,9 +191,12 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const connectToHost = async (hostId: string, mode: "terminal" | "sftp") => {
     const host = hosts.find((entry) => entry.id === hostId);
     if (!host) return;
+    if (mode === "sftp" && host.protocol !== "ssh") return;
     const credential = host.credentialId ? getCredential(host.credentialId) : undefined;
     const username = credential?.username ?? host.username ?? "";
-    const hostAddress = username ? `${username}@${host.host}` : host.host;
+    const hostAddress = host.protocol === "telnet"
+      ? host.host
+      : username ? `${username}@${host.host}` : host.host;
 
     onClose();
 
@@ -188,25 +227,26 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const connectDirectly = async () => {
     if (!quickConnectCandidate) return;
 
-    if (quickConnectAuthMethod === "password" && !quickConnectPassword.trim()) {
+    if (quickConnectCandidate.protocol === "ssh" && quickConnectAuthMethod === "password" && !quickConnectPassword.trim()) {
       setQuickConnectError(t("commandPalette.directConnectPasswordRequired"));
       return;
     }
 
-    if (quickConnectAuthMethod === "privateKey" && !quickConnectPrivateKey.trim()) {
+    if (quickConnectCandidate.protocol === "ssh" && quickConnectAuthMethod === "privateKey" && !quickConnectPrivateKey.trim()) {
       setQuickConnectError(t("commandPalette.directConnectKeyRequired"));
       return;
     }
 
     const connection: SessionConnection = {
       source: "quick-connect",
+      protocol: quickConnectCandidate.protocol,
       host: quickConnectCandidate.host,
       port: quickConnectCandidate.port,
       username: quickConnectCandidate.username,
-      authMethod: quickConnectAuthMethod,
-      password: quickConnectAuthMethod === "password" ? quickConnectPassword : null,
-      privateKeyContent: quickConnectAuthMethod === "privateKey" ? quickConnectPrivateKey : null,
-      passphrase: quickConnectAuthMethod === "privateKey" ? quickConnectPassphrase || null : null,
+      authMethod: quickConnectCandidate.protocol === "telnet" ? "password" : quickConnectAuthMethod,
+      password: quickConnectCandidate.protocol === "ssh" && quickConnectAuthMethod === "password" ? quickConnectPassword : null,
+      privateKeyContent: quickConnectCandidate.protocol === "ssh" && quickConnectAuthMethod === "privateKey" ? quickConnectPrivateKey : null,
+      passphrase: quickConnectCandidate.protocol === "ssh" && quickConnectAuthMethod === "privateKey" ? quickConnectPassphrase || null : null,
     };
 
     setQuickConnectError(null);
@@ -283,7 +323,11 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                     {quickConnectCandidate.label}
                   </p>
                   <p className="text-xs text-[var(--text-muted)]">
-                    {t("commandPalette.directConnectHint")}
+                    {t(
+                      quickConnectCandidate.protocol === "telnet"
+                        ? "commandPalette.directConnectTelnetHint"
+                        : "commandPalette.directConnectHint"
+                    )}
                   </p>
                 </div>
                 <button
@@ -295,25 +339,33 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                 </button>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="flex flex-col gap-1 text-xs text-[var(--text-muted)]">
-                  {t("hostEditor.fields.authMethod")}
-                  <select
-                    value={quickConnectAuthMethod}
-                    onChange={(event) => {
-                      setQuickConnectAuthMethod(event.target.value as SessionConnection["authMethod"]);
-                      setQuickConnectError(null);
-                    }}
-                    className="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--border-focus)]"
-                  >
-                    <option value="agent">{t("credentials.authMethods.agent")}</option>
-                    <option value="password">{t("credentials.authMethods.password")}</option>
-                    <option value="privateKey">{t("credentials.authMethods.privateKey")}</option>
-                  </select>
-                </label>
+              <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
+                <span className="rounded-full border border-[var(--border)] px-2 py-1">
+                  {t(`protocols.${quickConnectCandidate.protocol}`)}
+                </span>
               </div>
 
-              {quickConnectAuthMethod === "password" && (
+              {quickConnectCandidate.protocol === "ssh" && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="flex flex-col gap-1 text-xs text-[var(--text-muted)]">
+                    {t("hostEditor.fields.authMethod")}
+                    <select
+                      value={quickConnectAuthMethod}
+                      onChange={(event) => {
+                        setQuickConnectAuthMethod(event.target.value as SessionConnection["authMethod"]);
+                        setQuickConnectError(null);
+                      }}
+                      className="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--border-focus)]"
+                    >
+                      <option value="agent">{t("credentials.authMethods.agent")}</option>
+                      <option value="password">{t("credentials.authMethods.password")}</option>
+                      <option value="privateKey">{t("credentials.authMethods.privateKey")}</option>
+                    </select>
+                  </label>
+                </div>
+              )}
+
+              {quickConnectCandidate.protocol === "ssh" && quickConnectAuthMethod === "password" && (
                 <label className="flex flex-col gap-1 text-xs text-[var(--text-muted)]">
                   {t("credentials.fields.password")}
                   <input
@@ -328,7 +380,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                 </label>
               )}
 
-              {quickConnectAuthMethod === "privateKey" && (
+              {quickConnectCandidate.protocol === "ssh" && quickConnectAuthMethod === "privateKey" && (
                 <div className="flex flex-col gap-3">
                   <label className="flex flex-col gap-1 text-xs text-[var(--text-muted)]">
                     {t("hostEditor.fields.privateKey")}
@@ -396,9 +448,14 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                         <p className="truncate text-sm font-medium text-[var(--text-primary)]">
                           {host.label}
                         </p>
-                        <p className="truncate text-xs text-[var(--text-muted)]">
-                          {username ? `${username}@` : ""}{host.host}:{host.port}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="truncate text-xs text-[var(--text-muted)]">
+                            {host.protocol === "ssh" && username ? `${username}@` : ""}{host.host}:{host.port}
+                          </p>
+                          <span className="rounded-full border border-[var(--border)] px-2 py-0.5 text-[10px] text-[var(--text-muted)]">
+                            {t(`protocols.${host.protocol}`)}
+                          </span>
+                        </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <button
@@ -407,15 +464,17 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                         >
                           {t("commandPalette.terminal")}
                         </button>
-                        <button
-                          onClick={() => connectToHost(host.id, "sftp")}
-                          className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--text-primary)] hover:border-[var(--border-focus)]"
-                        >
-                          <span className="inline-flex items-center gap-1">
-                            <FolderOpen size={12} />
-                            {t("commandPalette.sftp")}
-                          </span>
-                        </button>
+                        {host.protocol === "ssh" && (
+                          <button
+                            onClick={() => connectToHost(host.id, "sftp")}
+                            className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--text-primary)] hover:border-[var(--border-focus)]"
+                          >
+                            <span className="inline-flex items-center gap-1">
+                              <FolderOpen size={12} />
+                              {t("commandPalette.sftp")}
+                            </span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   );

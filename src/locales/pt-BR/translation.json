@@ -28,8 +28,16 @@
     },
     "protocols": {
       "ssh": "SSH",
-      "sftp": "SFTP",
-      "future": "Telnet e futuros"
+      "sftp": "SFTP (via SSH)",
+      "telnet": "Telnet",
+      "future": "Extensoes futuras"
+    },
+    "protocolStatusTitle": "Estado atual dos protocolos",
+    "protocolStatus": {
+      "ssh": "SSH com autenticação, fingerprint, snippets, túneis e health check.",
+      "sftp": "SFTP disponível apenas para hosts SSH.",
+      "telnet": "Telnet com sessão interativa e gerenciamento de abas/workspaces.",
+      "future": "Outros protocolos entrarão sobre a mesma base multi-protocolo."
     },
     "highlightsTitle": "Destaques",
     "highlights": {
@@ -107,20 +115,24 @@
   "health": {
     "title": "Health Check e Fingerprints",
     "description": "Verifique alcance, latência e compare a fingerprint atual com o inventário salvo.",
+    "sshOnlyHint": "O inventário de fingerprints e o health check atual cobrem apenas hosts SSH. Outros protocolos continuam visíveis para contexto.",
     "searchPlaceholder": "Filtrar hosts...",
     "empty": "Nenhum host encontrado para os filtros atuais.",
     "actions": {
       "loadInventory": "Carregar inventário",
       "runAll": "Verificar todos",
-      "check": "Verificar"
+      "check": "Verificar",
+      "unsupported": "Indisponível"
     },
     "summary": {
       "online": "Hosts alcançáveis",
       "inventory": "Fingerprints inventariadas",
-      "issues": "Problemas encontrados"
+      "issues": "Problemas encontrados",
+      "unsupported": "Fora do escopo SSH"
     },
     "table": {
       "host": "Host",
+      "protocol": "Protocolo",
       "status": "Status",
       "latency": "Latência",
       "fingerprint": "Chave",
@@ -134,11 +146,13 @@
       "new": "Nova",
       "storedOnly": "Só inventário",
       "unknown": "Desconhecido",
-      "unreachable": "Inacessível"
+      "unreachable": "Inacessível",
+      "unsupported": "Não suportado"
     },
     "fingerprint": {
       "notRead": "Não lida",
-      "notStored": "Não inventariada"
+      "notStored": "Não inventariada",
+      "unsupported": "N/A para este protocolo"
     },
     "orphaned": {
       "title": "Inventário com entradas órfãs",
@@ -156,6 +170,7 @@
     "fields": {
       "label": "Nome / Etiqueta",
       "labelPlaceholder": "Ex: Servidor de Produção",
+      "protocol": "Protocolo",
       "host": "Host / IP",
       "hostPlaceholder": "Ex: 192.168.1.10 ou meuservidor.com",
       "port": "Porta",
@@ -194,6 +209,9 @@
       "copying": "Copiando...",
       "success": "Chave instalada com sucesso! A partir de agora você pode conectar usando a chave privada."
     },
+    "telnet": {
+      "authenticationHint": "Hosts Telnet usam autenticação interativa na própria sessão. Nesta primeira etapa, credenciais SSH, jump host, compatibilidade SSH e MFA ficam desabilitados para este protocolo."
+    },
     "sshCompat": {
       "section": "Compatibilidade SSH",
       "description": "Configure os algoritmos aceitos ao conectar. Use 'Legado' para servidores mais antigos que não suportam algoritmos modernos.",
@@ -228,6 +246,10 @@
       "portInvalid": "Porta deve ser entre 1 e 65535",
       "usernameRequired": "Usuário é obrigatório"
     }
+  },
+  "protocols": {
+    "ssh": "SSH",
+    "telnet": "Telnet"
   },
   "terminal": {
     "connecting": "Conectando a {{host}}...",
@@ -267,6 +289,7 @@
     "uploadSuccess": "Upload concluído",
     "downloadSuccess": "Download concluído",
     "openTerminal": "Abrir Terminal",
+    "sshOnly": "SFTP está disponível apenas para hosts SSH.",
     "columns": {
       "name": "Nome",
       "size": "Tamanho",
@@ -435,25 +458,28 @@
   },
   "backup": {
     "title": "Backup",
-    "description": "Exporte e importe suas configurações e credenciais",
+    "description": "Exporte e importe hosts, protocolos, configurações e credenciais",
     "export": {
       "title": "Exportar Backup",
-      "description": "Salva todos os hosts e configurações em um arquivo .sshvault",
+      "description": "Salva todos os hosts, protocolos e configurações em um arquivo .sshvault",
       "button": "Exportar Backup",
       "withCredentials": "Incluir credenciais cifradas",
       "withCredentialsHint": "Requer senha mestra. As senhas e chaves serão cifradas com AES-256-GCM.",
       "noMasterPassword": "Defina uma senha mestra em Configurações → Segurança para exportar credenciais cifradas.",
       "success": "Backup exportado com sucesso!",
       "cancelled": "Exportação cancelada.",
-      "hostsCount": "{{count}} host(s)"
+      "hostsCount": "{{count}} host(s)",
+      "protocolsPreserved": "O protocolo de cada host é preservado no backup.",
+      "protocolBreakdown": "SSH: {{ssh}} • Telnet: {{telnet}}"
     },
     "import": {
       "title": "Importar Backup",
-      "description": "Restaura hosts e configurações a partir de um arquivo .sshvault",
+      "description": "Restaura hosts, protocolos e configurações a partir de um arquivo .sshvault",
       "button": "Selecionar arquivo...",
       "preview": "Prévia do backup",
       "exportedAt": "Exportado em: {{date}}",
       "hostsFound": "{{count}} host(s) encontrado(s)",
+      "protocolBreakdown": "SSH: {{ssh}} • Telnet: {{telnet}}",
       "hasCredentials": "Contém credenciais cifradas",
       "noCredentials": "Sem credenciais cifradas",
       "enterPassword": "Informe a senha mestra usada na exportação para decifrar as credenciais.",
@@ -619,7 +645,8 @@
   "sshConfigImport": {
     "title": "Importar ~/.ssh/config",
     "loading": "Lendo arquivo de configuração SSH...",
-    "description": "Hosts detectados no arquivo de configuração. Duplicatas (mesmo alias, host, porta e usuário) são ignoradas automaticamente.",
+    "description": "Hosts detectados no arquivo de configuração SSH. Duplicatas (mesmo alias, host, porta e usuário) são ignoradas automaticamente.",
+    "sshOnlyHint": "Esta importação é exclusiva para SSH. Todos os hosts criados por aqui entram com protocolo SSH.",
     "summary": {
       "title": "Resumo da importação",
       "hostsNew": "Hosts novos",
@@ -639,11 +666,12 @@
     "importToVault": "Importar para o Vault"
   },
   "commandPalette": {
-    "searchPlaceholder": "Buscar hosts, telas ou usar user@host:porta",
+    "searchPlaceholder": "Buscar hosts ou usar user@host:porta / telnet://host:porta",
     "quickActions": "Acoes rapidas",
     "quickConnect": "Hosts",
     "directConnect": "Quick Connect",
     "directConnectHint": "Conecta sem cadastrar o host e permite escolher senha, chave privada ou SSH agent.",
+    "directConnectTelnetHint": "Abre uma sessão Telnet sem cadastrar o host. A autenticação, quando existir, acontece dentro da própria sessão remota.",
     "directConnectPasswordRequired": "Informe a senha para usar este metodo no Quick Connect.",
     "directConnectKeyRequired": "Cole a chave privada para usar este metodo no Quick Connect.",
     "directConnectAction": "Conectar",
@@ -675,9 +703,9 @@
     "noResults": "Nenhum resultado encontrado"
   },
   "notifications": {
-    "sshConnected": "Conectado: {{host}}",
-    "sshError": "Falha ao conectar: {{host}}",
-    "sshDropped": "Sessão encerrada inesperadamente: {{host}}",
+    "terminalConnected": "Conectado: {{host}}",
+    "terminalError": "Falha ao conectar: {{host}}",
+    "terminalDropped": "Sessão encerrada inesperadamente: {{host}}",
     "syncPushSuccess": "Sincronização enviada com sucesso",
     "syncPullSuccess": "Dados importados com sucesso",
     "syncError": "Erro na sincronização"

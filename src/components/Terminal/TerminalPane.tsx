@@ -8,8 +8,9 @@ import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { useSettingsStore } from "@/store/settings";
 import { useSessionsStore } from "@/store/sessions";
 
-interface SshPaneProps {
+interface TerminalPaneProps {
   paneId: string;
+  protocol: "ssh" | "telnet";
   host: string;
   port: number;
   authMethod: string;
@@ -23,8 +24,8 @@ interface SshPaneProps {
   onDisconnected?: (status: "disconnected" | "error") => void;
 }
 
-interface SshOutputEvent { tab_id: string; data: string }
-interface SshStatusEvent { tab_id: string; status: "connecting" | "connected" | "disconnected" | "error"; message?: string }
+interface TerminalOutputEvent { tab_id: string; data: string }
+interface TerminalStatusEvent { tab_id: string; status: "connecting" | "connected" | "disconnected" | "error"; message?: string }
 
 function writeBase64Chunk(term: Terminal | null, chunk: string) {
   if (!term) return;
@@ -36,8 +37,9 @@ function writeBase64Chunk(term: Terminal | null, chunk: string) {
   }
 }
 
-export function SshPane({
+export function TerminalPane({
   paneId,
+  protocol,
   host,
   port,
   authMethod,
@@ -49,7 +51,7 @@ export function SshPane({
   onStatusChange,
   onConnected,
   onDisconnected,
-}: SshPaneProps) {
+}: TerminalPaneProps) {
   const termRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -128,13 +130,14 @@ export function SshPane({
     const dims = fitAddon.proposeDimensions() ?? { cols: 80, rows: 24 };
 
     const dataDispose = xterm.onData((data) => {
-      invoke("ssh_send_input", { tabId: paneId, data }).catch(() => {});
+      const inputCommand = protocol === "telnet" ? "telnet_send_input" : "ssh_send_input";
+      invoke(inputCommand, { tabId: paneId, data }).catch(() => {});
     });
 
     let wasConnected = false;
     const registered: UnlistenFn[] = [];
 
-    const ul1 = await listen<SshOutputEvent>("ssh-output", (event) => {
+    const ul1 = await listen<TerminalOutputEvent>("terminal-output", (event) => {
       if (event.payload.tab_id !== paneId) return;
       writeBase64Chunk(xtermRef.current, event.payload.data);
       appendTerminalOutput(paneId, event.payload.data);
@@ -142,7 +145,7 @@ export function SshPane({
     if (cancelled) { ul1(); dataDispose.dispose(); return; }
     registered.push(ul1);
 
-    const ul2 = await listen<SshStatusEvent>("ssh-status", (event) => {
+    const ul2 = await listen<TerminalStatusEvent>("terminal-status", (event) => {
       if (event.payload.tab_id !== paneId) return;
       const s = event.payload.status;
       statusRef.current = s;
@@ -160,7 +163,8 @@ export function SshPane({
     if (cancelled) { ul2(); dataDispose.dispose(); registered.forEach((f) => f()); return; }
     registered.push(ul2);
 
-    const sessionExists = await invoke<boolean>("ssh_session_exists", { tabId: paneId });
+    const sessionExistsCommand = protocol === "telnet" ? "telnet_session_exists" : "ssh_session_exists";
+    const sessionExists = await invoke<boolean>(sessionExistsCommand, { tabId: paneId });
     if (cancelled) {
       dataDispose.dispose();
       registered.forEach((dispose) => dispose());
@@ -172,24 +176,36 @@ export function SshPane({
       onStatusChange(paneId, "connected");
       xtermRef.current?.focus();
     } else {
-      invoke("ssh_connect", {
-      tabId: paneId,
-      host,
-      port,
-      username,
-      authMethod,
-      password,
-      privateKeyContent,
-      privateKeyPassphrase: passphrase,
-      sshCompatPreset: sshCompatPreset ?? "modern",
-      keepaliveInterval: sshSettings?.keepAliveInterval ?? 60,
-      connectionTimeout: sshSettings?.inactivityTimeout ?? 0,
-      cols: dims.cols ?? 80,
-      rows: dims.rows ?? 24,
-      }).catch((err: string) => {
+      const connectCommand = protocol === "telnet" ? "telnet_connect" : "ssh_connect";
+      const payload = protocol === "telnet"
+        ? {
+            tabId: paneId,
+            host,
+            port,
+            connectionTimeout: sshSettings?.inactivityTimeout ?? 0,
+            cols: dims.cols ?? 80,
+            rows: dims.rows ?? 24,
+          }
+        : {
+            tabId: paneId,
+            host,
+            port,
+            username,
+            authMethod,
+            password,
+            privateKeyContent,
+            privateKeyPassphrase: passphrase,
+            sshCompatPreset: sshCompatPreset ?? "modern",
+            keepaliveInterval: sshSettings?.keepAliveInterval ?? 60,
+            connectionTimeout: sshSettings?.inactivityTimeout ?? 0,
+            cols: dims.cols ?? 80,
+            rows: dims.rows ?? 24,
+          };
+
+      invoke(connectCommand, payload).catch((err: string) => {
         if (cancelled) return;
         // Host desconhecido: pede confirmação de fingerprint antes de prosseguir
-        if (typeof err === "string" && err.startsWith("HOST_KEY_UNKNOWN:")) {
+        if (protocol === "ssh" && typeof err === "string" && err.startsWith("HOST_KEY_UNKNOWN:")) {
           const fingerprint = err.slice("HOST_KEY_UNKNOWN:".length);
           setPendingFingerprint(fingerprint);
           return;
@@ -202,7 +218,9 @@ export function SshPane({
     const resizeObserver = new ResizeObserver(() => {
       fitAddon.fit();
       const d = fitAddon.proposeDimensions();
-      if (d) invoke("ssh_resize", { tabId: paneId, cols: d.cols, rows: d.rows }).catch(() => {});
+      if (!d) return;
+      const resizeCommand = protocol === "telnet" ? "telnet_resize" : "ssh_resize";
+      invoke(resizeCommand, { tabId: paneId, cols: d.cols, rows: d.rows }).catch(() => {});
     });
     if (termRef.current) resizeObserver.observe(termRef.current);
 
@@ -218,7 +236,7 @@ export function SshPane({
 
     void wasConnected; // suppress unused warning
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appendTerminalOutput, clearConnectionBindings, paneId]);
+  }, [appendTerminalOutput, clearConnectionBindings, paneId, protocol, authMethod, host, passphrase, password, port, privateKeyContent, sshCompatPreset, sshSettings?.inactivityTimeout, sshSettings?.keepAliveInterval, username]);
 
   const handleTrustHost = useCallback(async (accepted: boolean) => {
     if (!pendingFingerprint) return;
@@ -239,11 +257,12 @@ export function SshPane({
 
   useEffect(() => {
     const handleBeforeUnload = () => {
-      void invoke("ssh_disconnect", { tabId: paneId }).catch(() => {});
+      const disconnectCommand = protocol === "telnet" ? "telnet_disconnect" : "ssh_disconnect";
+      void invoke(disconnectCommand, { tabId: paneId }).catch(() => {});
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [paneId]);
+  }, [paneId, protocol]);
 
   useEffect(() => {
     connect();
@@ -299,3 +318,6 @@ export function SshPane({
     </div>
   );
 }
+
+/** @deprecated Use TerminalPane. */
+export const SshPane = TerminalPane;
