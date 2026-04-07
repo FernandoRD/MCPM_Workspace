@@ -14,8 +14,7 @@ dist-ssr
 *.local
 
 # Editor directories and files
-.vscode/*
-!.vscode/extensions.json
+.vscode*
 .idea
 .DS_Store
 *.suo
@@ -25,3 +24,6 @@ dist-ssr
 *.sw?
 *.codex
 *IMPLEMENTATION*
+.claude
+.git
+.gitignore
