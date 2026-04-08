@@ -8,7 +8,9 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "cross-env NO_STRIP=1 APPIMAGE_EXTRACT_AND_RUN=1 tauri",
-    "version:sync": "node scripts/sync-version.mjs"
+    "version:sync": "node scripts/sync-version.mjs",
+    "rdp:viewer": "cargo run --manifest-path experiments/internal-rdp-client/Cargo.toml --bin viewer_mvp --",
+    "rdp:screenshot": "cargo run --manifest-path experiments/internal-rdp-client/Cargo.toml --bin screenshot_mvp --"
   },
   "dependencies": {
     "@fontsource/fira-code": "^5.2.7",

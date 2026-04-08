@@ -14,6 +14,7 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 - Novo fluxo de criação com `split button` em `+ Nova Conexão`, mantendo o cadastro individual rápido e adicionando atalhos para importações
 - Tela dedicada para importação em massa por CSV, com modos `Adicionar novos` e `Atualizar existentes`
 - Centralização prática do versionamento: `package.json` passou a ser a fonte principal e o projeto agora inclui um script de sincronização para `Cargo.toml`, `Cargo.lock` e `package-lock.json`
+- Laboratório isolado para cliente RDP interno em `experiments/internal-rdp-client`, com viewer local, screenshot, input básico e tuning de fluidez sem impacto no app principal
 
 ## Novidades da 0.3.0
 
@@ -46,6 +47,8 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 - Interface traduzida para `pt-BR` e `en-US`
 
 Hoje o app já opera como `Multi-Protocol Connection Manager`, com `SSH` e `Telnet` compartilhando a infraestrutura de terminal e `RDP` sendo tratado como sessão gráfica aberta no cliente nativo da plataforma.
+
+Em paralelo, o repositório agora mantém um laboratório isolado para o futuro cliente RDP interno em [experiments/internal-rdp-client/README.md](/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/README.md). Esse protótipo ainda não está integrado ao app principal, mas já consegue conectar, autenticar, renderizar a sessão remota, enviar input e capturar screenshots.
 
 ## Escopo por protocolo
 
@@ -123,6 +126,16 @@ src-tauri/
     totp.rs
 scripts/
   sync-version.mjs
+experiments/
+  internal-rdp-client/
+    README.md
+    src/
+      bin/
+        screenshot_mvp.rs
+        viewer_mvp.rs
+      mvp_runtime.rs
+      viewer_input.rs
+      viewer_renderer.rs
 ```
 
 ## Rodando o projeto
@@ -185,6 +198,7 @@ Fluxo recomendado para atualizar a versão:
 
 - [README.md](/home/fernando/Documentos/ssh_vault/README.md)
 - [TECHNICAL_REFERENCE.md](/home/fernando/Documentos/ssh_vault/TECHNICAL_REFERENCE.md)
+- [experiments/internal-rdp-client/README.md](/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/README.md)
 - [melhorias.txt](/home/fernando/Documentos/ssh_vault/melhorias.txt)
 
 ## Situação atual

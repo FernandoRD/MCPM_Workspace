@@ -1,0 +1,19 @@
+[package]
+name = "internal-rdp-client"
+version = "0.1.0"
+edition = "2021"
+description = "Protótipo isolado para o cliente RDP interno do MPCM Workspace"
+
+[lib]
+name = "internal_rdp_client"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1"
+image = { version = "0.25.6", default-features = false, features = ["png"] }
+ironrdp = { version = "0.14.0", features = ["connector", "session", "graphics"] }
+ironrdp-blocking = "0.8.0"
+minifb = "0.27"
+sspi = { version = "0.18", features = ["network_client"] }
+tokio-rustls = "0.26"
+x509-cert = { version = "0.2", default-features = false, features = ["std"] }

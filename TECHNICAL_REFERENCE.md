@@ -15,7 +15,8 @@ Documento de referência para desenvolvimento e manutenção do MPCM Workspace n
 9. Sync e backup
 10. Segurança e segredos
 11. Fluxos importantes
-12. Versionamento
+12. Laboratório RDP interno
+13. Versionamento
 
 ## 1. Visão geral
 
@@ -156,6 +157,20 @@ src-tauri/
     sync.rs
     telnet.rs
     totp.rs
+
+experiments/
+  internal-rdp-client/
+    README.md
+    src/
+      bin/
+        screenshot_mvp.rs
+        viewer_mvp.rs
+      mvp_runtime.rs
+      viewer_input.rs
+      viewer_renderer.rs
+      protocol/
+        tpkt.rs
+        x224.rs
 ```
 
 ## 4. Modelo de dados
@@ -306,6 +321,21 @@ Rotas atuais:
   Conecta a aba RDP ao backend, mostra launcher escolhido, preview dos argumentos e estado da sessão.
 - [Settings.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Settings.tsx)
   Expõe preferências globais de cliente Linux, resolução, fullscreen, multimonitor, clipboard, áudio e certificado.
+
+### Protótipo isolado de cliente RDP interno
+
+- [experiments/internal-rdp-client/README.md](/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/README.md)
+  Documento-base do laboratório isolado.
+- [experiments/internal-rdp-client/src/mvp_runtime.rs](/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/src/mvp_runtime.rs)
+  Contrato atual de conexão, perfil de sessão, loop ativo e coleta de regiões alteradas.
+- [experiments/internal-rdp-client/src/viewer_input.rs](/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/src/viewer_input.rs)
+  Tradutor de input local do `minifb` para eventos FastPath do RDP.
+- [experiments/internal-rdp-client/src/viewer_renderer.rs](/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/src/viewer_renderer.rs)
+  Buffer local e redraw parcial do viewer.
+- [experiments/internal-rdp-client/src/bin/viewer_mvp.rs](/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/src/bin/viewer_mvp.rs)
+  Viewer MVP para conexão real.
+- [experiments/internal-rdp-client/src/bin/screenshot_mvp.rs](/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/src/bin/screenshot_mvp.rs)
+  Captura de screenshot remoto.
 
 ### Sync / backup / estado portátil
 
@@ -588,7 +618,38 @@ Regras da importação CSV:
 - Hook: [useAutoSync.ts](/home/fernando/Documentos/ssh_vault/src/hooks/useAutoSync.ts)
 - Dispara push periódico com base nas settings atuais
 
-## 12. Versionamento
+## 12. Laboratório RDP interno
+
+O cliente RDP interno ainda não faz parte do app principal. Em vez disso, o repositório mantém um laboratório isolado em [experiments/internal-rdp-client/README.md](/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/README.md) para permitir evolução técnica sem risco para a aplicação atual.
+
+Estado atual desse laboratório:
+
+- conexão real com servidor RDP usando `IronRDP`
+- autenticação com usuário e senha
+- viewer local em janela nativa com `minifb`
+- screenshot remoto em `.png`
+- input básico de teclado e mouse
+- scroll vertical e horizontal
+- ponteiro remoto visível no viewer
+- redraw parcial e tuning de fluidez no loop de render
+- parâmetros de resolução, profundidade de cor e compressão no CLI
+
+Separação interna atual do protótipo:
+
+- `mvp_runtime`
+  conexão, handshake, perfil de sessão, loop ativo e resumo de regiões alteradas
+- `viewer_input`
+  tradução de input local para eventos FastPath
+- `viewer_renderer`
+  buffer local e atualização parcial do frame
+- `bin/viewer_mvp`
+  composição do viewer
+- `bin/screenshot_mvp`
+  composição do fluxo de captura
+
+Essa separação é intencional: o objetivo é chegar a um contrato claro para integração futura com `Tauri`, em vez de acoplar cedo demais um MVP experimental ao app principal.
+
+## 13. Versionamento
 
 Arquivos principais:
 
