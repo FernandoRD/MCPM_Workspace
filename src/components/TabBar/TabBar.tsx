@@ -2,7 +2,7 @@ import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useLocation, useNavigate } from "react-router-dom";
-import { X, Plus, Wifi, WifiOff, Loader2, FolderOpen } from "lucide-react";
+import { X, Plus, Wifi, WifiOff, Loader2, FolderOpen, Monitor } from "lucide-react";
 import { useSessionsStore } from "@/store/sessions";
 import { useHostsStore } from "@/store/hosts";
 import { cn } from "@/lib/utils";
@@ -47,8 +47,10 @@ export function TabBar() {
           invoke(protocol === "telnet" ? "telnet_disconnect" : "ssh_disconnect", { tabId: pane.id }).catch(() => {})
         )
       );
-    } else {
+    } else if (tab.type === "sftp") {
       await invoke("sftp_disconnect", { sessionId: tab.id }).catch(() => {});
+    } else {
+      await invoke("rdp_disconnect", { sessionId: tab.id }).catch(() => {});
     }
 
     closeSession(tab.id);
@@ -82,6 +84,7 @@ export function TabBar() {
         >
           <StatusIcon status={tab.status} />
           {tab.type === "sftp" && <FolderOpen size={10} className="text-[var(--accent)] shrink-0" />}
+          {tab.type === "rdp" && <Monitor size={10} className="text-[var(--accent)] shrink-0" />}
           <span className="truncate">{tab.hostLabel}</span>
           <span
             onClick={(e) => void handleClose(e, tab)}

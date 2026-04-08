@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { SessionConnection, SessionTab, SplitDirection, SftpTabSnapshot, TerminalPaneSnapshot } from "@/types";
+import { SessionConnection, SessionTab, SplitDirection, SftpTabSnapshot, TabType, TerminalPaneSnapshot } from "@/types";
 import { v4 as uuidv4 } from "uuid";
 
 interface SessionsStore {
@@ -10,9 +10,16 @@ interface SessionsStore {
   /** Abre uma aba de terminal. O primeiro pane.id === tab.id (compat. retroativa). */
   openSession: (hostId: string, hostLabel: string, hostAddress: string) => string;
   /** Abre uma aba de terminal temporária sem host salvo. */
-  openQuickConnectSession: (connection: SessionConnection, hostLabel: string, hostAddress: string) => string;
+  openQuickConnectSession: (
+    connection: SessionConnection,
+    hostLabel: string,
+    hostAddress: string,
+    type?: Extract<TabType, "terminal" | "rdp">
+  ) => string;
   /** Abre uma aba de SFTP. */
   openSftpTab: (hostId: string, hostLabel: string, hostAddress: string) => string;
+  /** Abre uma aba de RDP. */
+  openRdpTab: (hostId: string, hostLabel: string, hostAddress: string) => string;
   /** Garante que um tab exista na store atual. Útil para janelas dedicadas. */
   ensureSession: (tab: SessionTab) => void;
   closeSession: (tabId: string) => void;
@@ -56,17 +63,17 @@ export const useSessionsStore = create<SessionsStore>()((set, get) => ({
     return id;
   },
 
-  openQuickConnectSession: (connection, hostLabel, hostAddress) => {
+  openQuickConnectSession: (connection, hostLabel, hostAddress, type = "terminal") => {
     const id = uuidv4();
     const tab: SessionTab = {
       id,
-      type: "terminal",
+      type,
       hostId: `quick-connect:${id}`,
       hostLabel,
       hostAddress,
       connection,
       status: "connecting",
-      panes: [{ id, status: "connecting" }],
+      panes: type === "terminal" ? [{ id, status: "connecting" }] : [],
       splitDirection: "horizontal",
       createdAt: new Date().toISOString(),
     };
@@ -79,6 +86,23 @@ export const useSessionsStore = create<SessionsStore>()((set, get) => ({
     const tab: SessionTab = {
       id,
       type: "sftp",
+      hostId,
+      hostLabel,
+      hostAddress,
+      status: "connecting",
+      panes: [],
+      splitDirection: "horizontal",
+      createdAt: new Date().toISOString(),
+    };
+    set((s) => ({ tabs: [...s.tabs, tab], activeTabId: id }));
+    return id;
+  },
+
+  openRdpTab: (hostId, hostLabel, hostAddress) => {
+    const id = uuidv4();
+    const tab: SessionTab = {
+      id,
+      type: "rdp",
       hostId,
       hostLabel,
       hostAddress,
@@ -128,8 +152,8 @@ export const useSessionsStore = create<SessionsStore>()((set, get) => ({
       tabs: s.tabs.map((tab) => {
         const hasPane = tab.panes.some((p) => p.id === paneId);
         if (!hasPane && tab.id !== paneId) return tab;
-        // sftp tab: update tab status directly
-        if (tab.type === "sftp") return { ...tab, status };
+        // non-terminal tabs: update tab status directly
+        if (tab.type !== "terminal") return { ...tab, status };
         const panes = tab.panes.map((p) => p.id === paneId ? { ...p, status } : p);
         // Tab status = first pane status
         const tabStatus = panes[0]?.status ?? status;

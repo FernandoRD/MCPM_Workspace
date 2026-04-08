@@ -191,7 +191,7 @@ export function TerminalPage() {
   }
 
   const credential = host?.credentialId ? getCredential(host.credentialId) : undefined;
-  const protocol = sessionConnection?.protocol ?? host?.protocol ?? "ssh";
+  const protocol = (sessionConnection?.protocol ?? host?.protocol ?? "ssh") === "telnet" ? "telnet" : "ssh";
   const authMethod = sessionConnection?.authMethod ?? credential?.authMethod ?? host?.authMethod ?? "password";
   const username = sessionConnection?.username ?? credential?.username ?? host?.username ?? "";
   const password = sessionConnection?.password ?? credential?.password ?? host?.passwordRef ?? null;

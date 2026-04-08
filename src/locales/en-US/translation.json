@@ -30,6 +30,7 @@
       "ssh": "SSH",
       "sftp": "SFTP (over SSH)",
       "telnet": "Telnet",
+      "rdp": "RDP",
       "future": "Future extensions"
     },
     "protocolStatusTitle": "Current protocol status",
@@ -37,6 +38,7 @@
       "ssh": "SSH with authentication, fingerprint inventory, snippets, tunnels, and health checks.",
       "sftp": "SFTP available only for SSH hosts.",
       "telnet": "Telnet with interactive sessions and tab/workspace management.",
+      "rdp": "RDP with a native launcher, dedicated page, and tab/window integration.",
       "future": "Other protocols will build on the same multi-protocol foundation."
     },
     "highlightsTitle": "Highlights",
@@ -103,6 +105,7 @@
     "noHostsDescription": "Add your first SSH server to get started",
     "host": {
       "connect": "Connect",
+      "openDesktop": "Open Desktop",
       "openSftp": "Open SFTP",
       "edit": "Edit",
       "delete": "Delete",
@@ -212,6 +215,9 @@
     "telnet": {
       "authenticationHint": "Telnet hosts use interactive authentication inside the session itself. In this first step, SSH credentials, jump host, SSH compatibility and MFA stay disabled for this protocol."
     },
+    "rdp": {
+      "authenticationHint": "RDP hosts use username/password credentials. In this MVP, the app launches the system native RDP client and it may ask for the password again depending on the operating system."
+    },
     "sshCompat": {
       "section": "SSH Compatibility",
       "description": "Configure the algorithms accepted when connecting. Use 'Legacy' for older servers that don't support modern algorithms.",
@@ -249,7 +255,8 @@
   },
   "protocols": {
     "ssh": "SSH",
-    "telnet": "Telnet"
+    "telnet": "Telnet",
+    "rdp": "RDP"
   },
   "terminal": {
     "connecting": "Connecting to {{host}}...",
@@ -303,6 +310,7 @@
       "language": "Language",
       "terminal": "Terminal",
       "ssh": "SSH",
+      "rdp": "RDP",
       "security": "Security",
       "sync": "Sync"
     },
@@ -312,6 +320,40 @@
       "keepAliveHint": "Sends a keepalive packet every N seconds to prevent disconnection due to inactivity. 0 = disabled.",
       "inactivityTimeout": "Inactivity timeout (seconds)",
       "inactivityTimeoutHint": "Closes the session after N seconds with no activity. 0 = never disconnect (recommended)."
+    },
+    "rdp": {
+      "description": "Global RDP launcher preferences, including preferred client, display mode, and session capabilities.",
+      "linuxClient": "Preferred Linux client",
+      "linuxClientHint": "In 'Automatic', the app tries supported clients in sequence. If you choose a specific client, it uses only that one.",
+      "displayMode": "Display mode",
+      "width": "Remote desktop width",
+      "height": "Remote desktop height",
+      "dynamicResolution": "Dynamic resolution updates",
+      "multimon": "Use multiple monitors",
+      "clipboard": "Share clipboard",
+      "audioMode": "Audio",
+      "certificateMode": "Certificate",
+      "optionsHint": "Advanced options work best with xfreerdp or wlfreerdp. Clients like Remmina and KRDC may ignore some of these preferences.",
+      "clients": {
+        "auto": "Automatic",
+        "xfreerdp": "FreeRDP (xfreerdp)",
+        "wlfreerdp": "FreeRDP Wayland (wlfreerdp)",
+        "remmina": "Remmina",
+        "krdc": "KRDC"
+      },
+      "displayModes": {
+        "windowed": "Resizable window",
+        "fullscreen": "Fullscreen"
+      },
+      "audioModes": {
+        "redirect": "Play on local computer",
+        "remote": "Play on remote computer",
+        "disabled": "No audio"
+      },
+      "certificateModes": {
+        "ignore": "Ignore certificate warnings",
+        "strict": "Validate certificate"
+      }
     },
     "appearance": {
       "theme": "Theme",
@@ -470,7 +512,7 @@
       "cancelled": "Export cancelled.",
       "hostsCount": "{{count}} host(s)",
       "protocolsPreserved": "Each host protocol is preserved in the backup.",
-      "protocolBreakdown": "SSH: {{ssh}} • Telnet: {{telnet}}"
+      "protocolBreakdown": "SSH: {{ssh}} • Telnet: {{telnet}} • RDP: {{rdp}}"
     },
     "import": {
       "title": "Import Backup",
@@ -479,7 +521,7 @@
       "preview": "Backup preview",
       "exportedAt": "Exported at: {{date}}",
       "hostsFound": "{{count}} host(s) found",
-      "protocolBreakdown": "SSH: {{ssh}} • Telnet: {{telnet}}",
+      "protocolBreakdown": "SSH: {{ssh}} • Telnet: {{telnet}} • RDP: {{rdp}}",
       "hasCredentials": "Contains encrypted credentials",
       "noCredentials": "No encrypted credentials",
       "enterPassword": "Enter the master password used during export to decrypt credentials.",
@@ -634,7 +676,8 @@
     "status": "Status",
     "sessionType": {
       "terminal": "Terminal",
-      "sftp": "SFTP"
+      "sftp": "SFTP",
+      "rdp": "RDP"
     },
     "statusLabel": {
       "connected": "Active",
@@ -666,18 +709,21 @@
     "importToVault": "Import to Vault"
   },
   "commandPalette": {
-    "searchPlaceholder": "Search hosts or use user@host:port / telnet://host:port",
+    "searchPlaceholder": "Search hosts or use user@host:port / telnet://host:port / rdp://user@host:port",
     "quickActions": "Quick actions",
     "quickConnect": "Hosts",
     "directConnect": "Quick Connect",
     "directConnectHint": "Connects without saving the host and lets you choose password, private key or SSH agent.",
     "directConnectTelnetHint": "Opens a Telnet session without saving the host. Authentication, when required, happens inside the remote session itself.",
+    "directConnectRdpHint": "Opens an RDP session without saving the host. If you provide a password, the launcher will try to reuse it when the client supports it.",
+    "directConnectRdpPasswordPlaceholder": "Optional: leave empty to let the client ask for it",
     "directConnectPasswordRequired": "Enter a password to use this method in Quick Connect.",
     "directConnectKeyRequired": "Paste the private key to use this method in Quick Connect.",
     "directConnectAction": "Connect",
     "results": "{{count}} result(s)",
     "noHosts": "No hosts found",
     "terminal": "Terminal",
+    "desktop": "Desktop",
     "sftp": "SFTP",
     "actions": {
       "newHost": "New host",
@@ -706,8 +752,44 @@
     "terminalConnected": "Connected: {{host}}",
     "terminalError": "Failed to connect: {{host}}",
     "terminalDropped": "Session dropped unexpectedly: {{host}}",
+    "rdpConnected": "Remote desktop launched: {{host}}",
+    "rdpError": "Failed to launch RDP: {{host}}",
     "syncPushSuccess": "Sync sent successfully",
     "syncPullSuccess": "Data imported successfully",
     "syncError": "Sync error"
+  },
+  "rdp": {
+    "loadingSession": "Loading RDP session...",
+    "sessionNotFound": "RDP session not found",
+    "reconnect": "Reconnect",
+    "disconnect": "Disconnect",
+    "externalClientHint": "This session is opened in the system native RDP client.",
+    "launchDetails": "Launcher details",
+    "launcher": "Client used",
+    "executable": "Executable",
+    "authentication": "Authentication",
+    "credentialMode": "Credential flow",
+    "display": "Display",
+    "certificate": "Certificate",
+    "passwordHandled": "Password passed automatically",
+    "passwordPromptExpected": "The external client may prompt for the password",
+    "errorTitle": "Failed to launch the RDP session",
+    "milestoneTitle": "MVP scope",
+    "milestones": {
+      "host": "Host registration and persistence",
+      "launch": "Native launcher",
+      "viewer": "Embedded viewer",
+      "ready": "Ready",
+      "pending": "Next step"
+    },
+    "status": {
+      "connecting": "Starting RDP client...",
+      "connected": "RDP client started",
+      "disconnected": "Session closed",
+      "error": "Launch error"
+    },
+    "displayModes": {
+      "fullscreen": "Fullscreen"
+    }
   }
 }

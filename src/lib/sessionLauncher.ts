@@ -21,16 +21,36 @@ interface LaunchQuickConnectSessionParams {
   hostLabel: string;
   hostAddress: string;
   openMode: AppSettings["terminal"]["sessionOpenMode"];
-  openQuickConnectSession: (connection: SessionConnection, hostLabel: string, hostAddress: string) => string;
+  openQuickConnectSession: (
+    connection: SessionConnection,
+    hostLabel: string,
+    hostAddress: string,
+    type?: "terminal" | "rdp"
+  ) => string;
+  sessionType?: "terminal" | "rdp";
   standaloneWindow?: boolean;
 }
 
-async function createStandaloneTerminalWindow(route: string, hostLabel: string, sessionId: string): Promise<boolean> {
+interface LaunchRdpSessionParams {
+  hostId: string;
+  hostLabel: string;
+  hostAddress: string;
+  openMode: AppSettings["terminal"]["sessionOpenMode"];
+  openRdpTab: (hostId: string, hostLabel: string, hostAddress: string) => string;
+  standaloneWindow?: boolean;
+}
+
+async function createStandaloneSessionWindow(
+  route: string,
+  hostLabel: string,
+  sessionId: string,
+  kind: "terminal" | "rdp"
+): Promise<boolean> {
   // Uma URL relativa ("/terminal/abc123?...") não tem contexto de base no WebKit/WebView2
   // e resulta em janela em branco. Prefixar com window.location.origin resolve
   // corretamente tanto em dev (http://localhost:1420) quanto em prod (tauri://localhost).
   const absoluteUrl = `${window.location.origin}${route}`;
-  const webview = new WebviewWindow(`terminal-session-${sessionId}`, {
+  const webview = new WebviewWindow(`${kind}-session-${sessionId}`, {
     url: absoluteUrl,
     title: `${APP_NAME} - ${hostLabel}`,
     width: 1200,
@@ -89,7 +109,7 @@ export async function launchTerminalSession({
       hostAddress,
     });
 
-    const opened = await createStandaloneTerminalWindow(route, hostLabel, sessionId);
+    const opened = await createStandaloneSessionWindow(route, hostLabel, sessionId, "terminal");
     if (opened) return null;
 
     // Fallback: janela não pôde ser criada (ex: restrição do Wayland ou permissão ausente).
@@ -112,6 +132,7 @@ export async function launchQuickConnectSession({
   hostAddress,
   openMode,
   openQuickConnectSession,
+  sessionType = "terminal",
   standaloneWindow = false,
 }: LaunchQuickConnectSessionParams): Promise<string | null> {
   const sanitizedConnection = sanitizeSessionConnection(connection);
@@ -132,22 +153,59 @@ export async function launchQuickConnectSession({
 
   if (openMode === "window") {
     const sessionId = uuidv4();
-    const route = buildSessionRoute("terminal", sessionId, {
+    const route = buildSessionRoute(sessionType, sessionId, {
       standalone: true,
       quickConnect: true,
       quickConnectBootstrapId: bootstrapId,
     });
 
-    const opened = await createStandaloneTerminalWindow(route, "Quick Connect", sessionId);
+    const opened = await createStandaloneSessionWindow(route, "Quick Connect", sessionId, sessionType);
     if (opened) return null;
 
     notify(APP_NAME, `Nao foi possivel abrir janela separada para ${hostLabel}. Abrindo em aba.`);
   }
 
-  const sessionId = openQuickConnectSession({ ...sanitizedConnection, bootstrapId }, hostLabel, hostAddress);
-  return buildSessionRoute("terminal", sessionId, {
+  const sessionId = openQuickConnectSession(
+    { ...sanitizedConnection, bootstrapId },
+    hostLabel,
+    hostAddress,
+    sessionType
+  );
+  return buildSessionRoute(sessionType, sessionId, {
     standalone: standaloneWindow,
     quickConnect: standaloneWindow,
     quickConnectBootstrapId: standaloneWindow ? bootstrapId : undefined,
+  });
+}
+
+export async function launchRdpSession({
+  hostId,
+  hostLabel,
+  hostAddress,
+  openMode,
+  openRdpTab,
+  standaloneWindow = false,
+}: LaunchRdpSessionParams): Promise<string | null> {
+  if (openMode === "window") {
+    const sessionId = uuidv4();
+    const route = buildSessionRoute("rdp", sessionId, {
+      standalone: true,
+      hostId,
+      hostLabel,
+      hostAddress,
+    });
+
+    const opened = await createStandaloneSessionWindow(route, hostLabel, sessionId, "rdp");
+    if (opened) return null;
+
+    notify(APP_NAME, `Não foi possível abrir janela separada para ${hostLabel}. Abrindo em aba.`);
+  }
+
+  const sessionId = openRdpTab(hostId, hostLabel, hostAddress);
+  return buildSessionRoute("rdp", sessionId, {
+    standalone: standaloneWindow,
+    hostId: standaloneWindow ? hostId : undefined,
+    hostLabel: standaloneWindow ? hostLabel : undefined,
+    hostAddress: standaloneWindow ? hostAddress : undefined,
   });
 }

@@ -14,6 +14,7 @@ interface SettingsStore {
   updateTerminal: (terminal: Partial<AppSettings["terminal"]>) => void;
   updateSecurity: (security: Partial<AppSettings["security"]>) => void;
   updateSsh: (ssh: Partial<AppSettings["ssh"]>) => void;
+  updateRdp: (rdp: Partial<AppSettings["rdp"]>) => void;
   updateSync: (sync: Partial<AppSettings["sync"]>) => void;
   updateGroups: (groups: string[]) => void;
   updateProductivity: (productivity: Partial<AppSettings["productivity"]>) => void;
@@ -39,6 +40,17 @@ const DEFAULT_SETTINGS: AppSettings = {
   ssh: {
     keepAliveInterval: 60,
     inactivityTimeout: 0,
+  },
+  rdp: {
+    linuxClient: "auto",
+    fullscreen: false,
+    dynamicResolution: true,
+    width: 1600,
+    height: 900,
+    multimon: false,
+    clipboard: true,
+    audioMode: "redirect",
+    certificateMode: "ignore",
   },
   sync: {
     provider: null,
@@ -68,6 +80,10 @@ function normalizeSettings(settings?: Partial<AppSettings> | null): AppSettings 
     ssh: {
       ...DEFAULT_SETTINGS.ssh,
       ...(settings?.ssh ?? {}),
+    },
+    rdp: {
+      ...DEFAULT_SETTINGS.rdp,
+      ...(settings?.rdp ?? {}),
     },
     sync: {
       ...DEFAULT_SETTINGS.sync,
@@ -180,6 +196,16 @@ export const useSettingsStore = create<SettingsStore>()((set, _get) => ({
       const settings = {
         ...s.settings,
         ssh: { ...DEFAULT_SETTINGS.ssh, ...s.settings.ssh, ...ssh },
+      };
+      persistSettings(settings);
+      return { settings };
+    }),
+
+  updateRdp: (rdp) =>
+    set((s) => {
+      const settings = {
+        ...s.settings,
+        rdp: { ...DEFAULT_SETTINGS.rdp, ...s.settings.rdp, ...rdp },
       };
       persistSettings(settings);
       return { settings };

@@ -28,7 +28,7 @@ impl Database {
             Ok(db) => Ok(db),
             Err(e) if e.contains("file is not a database") || e.contains("not a database") => {
                 // Arquivo incompatível (plain SQLite ou chave diferente) — apaga e recria
-                eprintln!("[ssh-vault] vault.db incompatível, recriando: {e}");
+                eprintln!("[mpcm-workspace] vault.db incompatível, recriando: {e}");
                 let _ = std::fs::remove_file(&db_path);
                 // Remove também o WAL e SHM se existirem
                 let _ = std::fs::remove_file(db_path.with_extension("db-wal"));

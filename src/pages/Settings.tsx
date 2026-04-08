@@ -21,11 +21,11 @@ import { LOCALES } from "@/lib/i18n";
 import { Select } from "@/components/ui/Select";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import { AppSettings } from "@/types";
+import { AppSettings, LinuxRdpClient } from "@/types";
 
 export function Settings() {
   const { t } = useTranslation();
-  const { settings, setTheme, setLocale, updateTerminal, updateSecurity, updateSsh, resetSettings } =
+  const { settings, setTheme, setLocale, updateTerminal, updateSecurity, updateSsh, updateRdp, resetSettings } =
     useSettingsStore();
   const [saved, setSaved] = useState(false);
 
@@ -282,6 +282,147 @@ export function Settings() {
                   </p>
                 </div>
               </div>
+            </div>
+          </Section>
+
+          {/* RDP */}
+          <Section title={t("settings.sections.rdp")}>
+            <div className="flex flex-col gap-4">
+              <p className="text-sm text-[var(--text-secondary)]">
+                {t("settings.rdp.description")}
+              </p>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="max-w-sm">
+                  <Select
+                    id="linuxRdpClient"
+                    label={t("settings.rdp.linuxClient")}
+                    value={settings.rdp.linuxClient}
+                    onChange={(e) => updateRdp({ linuxClient: e.target.value as LinuxRdpClient })}
+                  >
+                    <option value="auto">{t("settings.rdp.clients.auto")}</option>
+                    <option value="xfreerdp">{t("settings.rdp.clients.xfreerdp")}</option>
+                    <option value="wlfreerdp">{t("settings.rdp.clients.wlfreerdp")}</option>
+                    <option value="remmina">{t("settings.rdp.clients.remmina")}</option>
+                    <option value="krdc">{t("settings.rdp.clients.krdc")}</option>
+                  </Select>
+                  <p className="mt-1 text-xs text-[var(--text-muted)]">
+                    {t("settings.rdp.linuxClientHint")}
+                  </p>
+                </div>
+
+                <label className="flex flex-col gap-1">
+                  <span className="text-sm font-medium text-[var(--text-primary)]">
+                    {t("settings.rdp.displayMode")}
+                  </span>
+                  <Select
+                    id="rdpDisplayMode"
+                    value={settings.rdp.fullscreen ? "fullscreen" : "windowed"}
+                    onChange={(e) => updateRdp({ fullscreen: e.target.value === "fullscreen" })}
+                  >
+                    <option value="windowed">{t("settings.rdp.displayModes.windowed")}</option>
+                    <option value="fullscreen">{t("settings.rdp.displayModes.fullscreen")}</option>
+                  </Select>
+                </label>
+
+                <label className="flex flex-col gap-1">
+                  <span className="text-sm font-medium text-[var(--text-primary)]">
+                    {t("settings.rdp.certificateMode")}
+                  </span>
+                  <Select
+                    id="rdpCertificateMode"
+                    value={settings.rdp.certificateMode}
+                    onChange={(e) => updateRdp({ certificateMode: e.target.value as AppSettings["rdp"]["certificateMode"] })}
+                  >
+                    <option value="ignore">{t("settings.rdp.certificateModes.ignore")}</option>
+                    <option value="strict">{t("settings.rdp.certificateModes.strict")}</option>
+                  </Select>
+                </label>
+
+                <label className="flex flex-col gap-1">
+                  <span className="text-sm font-medium text-[var(--text-primary)]">
+                    {t("settings.rdp.width")}
+                  </span>
+                  <Input
+                    type="number"
+                    min={640}
+                    max={7680}
+                    value={settings.rdp.width}
+                    onChange={(e) => updateRdp({ width: Math.max(640, parseInt(e.target.value, 10) || 1600) })}
+                    disabled={settings.rdp.fullscreen}
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1">
+                  <span className="text-sm font-medium text-[var(--text-primary)]">
+                    {t("settings.rdp.height")}
+                  </span>
+                  <Input
+                    type="number"
+                    min={480}
+                    max={4320}
+                    value={settings.rdp.height}
+                    onChange={(e) => updateRdp({ height: Math.max(480, parseInt(e.target.value, 10) || 900) })}
+                    disabled={settings.rdp.fullscreen}
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1 md:col-span-2">
+                  <span className="text-sm font-medium text-[var(--text-primary)]">
+                    {t("settings.rdp.audioMode")}
+                  </span>
+                  <Select
+                    id="rdpAudioMode"
+                    value={settings.rdp.audioMode}
+                    onChange={(e) => updateRdp({ audioMode: e.target.value as AppSettings["rdp"]["audioMode"] })}
+                  >
+                    <option value="redirect">{t("settings.rdp.audioModes.redirect")}</option>
+                    <option value="remote">{t("settings.rdp.audioModes.remote")}</option>
+                    <option value="disabled">{t("settings.rdp.audioModes.disabled")}</option>
+                  </Select>
+                </label>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={settings.rdp.dynamicResolution}
+                    onChange={(e) => updateRdp({ dynamicResolution: e.target.checked })}
+                    className="accent-[var(--accent)] w-4 h-4"
+                  />
+                  <span className="text-sm text-[var(--text-primary)]">
+                    {t("settings.rdp.dynamicResolution")}
+                  </span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={settings.rdp.multimon}
+                    onChange={(e) => updateRdp({ multimon: e.target.checked })}
+                    className="accent-[var(--accent)] w-4 h-4"
+                  />
+                  <span className="text-sm text-[var(--text-primary)]">
+                    {t("settings.rdp.multimon")}
+                  </span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={settings.rdp.clipboard}
+                    onChange={(e) => updateRdp({ clipboard: e.target.checked })}
+                    className="accent-[var(--accent)] w-4 h-4"
+                  />
+                  <span className="text-sm text-[var(--text-primary)]">
+                    {t("settings.rdp.clipboard")}
+                  </span>
+                </label>
+              </div>
+
+              <p className="text-xs text-[var(--text-muted)]">
+                {t("settings.rdp.optionsHint")}
+              </p>
             </div>
           </Section>
 

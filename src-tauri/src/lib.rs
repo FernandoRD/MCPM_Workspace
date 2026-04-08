@@ -2,6 +2,7 @@ mod credentials;
 mod crypto;
 mod database;
 mod rate_limit;
+mod rdp;
 mod session_bootstrap;
 mod sftp;
 mod ssh;
@@ -13,6 +14,7 @@ mod totp;
 
 use database::Database;
 use session_bootstrap::QuickConnectBootstrapPayload;
+use rdp::RdpManager;
 use sftp::SftpManager;
 use ssh::SshManager;
 use storage::Storage;
@@ -27,6 +29,7 @@ pub struct AppState {
     pub ssh: Arc<tokio::sync::Mutex<SshManager>>,
     pub telnet: Arc<tokio::sync::Mutex<TelnetManager>>,
     pub sftp: Arc<tokio::sync::Mutex<SftpManager>>,
+    pub rdp: Arc<tokio::sync::Mutex<RdpManager>>,
     pub rate_limiter: rate_limit::RateLimiter,
 }
 
@@ -48,6 +51,7 @@ pub fn run() {
             ssh: Arc::new(tokio::sync::Mutex::new(SshManager::new())),
             telnet: Arc::new(tokio::sync::Mutex::new(TelnetManager::new())),
             sftp: Arc::new(tokio::sync::Mutex::new(SftpManager::new())),
+            rdp: Arc::new(tokio::sync::Mutex::new(RdpManager::new())),
             rate_limiter: rate_limit::RateLimiter::new(),
         })
         .invoke_handler(tauri::generate_handler![
@@ -81,6 +85,9 @@ pub fn run() {
             telnet::telnet_resize,
             telnet::telnet_disconnect,
             telnet::telnet_session_exists,
+            rdp::rdp_connect,
+            rdp::rdp_disconnect,
+            rdp::rdp_session_exists,
             ssh_config::ssh_import_config,
             ssh_config::ssh_apply_imported_config,
             ssh_config::ssh_probe_host,

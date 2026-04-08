@@ -16,6 +16,7 @@ export function About() {
     t("about.protocols.ssh"),
     t("about.protocols.sftp"),
     t("about.protocols.telnet"),
+    t("about.protocols.rdp"),
     t("about.protocols.future"),
   ];
 
@@ -23,6 +24,7 @@ export function About() {
     { key: "ssh", variant: "accent" as const },
     { key: "sftp", variant: "accent" as const },
     { key: "telnet", variant: "warning" as const },
+    { key: "rdp", variant: "accent" as const },
     { key: "future", variant: "default" as const },
   ];
 

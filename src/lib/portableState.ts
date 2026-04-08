@@ -5,6 +5,7 @@ export interface PortableSyncSettings {
   locale: string;
   terminal: AppSettings["terminal"];
   ssh: AppSettings["ssh"];
+  rdp: AppSettings["rdp"];
   security: Pick<AppSettings["security"], "syncCredentials">;
   sync: {
     provider: AppSettings["sync"]["provider"];
@@ -55,6 +56,7 @@ export function buildPortableSettings(settings: AppSettings): PortableSyncSettin
     locale: settings.locale,
     terminal: settings.terminal,
     ssh: settings.ssh,
+    rdp: settings.rdp,
     security: {
       syncCredentials: settings.security.syncCredentials,
     },
@@ -242,6 +244,7 @@ export function mergePortableSettings(
     locale: incoming?.locale ?? current.locale,
     terminal: incoming?.terminal ? { ...current.terminal, ...incoming.terminal } : current.terminal,
     ssh: incoming?.ssh ? { ...current.ssh, ...incoming.ssh } : current.ssh,
+    rdp: incoming?.rdp ? { ...current.rdp, ...incoming.rdp } : current.rdp,
     security: {
       ...current.security,
       syncCredentials: incoming?.security?.syncCredentials ?? current.security.syncCredentials,

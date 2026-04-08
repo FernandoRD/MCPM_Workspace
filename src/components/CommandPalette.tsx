@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { FolderOpen, Plus, Search, Server, Settings, ShieldEllipsis, Workflow, Zap } from "lucide-react";
+import { FolderOpen, Plus, Search, Server, Settings, ShieldEllipsis, Workflow, Zap, Monitor } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useHostsStore } from "@/store/hosts";
 import { useCredentialsStore } from "@/store/credentials";
@@ -8,7 +8,7 @@ import { useSessionsStore } from "@/store/sessions";
 import { useSettingsStore } from "@/store/settings";
 import { Modal } from "@/components/ui/Modal";
 import { matchesHostSearch, sortHosts } from "@/lib/hostSearch";
-import { launchQuickConnectSession, launchTerminalSession } from "@/lib/sessionLauncher";
+import { launchQuickConnectSession, launchRdpSession, launchTerminalSession } from "@/lib/sessionLauncher";
 import { buildAppRoute, buildSessionRoute, isStandaloneWindow } from "@/lib/windowMode";
 import { ConnectionProtocol, SessionConnection } from "@/types";
 
@@ -106,8 +106,37 @@ function parseTelnetQuickConnect(value: string): ParsedQuickConnect | null {
   };
 }
 
+function parseRdpQuickConnect(value: string): ParsedQuickConnect | null {
+  const input = value.trim();
+  const lowerInput = input.toLowerCase();
+  if (!lowerInput.startsWith("rdp://") && !lowerInput.startsWith("rdp ")) return null;
+
+  const target = lowerInput.startsWith("rdp://")
+    ? input.slice("rdp://".length).trim()
+    : input.slice("rdp".length).trim();
+  if (!target || /\s/.test(target)) return null;
+
+  const atIndex = target.lastIndexOf("@");
+  const username = atIndex > -1 ? target.slice(0, atIndex).trim() : "";
+  const hostTarget = atIndex > -1 ? target.slice(atIndex + 1).trim() : target;
+  if (!hostTarget) return null;
+
+  const parsedTarget = parseTargetHost(hostTarget, 3389);
+  if (!parsedTarget) return null;
+  const displayHost = hostTarget.startsWith("[") ? `[${parsedTarget.host}]` : parsedTarget.host;
+
+  return {
+    protocol: "rdp",
+    username,
+    host: parsedTarget.host,
+    port: parsedTarget.port,
+    hostAddress: username ? `${username}@${displayHost}` : displayHost,
+    label: `rdp ${username ? `${username}@` : ""}${displayHost}:${parsedTarget.port}`,
+  };
+}
+
 function parseQuickConnect(value: string): ParsedQuickConnect | null {
-  return parseTelnetQuickConnect(value) ?? parseSshQuickConnect(value);
+  return parseTelnetQuickConnect(value) ?? parseRdpQuickConnect(value) ?? parseSshQuickConnect(value);
 }
 
 export function CommandPalette({ open, onClose }: CommandPaletteProps) {
@@ -125,6 +154,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const openSession = useSessionsStore((s) => s.openSession);
   const openQuickConnectSession = useSessionsStore((s) => s.openQuickConnectSession);
   const openSftpTab = useSessionsStore((s) => s.openSftpTab);
+  const openRdpTab = useSessionsStore((s) => s.openRdpTab);
   const sessionOpenMode = useSettingsStore((s) => s.settings.terminal.sessionOpenMode);
   const standaloneWindow = isStandaloneWindow(location.search);
 
@@ -188,10 +218,11 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     },
   ].filter((item) => item.label.toLowerCase().includes(query.trim().toLowerCase()));
 
-  const connectToHost = async (hostId: string, mode: "terminal" | "sftp") => {
+  const connectToHost = async (hostId: string, mode: "terminal" | "sftp" | "rdp") => {
     const host = hosts.find((entry) => entry.id === hostId);
     if (!host) return;
     if (mode === "sftp" && host.protocol !== "ssh") return;
+    if (mode === "rdp" && host.protocol !== "rdp") return;
     const credential = host.credentialId ? getCredential(host.credentialId) : undefined;
     const username = credential?.username ?? host.username ?? "";
     const hostAddress = host.protocol === "telnet"
@@ -199,6 +230,19 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
       : username ? `${username}@${host.host}` : host.host;
 
     onClose();
+
+    if (mode === "rdp") {
+      const route = await launchRdpSession({
+        hostId: host.id,
+        hostLabel: host.label,
+        hostAddress,
+        openMode: sessionOpenMode,
+        openRdpTab,
+        standaloneWindow,
+      });
+      if (route) navigate(route);
+      return;
+    }
 
     if (mode === "terminal") {
       const route = await launchTerminalSession({
@@ -243,8 +287,18 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
       host: quickConnectCandidate.host,
       port: quickConnectCandidate.port,
       username: quickConnectCandidate.username,
-      authMethod: quickConnectCandidate.protocol === "telnet" ? "password" : quickConnectAuthMethod,
-      password: quickConnectCandidate.protocol === "ssh" && quickConnectAuthMethod === "password" ? quickConnectPassword : null,
+      authMethod:
+        quickConnectCandidate.protocol === "telnet"
+          ? "password"
+          : quickConnectCandidate.protocol === "rdp"
+            ? "password"
+            : quickConnectAuthMethod,
+      password:
+        quickConnectCandidate.protocol === "ssh" && quickConnectAuthMethod === "password"
+          ? quickConnectPassword
+          : quickConnectCandidate.protocol === "rdp"
+            ? quickConnectPassword || null
+            : null,
       privateKeyContent: quickConnectCandidate.protocol === "ssh" && quickConnectAuthMethod === "privateKey" ? quickConnectPrivateKey : null,
       passphrase: quickConnectCandidate.protocol === "ssh" && quickConnectAuthMethod === "privateKey" ? quickConnectPassphrase || null : null,
     };
@@ -257,6 +311,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
       hostAddress: quickConnectCandidate.hostAddress,
       openMode: sessionOpenMode,
       openQuickConnectSession,
+      sessionType: quickConnectCandidate.protocol === "rdp" ? "rdp" : "terminal",
       standaloneWindow,
     });
     if (route) navigate(route);
@@ -326,6 +381,8 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                     {t(
                       quickConnectCandidate.protocol === "telnet"
                         ? "commandPalette.directConnectTelnetHint"
+                        : quickConnectCandidate.protocol === "rdp"
+                          ? "commandPalette.directConnectRdpHint"
                         : "commandPalette.directConnectHint"
                     )}
                   </p>
@@ -375,6 +432,22 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                       setQuickConnectPassword(event.target.value);
                       setQuickConnectError(null);
                     }}
+                    className="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--border-focus)]"
+                  />
+                </label>
+              )}
+
+              {quickConnectCandidate.protocol === "rdp" && (
+                <label className="flex flex-col gap-1 text-xs text-[var(--text-muted)]">
+                  {t("credentials.fields.password")}
+                  <input
+                    type="password"
+                    value={quickConnectPassword}
+                    onChange={(event) => {
+                      setQuickConnectPassword(event.target.value);
+                      setQuickConnectError(null);
+                    }}
+                    placeholder={t("commandPalette.directConnectRdpPasswordPlaceholder")}
                     className="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--border-focus)]"
                   />
                 </label>
@@ -459,10 +532,13 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                       </div>
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => connectToHost(host.id, "terminal")}
+                          onClick={() => connectToHost(host.id, host.protocol === "rdp" ? "rdp" : "terminal")}
                           className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--text-primary)] hover:border-[var(--border-focus)]"
                         >
-                          {t("commandPalette.terminal")}
+                          <span className="inline-flex items-center gap-1">
+                            {host.protocol === "rdp" ? <Monitor size={12} /> : null}
+                            {t(host.protocol === "rdp" ? "commandPalette.desktop" : "commandPalette.terminal")}
+                          </span>
                         </button>
                         {host.protocol === "ssh" && (
                           <button

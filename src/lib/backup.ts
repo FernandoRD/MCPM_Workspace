@@ -204,6 +204,17 @@ export function hydrateBackupData(
             locale: backup.settings.locale,
             terminal: backup.settings.terminal,
             ssh: backup.settings.ssh,
+            rdp: backup.settings.rdp ?? {
+              linuxClient: "auto",
+              fullscreen: false,
+              dynamicResolution: true,
+              width: 1600,
+              height: 900,
+              multimon: false,
+              clipboard: true,
+              audioMode: "redirect",
+              certificateMode: "ignore",
+            },
             security: {
               masterPasswordSet: false,
               syncCredentials: backup.settings.security.syncCredentials,

@@ -20,16 +20,16 @@ Documento de referência para desenvolvimento e manutenção do MPCM Workspace n
 
 O MPCM Workspace é uma aplicação desktop Tauri com frontend React e backend Rust para gerenciar:
 
-- hosts `SSH` e `Telnet`
+- hosts `SSH`, `Telnet` e `RDP`
 - credenciais reutilizáveis
 - chaves SSH
-- sessões de terminal multi-protocolo e SFTP
+- sessões de terminal multi-protocolo, sessões gráficas `RDP` e SFTP
 - snippets, túneis e workspaces
 - sincronização remota
 - backup/restore
 - health check e inventário de fingerprints
 
-O posicionamento atual do produto é `Multi-Protocol Connection Manager` e isso já se reflete na arquitetura de sessão: `SSH` e `Telnet` compartilham a camada de terminal, enquanto recursos específicos como `SFTP`, túneis, inventário de fingerprints, `~/.ssh/config` e MFA/TOTP continuam restritos a `SSH`.
+O posicionamento atual do produto é `Multi-Protocol Connection Manager` e isso já se reflete na arquitetura de sessão: `SSH` e `Telnet` compartilham a camada de terminal, `RDP` usa uma rota e uma orquestração próprias para abrir o cliente nativo da plataforma, e recursos específicos como `SFTP`, túneis, inventário de fingerprints, `~/.ssh/config` e MFA/TOTP continuam restritos a `SSH`.
 
 O app segue uma abordagem `local-first`:
 
@@ -111,6 +111,7 @@ src/
     Health.tsx
     HostEditor.tsx
     Operations.tsx
+    RdpPage.tsx
     Settings.tsx
     SftpPage.tsx
     SshKeyEditor.tsx
@@ -135,7 +136,9 @@ src-tauri/
     crypto.rs
     database.rs
     lib.rs
+    rdp.rs
     sftp.rs
+    session_bootstrap.rs
     ssh.rs
     ssh_config.rs
     storage.rs
@@ -157,11 +160,11 @@ Arquivo-base: [index.ts](/home/fernando/Documentos/ssh_vault/src/types/index.ts)
 - `SshKey`
   Chave SSH persistida separadamente com `privateKeyContent`, `publicKeyContent?` e `passphrase?`.
 - `SessionTab`
-  Estado volátil de sessão de terminal ou SFTP na janela atual.
+  Estado volátil de sessão de terminal, SFTP ou RDP na janela atual.
 - `TerminalPaneState`
   Estado de cada pane de terminal, compartilhado por sessões `SSH` e `Telnet`.
 - `AppSettings`
-  Tema, idioma, terminal, SSH, segurança, sync, grupos e produtividade.
+  Tema, idioma, terminal, SSH, RDP, segurança, sync, grupos e produtividade.
 
 ### AppSettings
 
@@ -173,6 +176,8 @@ Arquivo-base: [index.ts](/home/fernando/Documentos/ssh_vault/src/types/index.ts)
   `fontSize`, `fontFamily`, `cursorStyle`, `cursorBlink`, `scrollback`, `sessionOpenMode`
 - `ssh`
   `keepAliveInterval`, `inactivityTimeout`
+- `rdp`
+  `linuxClient`, `fullscreen`, `dynamicResolution`, `width`, `height`, `multimon`, `clipboard`, `audioMode`, `certificateMode`
 - `security`
   `masterPasswordSet`, `verificationPayload?`, `syncCredentials`
 - `sync`
@@ -235,6 +240,7 @@ Rotas atuais:
 - `/hosts/new`
 - `/hosts/:id`
 - `/terminal/:tabId`
+- `/rdp/:tabId`
 - `/sftp/:tabId`
 - `/settings`
 - `/sync`
@@ -256,15 +262,18 @@ Rotas atuais:
 ### Sessões e janelas
 
 - [sessionLauncher.ts](/home/fernando/Documentos/ssh_vault/src/lib/sessionLauncher.ts)
-  Decide entre abrir em aba ou janela dedicada.
+  Decide entre abrir em aba ou janela dedicada para sessões de terminal e RDP.
 - [windowMode.ts](/home/fernando/Documentos/ssh_vault/src/lib/windowMode.ts)
   Helpers para rotas e bootstrap de janelas standalone.
+- [RdpPage.tsx](/home/fernando/Documentos/ssh_vault/src/pages/RdpPage.tsx)
+  Orquestra a conexão RDP, exibe diagnósticos de launcher e acompanha o ciclo de vida da sessão.
 
 ### Branding e identidade
 
 - O branding visível do app foi atualizado para `MPCM Workspace`
 - O subtítulo usado na documentação e na página `About` é `Multi-Protocol Connection Manager`
-- Identificadores internos legados como `ssh-vault` foram mantidos em storage, sync e backup para evitar migrações destrutivas de dados existentes
+- O diretório de dados atual é `mpcm-workspace`, com migração automática a partir do legado `ssh-vault`
+- Identificadores internos legados como `name` do pacote, `identifier` do bundle e alguns marcadores de compatibilidade continuam preservados para evitar migrações destrutivas de dados existentes
 
 ### Consciência de protocolo
 
@@ -273,7 +282,16 @@ Rotas atuais:
 - [portableState.ts](/home/fernando/Documentos/ssh_vault/src/lib/portableState.ts)
   Normaliza e preserva `protocol` durante import/export e sync.
 - [sessionLauncher.ts](/home/fernando/Documentos/ssh_vault/src/lib/sessionLauncher.ts)
-  Lança janelas dedicadas de sessão usando nomenclatura neutra de terminal.
+  Lança janelas dedicadas de sessão usando fluxo compartilhado para terminal e RDP.
+
+### RDP nativo
+
+- [rdp.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/rdp.rs)
+  Gera arquivos `.rdp` temporários, aplica opções de sessão e aciona o launcher nativo apropriado por plataforma.
+- [RdpPage.tsx](/home/fernando/Documentos/ssh_vault/src/pages/RdpPage.tsx)
+  Conecta a aba RDP ao backend, mostra launcher escolhido, preview dos argumentos e estado da sessão.
+- [Settings.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Settings.tsx)
+  Expõe preferências globais de cliente Linux, resolução, fullscreen, multimonitor, clipboard, áudio e certificado.
 
 ### Sync / backup / estado portátil
 
@@ -312,6 +330,8 @@ Arquivo-base: [lib.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/lib.rs)
 - `generate_totp_code`
 - `verify_totp_code`
 - `generate_totp_secret`
+- `store_quick_connect_bootstrap`
+- `get_quick_connect_bootstrap`
 
 ### SSH
 
@@ -336,6 +356,12 @@ Arquivo-base: [lib.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/lib.rs)
 - `telnet_resize`
 - `telnet_disconnect`
 - `telnet_session_exists`
+
+### RDP
+
+- `rdp_connect`
+- `rdp_disconnect`
+- `rdp_session_exists`
 
 ### SSH config
 
@@ -435,7 +461,7 @@ O arquivo `.sshvault` hoje pode transportar:
 - settings portáveis
 - segredos cifrados opcionais
 
-O campo `protocol` do host também é preservado no backup, então restores mantêm a diferenciação entre `SSH` e `Telnet`.
+O campo `protocol` do host também é preservado no backup, então restores mantêm a diferenciação entre `SSH`, `Telnet` e `RDP`.
 
 O restore preserva IDs e restaura entidades com `replace*`, evitando perder vínculos entre host, credencial e chave.
 
@@ -462,6 +488,7 @@ O backend mantém inventário TOFU em `known_hosts.json` e agora expõe leitura 
 - fingerprint armazenada localmente
 
 Esse fluxo continua sendo específico de `SSH`; hosts `Telnet` ficam fora do inventário e do health check de fingerprint.
+Hosts `RDP` também ficam fora desse escopo.
 
 Arquivo principal: [ssh.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/ssh.rs)
 
@@ -470,13 +497,26 @@ Arquivo principal: [ssh.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/ss
 ### Quick Connect
 
 - UI: [CommandPalette.tsx](/home/fernando/Documentos/ssh_vault/src/components/CommandPalette.tsx)
-- Abre sessão temporária com `user@host[:port]`
+- Abre sessão temporária para `SSH`, `Telnet` e `RDP`
 - Não cria host salvo
+
+Para `RDP`, o formato suportado é `rdp://usuario@host:porta` e a sessão usa o mesmo fluxo de launcher nativo dos hosts persistidos.
 
 ### Sessões em janela dedicada
 
 - Configuração em [Settings.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Settings.tsx)
 - Lançamento e bootstrap em [sessionLauncher.ts](/home/fernando/Documentos/ssh_vault/src/lib/sessionLauncher.ts) e [windowMode.ts](/home/fernando/Documentos/ssh_vault/src/lib/windowMode.ts)
+
+### Sessões RDP nativas
+
+- Página: [RdpPage.tsx](/home/fernando/Documentos/ssh_vault/src/pages/RdpPage.tsx)
+- Backend: [rdp.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/rdp.rs)
+- Linux:
+  `auto`, `xfreerdp`, `wlfreerdp`, `remmina` e `krdc`
+- Windows:
+  `mstsc`, com tentativa de pré-carregar credenciais via `cmdkey`
+- macOS e outros ambientes:
+  abertura do arquivo `.rdp` no app associado do sistema
 
 ### Health check e fingerprints
 

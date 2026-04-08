@@ -1,5 +1,8 @@
 export type AuthMethod = "password" | "privateKey" | "agent";
-export type ConnectionProtocol = "ssh" | "telnet";
+export type ConnectionProtocol = "ssh" | "telnet" | "rdp";
+export type LinuxRdpClient = "auto" | "xfreerdp" | "wlfreerdp" | "remmina" | "krdc";
+export type RdpAudioMode = "redirect" | "remote" | "disabled";
+export type RdpCertificateMode = "ignore" | "strict";
 
 export type SshCompatPreset = "modern" | "legacy" | "very-legacy";
 
@@ -59,7 +62,7 @@ export interface HostEntry {
 /** @deprecated Use HostEntry. */
 export type SshHost = HostEntry;
 
-export type TabType = "terminal" | "sftp";
+export type TabType = "terminal" | "sftp" | "rdp";
 export type SplitDirection = "horizontal" | "vertical";
 
 export interface TerminalPaneState {
@@ -114,6 +117,18 @@ export interface SftpTabSnapshot {
   entries: SftpEntrySnapshot[];
 }
 
+export interface RdpSettings {
+  linuxClient: LinuxRdpClient;
+  fullscreen: boolean;
+  dynamicResolution: boolean;
+  width: number;
+  height: number;
+  multimon: boolean;
+  clipboard: boolean;
+  audioMode: RdpAudioMode;
+  certificateMode: RdpCertificateMode;
+}
+
 export type SyncProvider = "githubGist" | "s3" | "webdav" | "custom" | null;
 
 export interface GistSyncConfig {
@@ -158,6 +173,7 @@ export interface AppSettings {
     keepAliveInterval: number;
     inactivityTimeout: number;
   };
+  rdp: RdpSettings;
   security: {
     /** true se uma senha mestra foi definida (a senha em si nunca é salva aqui) */
     masterPasswordSet: boolean;

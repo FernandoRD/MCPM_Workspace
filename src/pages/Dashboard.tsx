@@ -9,6 +9,7 @@ import {
   Trash2,
   Copy,
   Terminal,
+  Monitor,
   MoreVertical,
   ShieldCheck,
   Layers,
@@ -37,7 +38,7 @@ import { TagBadge } from "@/components/ui/TagBadge";
 import { SshConfigImportModal } from "@/components/SshConfigImportModal";
 import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
-import { launchTerminalSession } from "@/lib/sessionLauncher";
+import { launchRdpSession, launchTerminalSession } from "@/lib/sessionLauncher";
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { buildSessionRoute, isStandaloneWindow } from "@/lib/windowMode";
@@ -63,6 +64,7 @@ export function Dashboard() {
   const { deleteHost, duplicateHost, updateHost } = useHostsStore();
   const openSession = useSessionsStore((s) => s.openSession);
   const openSftpTab = useSessionsStore((s) => s.openSftpTab);
+  const openRdpTab = useSessionsStore((s) => s.openRdpTab);
   const credentials = useCredentialsStore((s) => s.credentials);
   const getCredential = useCredentialsStore((s) => s.getCredential);
   const locale = useSettingsStore((s) => s.settings.locale);
@@ -150,6 +152,18 @@ export function Dashboard() {
     const credential = host.credentialId ? getCredential(host.credentialId) : undefined;
     const username = credential?.username ?? host.username ?? "";
     const hostAddress = username ? `${username}@${host.host}` : host.host;
+    if (host.protocol === "rdp") {
+      const route = await launchRdpSession({
+        hostId: host.id,
+        hostLabel: host.label,
+        hostAddress,
+        openMode: sessionOpenMode,
+        openRdpTab,
+        standaloneWindow,
+      });
+      if (route) navigate(route);
+      return;
+    }
     const route = await launchTerminalSession({
       hostId: host.id,
       hostLabel: host.label,
@@ -530,7 +544,11 @@ function HostCard({
           </button>
           {menuOpen && (
             <div className="absolute right-0 top-8 z-20 w-40 rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] shadow-xl py-1">
-              <ContextItem icon={Terminal} label={t("dashboard.host.connect")} onClick={() => onConnect(host)} />
+              <ContextItem
+                icon={host.protocol === "rdp" ? Monitor : Terminal}
+                label={t(host.protocol === "rdp" ? "dashboard.host.openDesktop" : "dashboard.host.connect")}
+                onClick={() => onConnect(host)}
+              />
               {host.protocol === "ssh" && (
                 <ContextItem icon={FolderOpen} label={t("dashboard.host.openSftp")} onClick={() => onOpenSftp(host)} />
               )}
@@ -563,8 +581,8 @@ function HostCard({
           {host.lastConnectedAt ? formatDate(host.lastConnectedAt, locale) : t("dashboard.host.neverConnected")}
         </p>
         <Button size="sm" onClick={() => onConnect(host)}>
-          <Terminal size={12} />
-          {t("dashboard.host.connect")}
+          {host.protocol === "rdp" ? <Monitor size={12} /> : <Terminal size={12} />}
+          {t(host.protocol === "rdp" ? "dashboard.host.openDesktop" : "dashboard.host.connect")}
         </Button>
       </div>
     </div>

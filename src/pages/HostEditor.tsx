@@ -69,6 +69,10 @@ export function HostEditor() {
     .map((tag) => tag.trim())
     .filter(Boolean);
   const isTelnet = form.protocol === "telnet";
+  const isRdp = form.protocol === "rdp";
+  const availableCredentials = isRdp
+    ? credentials.filter((credential) => credential.authMethod === "password")
+    : credentials;
 
   useEffect(() => {
     if (!isNew && id) {
@@ -130,12 +134,24 @@ export function HostEditor() {
     setForm((prev) => ({ ...prev, [key]: value }));
 
   const handleProtocolChange = (protocol: ConnectionProtocol) => {
+    const nextCredentialId =
+      protocol === "rdp" && form.credentialId
+        ? credentials
+            .filter((credential) => credential.authMethod === "password")
+            .some((credential) => credential.id === form.credentialId)
+          ? form.credentialId
+          : undefined
+        : form.credentialId;
+
     setForm((prev) => ({
       ...prev,
       protocol,
+      credentialId: nextCredentialId,
       port:
         protocol === "telnet"
           ? prev.port === 22 ? 23 : prev.port
+          : protocol === "rdp"
+          ? prev.port === 22 || prev.port === 23 ? 3389 : prev.port
           : prev.port === 23 ? 22 : prev.port,
     }));
   };
@@ -212,6 +228,7 @@ export function HostEditor() {
                 >
                   <option value="ssh">{t("protocols.ssh")}</option>
                   <option value="telnet">{t("protocols.telnet")}</option>
+                  <option value="rdp">{t("protocols.rdp")}</option>
                 </Select>
               </div>
               <div className="sm:col-span-2">
@@ -231,7 +248,7 @@ export function HostEditor() {
                 min={1}
                 max={65535}
                 value={form.port}
-                onChange={(e) => set("port", parseInt(e.target.value) || 22)}
+                onChange={(e) => set("port", parseInt(e.target.value) || (isTelnet ? 23 : isRdp ? 3389 : 22))}
                 error={errors.port}
               />
             </div>
@@ -249,6 +266,38 @@ export function HostEditor() {
                 <div className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-primary)] px-4 py-4 text-sm text-[var(--text-muted)]">
                   {t("hostEditor.telnet.authenticationHint")}
                 </div>
+              ) : isRdp ? (
+                availableCredentials.length === 0 ? (
+                  <div className="flex flex-col items-center gap-3 py-6 text-center rounded-lg border border-dashed border-[var(--border)]">
+                    <p className="text-sm text-[var(--text-muted)]">
+                      {t("hostEditor.rdp.authenticationHint")}
+                    </p>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => navigate("/credentials/new")}
+                    >
+                      <Plus size={13} />
+                      {t("credentials.createFirst")}
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-xs text-[var(--text-muted)] mb-1">
+                      {t("hostEditor.rdp.authenticationHint")}
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {availableCredentials.map((cred) => (
+                        <CredentialCard
+                          key={cred.id}
+                          credential={cred}
+                          selected={form.credentialId === cred.id}
+                          onSelect={() => set("credentialId", form.credentialId === cred.id ? undefined : cred.id)}
+                        />
+                      ))}
+                    </div>
+                  </>
+                )
               ) : credentials.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 py-6 text-center rounded-lg border border-dashed border-[var(--border)]">
                   <p className="text-sm text-[var(--text-muted)]">
@@ -269,7 +318,7 @@ export function HostEditor() {
                     {t("credentials.selectCredential")}
                   </p>
                   <div className="grid grid-cols-2 gap-2">
-                    {credentials.map((cred) => (
+                    {availableCredentials.map((cred) => (
                       <CredentialCard
                         key={cred.id}
                         credential={cred}
@@ -402,7 +451,7 @@ export function HostEditor() {
                   ))}
                 </div>
               )}
-              {!isTelnet && otherHosts.length > 0 && (
+              {!isTelnet && !isRdp && otherHosts.length > 0 && (
                 <Select
                   id="jumpHost"
                   label={t("hostEditor.fields.jumpHost")}
@@ -429,7 +478,7 @@ export function HostEditor() {
           </Section>
 
           {/* SSH Compat Section */}
-          {!isTelnet && (
+          {!isTelnet && !isRdp && (
             <Section
               id="sshCompat"
               title={t("hostEditor.sshCompat.section")}
@@ -483,7 +532,7 @@ export function HostEditor() {
           )}
 
           {/* MFA Section */}
-          {!isTelnet && (
+          {!isTelnet && !isRdp && (
             <Section
               id="mfa"
               title={t("hostEditor.mfa.section")}

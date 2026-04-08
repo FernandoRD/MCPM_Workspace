@@ -8,6 +8,7 @@ import { Sync } from "@/pages/Sync";
 import { Backup } from "@/pages/Backup";
 import { TerminalPage } from "@/pages/TerminalPage";
 import { SftpPage } from "@/pages/SftpPage";
+import { RdpPage } from "@/pages/RdpPage";
 import { Credentials } from "@/pages/Credentials";
 import { CredentialEditor } from "@/pages/CredentialEditor";
 import { SshKeys } from "@/pages/SshKeys";
@@ -66,6 +67,7 @@ export default function App() {
           <Route path="hosts/:id" element={<HostEditor />} />
           <Route path="terminal/:tabId" element={<TerminalPage />} />
           <Route path="sftp/:tabId" element={<SftpPage />} />
+          <Route path="rdp/:tabId" element={<RdpPage />} />
           <Route path="settings" element={<Settings />} />
           <Route path="sync" element={<Sync />} />
           <Route path="backup" element={<Backup />} />

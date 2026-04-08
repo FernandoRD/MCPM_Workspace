@@ -41,7 +41,8 @@ export function buildSessionRoute(
   sessionId: string,
   options: SessionRouteOptions = {}
 ): string {
-  const basePath = type === "sftp" ? `/sftp/${sessionId}` : `/terminal/${sessionId}`;
+  const basePath =
+    type === "sftp" ? `/sftp/${sessionId}` : type === "rdp" ? `/rdp/${sessionId}` : `/terminal/${sessionId}`;
   const params = new URLSearchParams();
 
   if (options.standalone) params.set("standalone", "1");

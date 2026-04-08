@@ -23,7 +23,9 @@ function sanitizeTags(tags: string[] | undefined): string[] | undefined {
 }
 
 function sanitizeProtocol(protocol: ConnectionProtocol | string | undefined): ConnectionProtocol {
-  return protocol === "telnet" ? "telnet" : "ssh";
+  if (protocol === "telnet") return "telnet";
+  if (protocol === "rdp") return "rdp";
+  return "ssh";
 }
 
 export function sanitizeHostInput<T extends Partial<HostEntry>>(host: T): T {
@@ -83,8 +85,16 @@ export function sanitizeTunnelProfiles(profiles: TunnelProfile[]): TunnelProfile
 }
 
 export function sanitizeSettingsInput(settings: AppSettings): AppSettings {
+  const rdpWidth = Number.isFinite(settings.rdp.width) ? Math.round(settings.rdp.width) : 1600;
+  const rdpHeight = Number.isFinite(settings.rdp.height) ? Math.round(settings.rdp.height) : 900;
+
   return {
     ...settings,
+    rdp: {
+      ...settings.rdp,
+      width: Math.min(7680, Math.max(640, rdpWidth)),
+      height: Math.min(4320, Math.max(480, rdpHeight)),
+    },
     groups: settings.groups.map((group) => group.trim()).filter(Boolean),
     sync: {
       ...settings.sync,
