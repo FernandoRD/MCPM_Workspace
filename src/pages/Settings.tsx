@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, ShieldCheck, ShieldOff, Eye, EyeOff, AlertTriangle } from "lucide-react";
+import { Check, ShieldCheck, ShieldOff, Eye, EyeOff, AlertTriangle, FileCode2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TERMINAL_FONTS: { id: string; label: string }[] = [
@@ -21,6 +21,7 @@ import { LOCALES } from "@/lib/i18n";
 import { Select } from "@/components/ui/Select";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { SshConfigImportModal } from "@/components/SshConfigImportModal";
 import { AppSettings, LinuxRdpClient } from "@/types";
 
 export function Settings() {
@@ -28,6 +29,7 @@ export function Settings() {
   const { settings, setTheme, setLocale, updateTerminal, updateSecurity, updateSsh, updateRdp, resetSettings } =
     useSettingsStore();
   const [saved, setSaved] = useState(false);
+  const [showSshConfigImport, setShowSshConfigImport] = useState(false);
 
   const handleSave = () => {
     setSaved(true);
@@ -250,6 +252,22 @@ export function Settings() {
               <p className="text-sm text-[var(--text-secondary)]">
                 {t("settings.ssh.description")}
               </p>
+              <div className="flex flex-col gap-3 rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] p-4">
+                <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-[var(--text-primary)]">
+                      {t("settings.ssh.importConfigTitle")}
+                    </p>
+                    <p className="text-xs text-[var(--text-muted)]">
+                      {t("settings.ssh.importConfigHint")}
+                    </p>
+                  </div>
+                  <Button variant="secondary" size="sm" onClick={() => setShowSshConfigImport(true)}>
+                    <FileCode2 size={14} />
+                    {t("settings.ssh.importConfigAction")}
+                  </Button>
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1">
                   <label className="text-sm font-medium text-[var(--text-primary)]">
@@ -437,6 +455,11 @@ export function Settings() {
           </Section>
         </div>
       </div>
+
+      <SshConfigImportModal
+        open={showSshConfigImport}
+        onClose={() => setShowSshConfigImport(false)}
+      />
     </div>
   );
 }

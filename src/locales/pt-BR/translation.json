@@ -19,6 +19,15 @@
     "health": "Health",
     "about": "About"
   },
+  "newConnectionMenu": {
+    "openMenu": "Abrir opções de criação",
+    "singleHost": "Cadastrar host único",
+    "singleHostDescription": "Abre o formulário atual para criar ou editar uma conexão individual.",
+    "csvImport": "Importar via CSV",
+    "csvImportDescription": "Baixe um template, preencha vários hosts e importe tudo de uma vez.",
+    "sshConfigImport": "Importar ~/.ssh/config",
+    "sshConfigImportDescription": "Aproveita aliases e parâmetros já presentes no seu arquivo de configuração SSH."
+  },
   "about": {
     "description": "Workspace local-first para organizar conexoes remotas, operar hosts e centralizar fluxos de acesso em um unico lugar.",
     "facts": {
@@ -258,6 +267,110 @@
     "telnet": "Telnet",
     "rdp": "RDP"
   },
+  "csvImport": {
+    "title": "Importação em massa via CSV",
+    "description": "Use um arquivo CSV para cadastrar ou atualizar vários hosts de uma só vez.",
+    "instructions": {
+      "title": "Como funciona",
+      "description": "Baixe o template, preencha as linhas com seus hosts e depois importe o arquivo de volta no app. O preview mostra o que será criado, atualizado ou rejeitado antes de aplicar qualquer mudança.",
+      "requiredTitle": "Campos obrigatórios",
+      "required": {
+        "label": "label: nome visível do host dentro do workspace",
+        "protocol": "protocol: ssh, telnet ou rdp",
+        "host": "host: IP, hostname ou FQDN"
+      },
+      "allowedTitle": "Valores aceitos",
+      "allowed": {
+        "protocols": "protocol aceita: ssh, telnet, rdp",
+        "authMethods": "authMethod aceita: password, privateKey, agent",
+        "tags": "tags podem ser separadas por ; ou ,"
+      },
+      "defaultsTitle": "Defaults aplicados",
+      "defaults": {
+        "ssh": "SSH usa porta 22 e authMethod agent quando a coluna vier vazia.",
+        "telnet": "Telnet usa porta 23 e authMethod password quando a coluna vier vazia.",
+        "rdp": "RDP usa porta 3389 e authMethod password quando a coluna vier vazia."
+      },
+      "matchingTitle": "Regras de atualização",
+      "matching": {
+        "id": "Se a coluna id vier preenchida e bater com um host existente, o app usa esse host.",
+        "identity": "Sem id, o app tenta casar por protocolo + host + porta + username.",
+        "blanks": "Campos opcionais vazios limpam esses valores no CSV para os campos cobertos pelo importador."
+      }
+    },
+    "actions": {
+      "title": "Arquivos",
+      "description": "Você pode salvar um template vazio, baixar um exemplo preenchido ou importar um CSV já preparado.",
+      "saveTemplate": "Salvar template CSV",
+      "saveExample": "Salvar exemplo CSV",
+      "importCsv": "Importar CSV",
+      "importing": "Lendo CSV...",
+      "currentFile": "Arquivo selecionado: {{name}}",
+      "noFileSelected": "Nenhum arquivo selecionado ainda."
+    },
+    "messages": {
+      "templateSaved": "Arquivo CSV salvo com sucesso.",
+      "emptyFile": "O CSV foi lido, mas não há linhas preenchidas para importar.",
+      "importApplied": "Importação aplicada com sucesso."
+    },
+    "preview": {
+      "unknownSource": "arquivo CSV",
+      "title": "Prévia da importação",
+      "description": "Revise cada linha antes de aplicar as mudanças.",
+      "modes": {
+        "add": "Adicionar novos",
+        "addDescription": "Importa apenas hosts que ainda não existem e ignora os já encontrados.",
+        "merge": "Atualizar existentes",
+        "mergeDescription": "Atualiza hosts casados no preview e também adiciona os novos."
+      },
+      "totalRows": "Linhas",
+      "validRows": "Válidas",
+      "invalidRows": "Inválidas",
+      "newRows": "Novas",
+      "matchedRows": "Encontradas",
+      "applyTitle": "Resultado previsto",
+      "applyDescription": "Nesta configuração, serão criados {{created}} host(s), atualizados {{updated}} e ignorados {{skipped}}.",
+      "clearPreview": "Limpar prévia",
+      "applying": "Aplicando importação...",
+      "applyImport": "Aplicar importação"
+    },
+    "table": {
+      "line": "Linha",
+      "host": "Host",
+      "protocol": "Protocolo",
+      "status": "Status",
+      "details": "Detalhes",
+      "matchHint": "Essa linha corresponde a um host já existente.",
+      "readyHint": "Linha pronta para importar.",
+      "statuses": {
+        "invalid": "Inválida",
+        "matched": "Existente",
+        "new": "Nova"
+      }
+    },
+    "result": {
+      "title": "Importação concluída",
+      "description": "O arquivo {{name}} foi processado e as alterações já foram gravadas.",
+      "created": "Criados",
+      "updated": "Atualizados",
+      "skipped": "Ignorados",
+      "invalid": "Inválidos"
+    },
+    "errors": {
+      "missingHeaderRow": "O arquivo CSV não possui cabeçalho.",
+      "missingRequiredHeaders": "O CSV não contém todos os cabeçalhos obrigatórios: {{headers}}.",
+      "invalidProtocol": "Protocol inválido: {{value}}.",
+      "invalidPort": "Porta inválida: {{value}}.",
+      "invalidAuthMethod": "authMethod inválido: {{value}}.",
+      "invalidKeepAliveInterval": "keepAliveInterval inválido: {{value}}.",
+      "invalidConnectionTimeout": "connectionTimeout inválido: {{value}}.",
+      "invalidSshCompatPreset": "sshCompatPreset inválido: {{value}}.",
+      "duplicateIdInFile": "O id {{value}} aparece mais de uma vez no arquivo.",
+      "duplicateIdentityInFile": "Há mais de uma linha apontando para o mesmo destino: {{value}}.",
+      "missingLabel": "label é obrigatório.",
+      "missingHost": "host é obrigatório."
+    }
+  },
   "terminal": {
     "connecting": "Conectando a {{host}}...",
     "connected": "Conectado",
@@ -316,6 +429,9 @@
     },
     "ssh": {
       "description": "Configurações globais de conexão SSH, aplicadas a todas as sessões.",
+      "importConfigTitle": "Importação de ~/.ssh/config",
+      "importConfigHint": "Como agora o app também cobre outros protocolos, a importação do arquivo SSH fica agrupada aqui com as opções específicas de SSH.",
+      "importConfigAction": "Importar ~/.ssh/config",
       "keepAliveInterval": "Keep-alive (segundos)",
       "keepAliveHint": "Envia um pacote de manutenção a cada N segundos para evitar desconexão por inatividade. 0 = desabilitado.",
       "inactivityTimeout": "Timeout de inatividade (segundos)",

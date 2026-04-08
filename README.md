@@ -6,7 +6,14 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 
 ## Versão atual
 
-`0.3.0`
+`0.3.2`
+
+## Novidades da 0.3.2
+
+- Importação em massa de hosts via `.csv`, com template, exemplo, preview por linha e aplicação controlada
+- Novo fluxo de criação com `split button` em `+ Nova Conexão`, mantendo o cadastro individual rápido e adicionando atalhos para importações
+- Tela dedicada para importação em massa por CSV, com modos `Adicionar novos` e `Atualizar existentes`
+- Centralização prática do versionamento: `package.json` passou a ser a fonte principal e o projeto agora inclui um script de sincronização para `Cargo.toml`, `Cargo.lock` e `package-lock.json`
 
 ## Novidades da 0.3.0
 
@@ -28,6 +35,8 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 - `Quick Connect` na command palette para conexões temporárias `SSH`, `Telnet` e `RDP` sem salvar host
 - Opção para abrir sessões na `mesma janela` ou em `janelas dedicadas`
 - Dashboard com filtros por grupo/tag, ordenação e edição em massa de `credencial`, `grupo` e `tags`
+- Importação em massa de hosts via `.csv`, com template/export de exemplo, preview e merge controlado
+- Acesso às importações direto pelo `+ Nova Conexão`, sem atrapalhar o fluxo principal de cadastro individual
 - Operações com snippets, túneis e workspaces com compatibilidade por protocolo
 - `Health check` de hosts e inventário de fingerprints salvas para hosts `SSH`
 - Backup/restore com arquivo `.sshvault`, preservando o protocolo de cada host
@@ -41,18 +50,18 @@ Hoje o app já opera como `Multi-Protocol Connection Manager`, com `SSH` e `Teln
 ## Escopo por protocolo
 
 - `SSH`
-  Terminal completo, SFTP, snippets remotos, batch execution, túneis, health check, inventário de fingerprints, MFA/TOTP, import de `~/.ssh/config`, jump host e presets de compatibilidade.
+  Terminal completo, SFTP, snippets remotos, batch execution, túneis, health check, inventário de fingerprints, MFA/TOTP, import de `~/.ssh/config`, importação em massa via `.csv`, jump host e presets de compatibilidade.
 - `Telnet`
-  Terminal interativo com múltiplas abas, quick connect, workspaces e preservação de sessão entre trocas de aba.
+  Terminal interativo com múltiplas abas, quick connect, workspaces, preservação de sessão entre trocas de aba e suporte ao cadastro/import em massa via `.csv`.
 - `RDP`
-  Sessão gráfica via launcher nativo, quick connect, abertura em aba ou janela dedicada, escolha de cliente no Linux e opções globais de resolução, fullscreen, multimonitor, clipboard, áudio e certificado.
+  Sessão gráfica via launcher nativo, quick connect, abertura em aba ou janela dedicada, escolha de cliente no Linux, opções globais de resolução, fullscreen, multimonitor, clipboard, áudio e certificado, além de suporte ao cadastro/import em massa via `.csv`.
 - `SFTP`
   Continua sendo um recurso derivado de `SSH`, então não aparece para hosts `Telnet`.
 
 ## Arquitetura em alto nível
 
 - `Frontend`
-  React Router organiza as páginas, Zustand mantém estado local e persistido, e a UI roda dentro do WebView do Tauri. O terminal do frontend foi neutralizado para servir `SSH` e `Telnet` com a mesma infraestrutura visual, enquanto `RDP` usa uma página de sessão própria para orquestrar o launcher nativo.
+  React Router organiza as páginas, Zustand mantém estado local e persistido, e a UI roda dentro do WebView do Tauri. O terminal do frontend foi neutralizado para servir `SSH` e `Telnet` com a mesma infraestrutura visual, enquanto `RDP` usa uma página de sessão própria para orquestrar o launcher nativo. Os fluxos de onboarding agora incluem cadastro único, importação de `~/.ssh/config` e importação em massa por `.csv`.
 - `Backend`
   O backend em Rust expõe comandos Tauri para terminal `SSH`/`Telnet`, SFTP, `RDP`, sync, criptografia, TOTP e persistência.
 - `Persistência`
@@ -89,10 +98,13 @@ Hoje o app já opera como `Multi-Protocol Connection Manager`, com `SSH` e `Teln
 ```text
 src/
   components/
+    NewConnectionSplitButton.tsx
   hooks/
   lib/
+    csvHostImport.ts
   locales/
   pages/
+    CsvImportPage.tsx
     RdpPage.tsx
   store/
   themes/
@@ -109,6 +121,8 @@ src-tauri/
     sync.rs
     telnet.rs
     totp.rs
+scripts/
+  sync-version.mjs
 ```
 
 ## Rodando o projeto
@@ -149,6 +163,24 @@ npm run build
 npm run tauri build
 ```
 
+## Versionamento
+
+O projeto agora usa o [package.json](/home/fernando/Documentos/ssh_vault/package.json) como fonte principal da versão da aplicação.
+
+Arquivos sincronizados a partir dele:
+
+- [package-lock.json](/home/fernando/Documentos/ssh_vault/package-lock.json)
+- [src-tauri/Cargo.toml](/home/fernando/Documentos/ssh_vault/src-tauri/Cargo.toml)
+- [src-tauri/Cargo.lock](/home/fernando/Documentos/ssh_vault/src-tauri/Cargo.lock)
+- [src-tauri/tauri.conf.json](/home/fernando/Documentos/ssh_vault/src-tauri/tauri.conf.json) já aponta para o `package.json`
+- [src/lib/appInfo.ts](/home/fernando/Documentos/ssh_vault/src/lib/appInfo.ts) lê a versão direto do `package.json`
+
+Fluxo recomendado para atualizar a versão:
+
+1. Edite o campo `version` em [package.json](/home/fernando/Documentos/ssh_vault/package.json).
+2. Rode `npm run version:sync`.
+3. Se quiser validar o pacote final, rode `npm run build`.
+
 ## Arquivos de referência
 
 - [README.md](/home/fernando/Documentos/ssh_vault/README.md)
@@ -163,6 +195,8 @@ O projeto já cobre o núcleo operacional multi-protocolo atual e inclui:
 - janelas dedicadas de sessão
 - suporte consolidado a `Telnet`
 - suporte inicial a `RDP` via launcher nativo
+- importação em massa via `.csv`
+- fluxo de `+ Nova Conexão` com menu de ações
 - seleção de cliente RDP no Linux
 - opções globais de sessão RDP
 - health check e inventário de fingerprints

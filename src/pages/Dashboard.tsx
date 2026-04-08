@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
-  Plus,
   Search,
   Server,
   Edit2,
@@ -20,7 +19,6 @@ import {
   ClockArrowUp,
   Tag,
   X,
-  FileCode2,
   CheckSquare,
   Square,
   PencilLine,
@@ -35,9 +33,10 @@ import { Credential, HostEntry } from "@/types";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { TagBadge } from "@/components/ui/TagBadge";
-import { SshConfigImportModal } from "@/components/SshConfigImportModal";
 import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
+import { SshConfigImportModal } from "@/components/SshConfigImportModal";
+import { NewConnectionSplitButton } from "@/components/NewConnectionSplitButton";
 import { launchRdpSession, launchTerminalSession } from "@/lib/sessionLauncher";
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
@@ -73,8 +72,8 @@ export function Dashboard() {
   const updateGroups = useSettingsStore((s) => s.updateGroups);
   const standaloneWindow = isStandaloneWindow(location.search);
 
-  const [showImportModal, setShowImportModal] = useState(false);
   const [showBulkEditModal, setShowBulkEditModal] = useState(false);
+  const [showSshConfigImport, setShowSshConfigImport] = useState(false);
   const [selectedHostIds, setSelectedHostIds] = useState<string[]>([]);
 
   const search = useUIStore((s) => s.dashboardSearch);
@@ -256,21 +255,13 @@ export function Dashboard() {
       <div className="flex items-center justify-between border-b border-[var(--border)] px-6 py-4">
         <h1 className="text-lg font-semibold text-[var(--text-primary)]">{t("dashboard.title")}</h1>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => setShowImportModal(true)}>
-            <FileCode2 size={14} />
-            {t("dashboard.importSshConfig")}
-          </Button>
-          <Button onClick={() => navigate("/hosts/new")} size="sm">
-            <Plus size={14} />
-            {t("nav.newConnection")}
-          </Button>
+          <NewConnectionSplitButton
+            size="sm"
+            standaloneWindow={standaloneWindow}
+            onImportSshConfig={() => setShowSshConfigImport(true)}
+          />
         </div>
       </div>
-
-      <SshConfigImportModal
-        open={showImportModal}
-        onClose={() => setShowImportModal(false)}
-      />
 
       <BulkEditHostsModal
         open={showBulkEditModal}
@@ -279,6 +270,10 @@ export function Dashboard() {
         credentials={credentials}
         groups={allGroups}
         onApply={handleBulkApply}
+      />
+      <SshConfigImportModal
+        open={showSshConfigImport}
+        onClose={() => setShowSshConfigImport(false)}
       />
 
       <div className="px-6 py-3 border-b border-[var(--border)] flex items-center gap-3">
@@ -326,7 +321,10 @@ export function Dashboard() {
 
       <div className="flex-1 overflow-auto px-6 py-4 flex flex-col gap-4">
         {hosts.length === 0 ? (
-          <EmptyState onAdd={() => navigate("/hosts/new")} />
+          <EmptyState
+            standaloneWindow={standaloneWindow}
+            onImportSshConfig={() => setShowSshConfigImport(true)}
+          />
         ) : (
           <>
             {allGroups.length > 0 && (
@@ -797,7 +795,13 @@ function ContextItem({
   );
 }
 
-function EmptyState({ onAdd }: { onAdd: () => void }) {
+function EmptyState({
+  standaloneWindow,
+  onImportSshConfig,
+}: {
+  standaloneWindow: boolean;
+  onImportSshConfig: () => void;
+}) {
   const { t } = useTranslation();
   return (
     <div className="flex flex-col items-center justify-center py-20 gap-4">
@@ -808,10 +812,11 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
         <p className="font-medium text-[var(--text-primary)]">{t("dashboard.noHosts")}</p>
         <p className="text-sm text-[var(--text-muted)] mt-1">{t("dashboard.noHostsDescription")}</p>
       </div>
-      <Button onClick={onAdd}>
-        <Plus size={14} />
-        {t("nav.newConnection")}
-      </Button>
+      <NewConnectionSplitButton
+        size="md"
+        standaloneWindow={standaloneWindow}
+        onImportSshConfig={onImportSshConfig}
+      />
     </div>
   );
 }

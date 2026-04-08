@@ -19,6 +19,15 @@
     "health": "Health",
     "about": "About"
   },
+  "newConnectionMenu": {
+    "openMenu": "Open creation options",
+    "singleHost": "Create single host",
+    "singleHostDescription": "Opens the current form to create or edit one connection.",
+    "csvImport": "Import via CSV",
+    "csvImportDescription": "Download a template, fill multiple hosts, and import everything at once.",
+    "sshConfigImport": "Import ~/.ssh/config",
+    "sshConfigImportDescription": "Reuse aliases and parameters already defined in your SSH config file."
+  },
   "about": {
     "description": "A local-first workspace for organizing remote connections, operating hosts, and centralizing access workflows in one place.",
     "facts": {
@@ -258,6 +267,110 @@
     "telnet": "Telnet",
     "rdp": "RDP"
   },
+  "csvImport": {
+    "title": "Bulk CSV import",
+    "description": "Use a CSV file to create or update multiple hosts in one go.",
+    "instructions": {
+      "title": "How it works",
+      "description": "Download the template, fill the rows with your hosts, and then import the file back into the app. The preview shows what will be created, updated, or rejected before any changes are applied.",
+      "requiredTitle": "Required fields",
+      "required": {
+        "label": "label: visible host name inside the workspace",
+        "protocol": "protocol: ssh, telnet, or rdp",
+        "host": "host: IP, hostname, or FQDN"
+      },
+      "allowedTitle": "Allowed values",
+      "allowed": {
+        "protocols": "protocol accepts: ssh, telnet, rdp",
+        "authMethods": "authMethod accepts: password, privateKey, agent",
+        "tags": "tags can be separated with ; or ,"
+      },
+      "defaultsTitle": "Applied defaults",
+      "defaults": {
+        "ssh": "SSH uses port 22 and authMethod agent when the column is blank.",
+        "telnet": "Telnet uses port 23 and authMethod password when the column is blank.",
+        "rdp": "RDP uses port 3389 and authMethod password when the column is blank."
+      },
+      "matchingTitle": "Update rules",
+      "matching": {
+        "id": "If the id column is filled and matches an existing host, the app uses that host.",
+        "identity": "Without id, the app tries to match by protocol + host + port + username.",
+        "blanks": "Blank optional fields clear those values for the fields managed by the importer."
+      }
+    },
+    "actions": {
+      "title": "Files",
+      "description": "You can save an empty template, download a filled example, or import a prepared CSV.",
+      "saveTemplate": "Save CSV template",
+      "saveExample": "Save CSV example",
+      "importCsv": "Import CSV",
+      "importing": "Reading CSV...",
+      "currentFile": "Selected file: {{name}}",
+      "noFileSelected": "No file selected yet."
+    },
+    "messages": {
+      "templateSaved": "CSV file saved successfully.",
+      "emptyFile": "The CSV was read, but there are no populated rows to import.",
+      "importApplied": "Import applied successfully."
+    },
+    "preview": {
+      "unknownSource": "CSV file",
+      "title": "Import preview",
+      "description": "Review each row before applying the changes.",
+      "modes": {
+        "add": "Add new",
+        "addDescription": "Imports only hosts that do not exist yet and skips the ones already found.",
+        "merge": "Update existing",
+        "mergeDescription": "Updates hosts matched in the preview and also adds the new ones."
+      },
+      "totalRows": "Rows",
+      "validRows": "Valid",
+      "invalidRows": "Invalid",
+      "newRows": "New",
+      "matchedRows": "Matched",
+      "applyTitle": "Expected result",
+      "applyDescription": "With this mode, {{created}} host(s) will be created, {{updated}} updated, and {{skipped}} skipped.",
+      "clearPreview": "Clear preview",
+      "applying": "Applying import...",
+      "applyImport": "Apply import"
+    },
+    "table": {
+      "line": "Line",
+      "host": "Host",
+      "protocol": "Protocol",
+      "status": "Status",
+      "details": "Details",
+      "matchHint": "This row matches an existing host.",
+      "readyHint": "Row ready to import.",
+      "statuses": {
+        "invalid": "Invalid",
+        "matched": "Existing",
+        "new": "New"
+      }
+    },
+    "result": {
+      "title": "Import complete",
+      "description": "The file {{name}} was processed and the changes have already been saved.",
+      "created": "Created",
+      "updated": "Updated",
+      "skipped": "Skipped",
+      "invalid": "Invalid"
+    },
+    "errors": {
+      "missingHeaderRow": "The CSV file does not have a header row.",
+      "missingRequiredHeaders": "The CSV is missing required headers: {{headers}}.",
+      "invalidProtocol": "Invalid protocol: {{value}}.",
+      "invalidPort": "Invalid port: {{value}}.",
+      "invalidAuthMethod": "Invalid authMethod: {{value}}.",
+      "invalidKeepAliveInterval": "Invalid keepAliveInterval: {{value}}.",
+      "invalidConnectionTimeout": "Invalid connectionTimeout: {{value}}.",
+      "invalidSshCompatPreset": "Invalid sshCompatPreset: {{value}}.",
+      "duplicateIdInFile": "The id {{value}} appears more than once in the file.",
+      "duplicateIdentityInFile": "More than one row points to the same destination: {{value}}.",
+      "missingLabel": "label is required.",
+      "missingHost": "host is required."
+    }
+  },
   "terminal": {
     "connecting": "Connecting to {{host}}...",
     "connected": "Connected",
@@ -316,6 +429,9 @@
     },
     "ssh": {
       "description": "Global SSH connection settings, applied to all sessions.",
+      "importConfigTitle": "Import ~/.ssh/config",
+      "importConfigHint": "Now that the app supports multiple protocols, the SSH config import lives here with the rest of the SSH-specific settings.",
+      "importConfigAction": "Import ~/.ssh/config",
       "keepAliveInterval": "Keep-alive (seconds)",
       "keepAliveHint": "Sends a keepalive packet every N seconds to prevent disconnection due to inactivity. 0 = disabled.",
       "inactivityTimeout": "Inactivity timeout (seconds)",

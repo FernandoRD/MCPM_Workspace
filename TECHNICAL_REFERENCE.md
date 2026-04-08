@@ -15,6 +15,7 @@ Documento de referência para desenvolvimento e manutenção do MPCM Workspace n
 9. Sync e backup
 10. Segurança e segredos
 11. Fluxos importantes
+12. Versionamento
 
 ## 1. Visão geral
 
@@ -27,9 +28,16 @@ O MPCM Workspace é uma aplicação desktop Tauri com frontend React e backend R
 - snippets, túneis e workspaces
 - sincronização remota
 - backup/restore
+- importação em massa via `.csv`
 - health check e inventário de fingerprints
 
 O posicionamento atual do produto é `Multi-Protocol Connection Manager` e isso já se reflete na arquitetura de sessão: `SSH` e `Telnet` compartilham a camada de terminal, `RDP` usa uma rota e uma orquestração próprias para abrir o cliente nativo da plataforma, e recursos específicos como `SFTP`, túneis, inventário de fingerprints, `~/.ssh/config` e MFA/TOTP continuam restritos a `SSH`.
+
+No onboarding de hosts, o app agora combina três caminhos principais:
+
+- cadastro individual pelo fluxo tradicional
+- importação de `~/.ssh/config`
+- importação em massa por `.csv` com preview e merge controlado
 
 O app segue uma abordagem `local-first`:
 
@@ -75,6 +83,7 @@ src/
   components/
     CommandPalette.tsx
     Layout/AppLayout.tsx
+    NewConnectionSplitButton.tsx
     Sidebar/Sidebar.tsx
     SshConfigImportModal.tsx
     TabBar/TabBar.tsx
@@ -85,6 +94,7 @@ src/
     useAutoSync.ts
   lib/
     backup.ts
+    csvHostImport.ts
     health.ts
     hostSearch.ts
     i18n.ts
@@ -103,6 +113,7 @@ src/
   pages/
     Backup.tsx
     About.tsx
+    CsvImportPage.tsx
     ConnectionLog.tsx
     CredentialEditor.tsx
     Credentials.tsx
@@ -238,6 +249,7 @@ Rotas atuais:
 
 - `/`
 - `/hosts/new`
+- `/hosts/import/csv`
 - `/hosts/:id`
 - `/terminal/:tabId`
 - `/rdp/:tabId`
@@ -283,6 +295,8 @@ Rotas atuais:
   Normaliza e preserva `protocol` durante import/export e sync.
 - [sessionLauncher.ts](/home/fernando/Documentos/ssh_vault/src/lib/sessionLauncher.ts)
   Lança janelas dedicadas de sessão usando fluxo compartilhado para terminal e RDP.
+- [csvHostImport.ts](/home/fernando/Documentos/ssh_vault/src/lib/csvHostImport.ts)
+  Centraliza parsing, validação, matching, template e plano de aplicação para importação em massa por `.csv`.
 
 ### RDP nativo
 
@@ -310,6 +324,8 @@ Rotas atuais:
   Wrapper frontend para health check e inventário de fingerprints.
 - [sshConfigImport.ts](/home/fernando/Documentos/ssh_vault/src/lib/sshConfigImport.ts)
   Importação de `~/.ssh/config` e probe TCP simples.
+- [csvHostImport.ts](/home/fernando/Documentos/ssh_vault/src/lib/csvHostImport.ts)
+  Importação de hosts via `.csv`, geração de template/exemplo e definição do comportamento de `add` vs `merge`.
 - [productivity.ts](/home/fernando/Documentos/ssh_vault/src/lib/productivity.ts)
   Resolução de snippets e lançamento de túneis.
 - [tagColors.ts](/home/fernando/Documentos/ssh_vault/src/lib/tagColors.ts)
@@ -537,10 +553,68 @@ Para `RDP`, o formato suportado é `rdp://usuario@host:porta` e a sessão usa o 
 - UI: [SshConfigImportModal.tsx](/home/fernando/Documentos/ssh_vault/src/components/SshConfigImportModal.tsx)
 - Parser/probe: [sshConfigImport.ts](/home/fernando/Documentos/ssh_vault/src/lib/sshConfigImport.ts) e [ssh_config.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/ssh_config.rs)
 
+### Importação em massa por CSV
+
+- UI: [CsvImportPage.tsx](/home/fernando/Documentos/ssh_vault/src/pages/CsvImportPage.tsx)
+- Entrada principal: [NewConnectionSplitButton.tsx](/home/fernando/Documentos/ssh_vault/src/components/NewConnectionSplitButton.tsx)
+- Parser e plano de aplicação: [csvHostImport.ts](/home/fernando/Documentos/ssh_vault/src/lib/csvHostImport.ts)
+
+Fluxo atual:
+
+- o CTA principal `+ Nova Conexão` continua abrindo `/hosts/new`
+- o menu secundário expõe `Importar via CSV` e `Importar ~/.ssh/config`
+- a tela CSV permite salvar template vazio, salvar exemplo preenchido e importar um arquivo
+- o preview classifica linhas como `new`, `matched` ou `invalid`
+- o usuário escolhe entre `add` e `merge` antes de aplicar
+
+Regras da importação CSV:
+
+- obrigatórios: `label`, `protocol`, `host`
+- opcionais: `id`, `port`, `username`, `authMethod`, `group`, `tags`, `notes`, `color`, `keepAliveInterval`, `connectionTimeout`, `sshCompatPreset`
+- `tags` aceitam `;` ou `,`
+- defaults de porta: `22` para `ssh`, `23` para `telnet`, `3389` para `rdp`
+- defaults de `authMethod`: `agent` para `ssh`, `password` para `telnet` e `rdp`
+- matching de atualização:
+  - primeiro por `id`, quando informado
+  - depois por `protocol + host + port + username`
+- segredos não entram no CSV v1:
+  - senha
+  - chave privada
+  - passphrase
+  - TOTP
+
 ### Auto-sync
 
 - Hook: [useAutoSync.ts](/home/fernando/Documentos/ssh_vault/src/hooks/useAutoSync.ts)
 - Dispara push periódico com base nas settings atuais
+
+## 12. Versionamento
+
+Arquivos principais:
+
+- [package.json](/home/fernando/Documentos/ssh_vault/package.json)
+- [scripts/sync-version.mjs](/home/fernando/Documentos/ssh_vault/scripts/sync-version.mjs)
+- [src-tauri/tauri.conf.json](/home/fernando/Documentos/ssh_vault/src-tauri/tauri.conf.json)
+- [src/lib/appInfo.ts](/home/fernando/Documentos/ssh_vault/src/lib/appInfo.ts)
+
+Estado atual:
+
+- `package.json` é a fonte principal da versão do app
+- `tauri.conf.json` lê a versão a partir de `../package.json`
+- o frontend lê a versão a partir de `package.json` via `appInfo.ts`
+- `Cargo.toml`, `Cargo.lock` e `package-lock.json` continuam precisando de sincronização física no repositório
+
+Fluxo recomendado para bump de versão:
+
+1. Atualizar `version` em [package.json](/home/fernando/Documentos/ssh_vault/package.json).
+2. Rodar `npm run version:sync`.
+3. Validar com `npm run build`.
+
+O script [sync-version.mjs](/home/fernando/Documentos/ssh_vault/scripts/sync-version.mjs) hoje sincroniza:
+
+- [package-lock.json](/home/fernando/Documentos/ssh_vault/package-lock.json)
+- [src-tauri/Cargo.toml](/home/fernando/Documentos/ssh_vault/src-tauri/Cargo.toml)
+- [src-tauri/Cargo.lock](/home/fernando/Documentos/ssh_vault/src-tauri/Cargo.lock)
 
 ---
 

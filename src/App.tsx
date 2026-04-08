@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AppLayout } from "@/components/Layout/AppLayout";
 import { Dashboard } from "@/pages/Dashboard";
 import { HostEditor } from "@/pages/HostEditor";
+import { CsvImportPage } from "@/pages/CsvImportPage";
 import { Settings } from "@/pages/Settings";
 import { Sync } from "@/pages/Sync";
 import { Backup } from "@/pages/Backup";
@@ -64,6 +65,7 @@ export default function App() {
         <Route element={<AppLayout />}>
           <Route index element={<Dashboard />} />
           <Route path="hosts/new" element={<HostEditor />} />
+          <Route path="hosts/import/csv" element={<CsvImportPage />} />
           <Route path="hosts/:id" element={<HostEditor />} />
           <Route path="terminal/:tabId" element={<TerminalPage />} />
           <Route path="sftp/:tabId" element={<SftpPage />} />
