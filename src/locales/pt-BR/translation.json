@@ -65,6 +65,7 @@
   "dashboard": {
     "title": "Hosts",
     "searchPlaceholder": "Buscar hosts...",
+    "clearSearch": "Limpar busca",
     "allHosts": "Todos",
     "bulk": {
       "selected": "{{count}} host(s) selecionado(s)",
@@ -446,7 +447,7 @@
       "description": "Preferências globais do launcher RDP, incluindo cliente preferido, modo de exibição e recursos da sessão.",
       "launchMode": "Modo de abertura",
       "launchModeHint": "Escolha se o app deve abrir sessões RDP no launcher nativo do sistema ou no viewer interno experimental.",
-      "internalExperimentalWorkspaceHint": "Modo experimental. A disponibilidade do viewer interno pode variar fora do ambiente de desenvolvimento.",
+      "internalExperimentalWorkspaceHint": "Modo experimental. O viewer interno já pode acompanhar o app compilado, mas ainda pode apresentar limitações em relação ao launcher nativo.",
       "linuxClient": "Cliente preferido no Linux",
       "linuxClientHint": "Em 'Automático', o app tenta os clientes suportados em sequência. Se você escolher um cliente específico, ele usa somente aquele.",
       "linuxClientDisabledHint": "Essa escolha só vale para o launcher nativo. Quando o viewer interno experimental está ativo, o cliente Linux externo é ignorado.",

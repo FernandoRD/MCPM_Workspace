@@ -6,7 +6,7 @@ use std::process::{Child, Command, Stdio};
 
 use cfg_if::cfg_if;
 use serde::{Deserialize, Serialize};
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 
 use crate::{storage, AppState};
 
@@ -412,7 +412,19 @@ fn internal_viewer_binary_candidates() -> Vec<PathBuf> {
     ]
 }
 
+fn bundled_internal_viewer_path(app: &AppHandle) -> Option<PathBuf> {
+    let resource_dir = app.path().resource_dir().ok()?;
+    let bin_name = if cfg!(target_os = "windows") {
+        "viewer_mvp.exe"
+    } else {
+        "viewer_mvp"
+    };
+    let path = resource_dir.join("internal-rdp-client").join(bin_name);
+    path.exists().then_some(path)
+}
+
 fn launch_internal_rdp_viewer(
+    app: &AppHandle,
     state: &AppState,
     host: &str,
     port: u16,
@@ -465,6 +477,20 @@ fn launch_internal_rdp_viewer(
     }
 
     let preview_args = sanitize_internal_viewer_preview_args(&viewer_args);
+
+    if let Some(candidate) = bundled_internal_viewer_path(app) {
+        let child = spawn_path_with_args(&candidate, &viewer_args, None)
+            .map_err(|e| format!("Falha ao iniciar viewer interno empacotado em {}: {e}", candidate.display()))?;
+
+        return Ok(InternalViewerLaunchOutcome {
+            child,
+            launcher_name: "viewer_mvp".to_string(),
+            executable: candidate.to_string_lossy().to_string(),
+            arguments_preview: preview_command(&candidate.to_string_lossy(), &preview_args),
+            message: "Viewer RDP interno experimental iniciado a partir do binário empacotado com o app.".to_string(),
+            settings_source: settings_source.map(|path| path.to_string_lossy().to_string()),
+        });
+    }
 
     for candidate in internal_viewer_binary_candidates() {
         if !candidate.exists() {
@@ -949,6 +975,7 @@ pub async fn rdp_connect(
 
 #[tauri::command]
 pub async fn rdp_launch_internal_viewer(
+    app: AppHandle,
     state: State<'_, AppState>,
     session_id: String,
     host: String,
@@ -964,6 +991,7 @@ pub async fn rdp_launch_internal_viewer(
     let options = options.unwrap_or_default();
 
     let launch = launch_internal_rdp_viewer(
+        &app,
         &state,
         &host,
         port,

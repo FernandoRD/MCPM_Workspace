@@ -287,8 +287,19 @@ export function Dashboard() {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder={t("dashboard.searchPlaceholder")}
-            className="w-full h-9 rounded-md border border-[var(--border)] bg-[var(--bg-secondary)] pl-9 pr-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-focus)]"
+            className="w-full h-9 rounded-md border border-[var(--border)] bg-[var(--bg-secondary)] pl-9 pr-10 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-focus)]"
           />
+          {search.trim().length > 0 && (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              aria-label={t("dashboard.clearSearch")}
+              title={t("dashboard.clearSearch")}
+              className="absolute right-2 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
         <SortSelector value={sortBy} onChange={setSortBy} />
       </div>

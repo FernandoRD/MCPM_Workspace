@@ -599,7 +599,7 @@ Regras práticas:
 - [x] Decidir o status de produto do viewer interno
   O viewer interno permanece experimental. O caminho oficial do produto continua sendo o launcher nativo por plataforma.
 - [x] Fechar distribuição/empacotamento do viewer interno
-  No estado atual, o viewer interno não é empacotado como parte do app distribuído. Ele continua restrito ao workspace de desenvolvimento e ao laboratório isolado em `experiments/internal-rdp-client`.
+  O viewer interno agora pode ser empacotado como recurso do app compilado para a plataforma atual. Mesmo assim, ele continua classificado como experimental e o launcher nativo segue como caminho oficial recomendado.
 - [x] Ampliar cobertura de testes do backend RDP
   O backend agora tem builders testáveis para argumentos do FreeRDP e serialização do arquivo `.rdp`, com testes unitários cobrindo display, áudio, preferências visuais, preview sanitizado e clamps de dimensão.
 - [x] Consolidar documentação final para usuário e manutenção
@@ -667,7 +667,7 @@ Decisão atual de produto:
 
 - o launcher RDP nativo continua sendo o caminho oficial distribuído
 - o viewer interno permanece experimental
-- o binário do protótipo não faz parte do app empacotado neste estágio
+- o binário do protótipo pode ser incluído no app compilado por meio do empacotamento de recursos do Tauri
 
 Estado atual desse laboratório:
 
