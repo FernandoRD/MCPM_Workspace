@@ -3,6 +3,7 @@ export type ConnectionProtocol = "ssh" | "telnet" | "rdp";
 export type LinuxRdpClient = "auto" | "xfreerdp" | "wlfreerdp" | "remmina" | "krdc";
 export type RdpAudioMode = "redirect" | "remote" | "disabled";
 export type RdpCertificateMode = "ignore" | "strict";
+export type RdpLaunchMode = "native" | "internalExperimental";
 
 export type SshCompatPreset = "modern" | "legacy" | "very-legacy";
 
@@ -118,6 +119,7 @@ export interface SftpTabSnapshot {
 }
 
 export interface RdpSettings {
+  launchMode: RdpLaunchMode;
   linuxClient: LinuxRdpClient;
   fullscreen: boolean;
   dynamicResolution: boolean;
@@ -127,7 +129,30 @@ export interface RdpSettings {
   clipboard: boolean;
   audioMode: RdpAudioMode;
   certificateMode: RdpCertificateMode;
+  internalClientPerformance: RdpInternalClientPerformanceSettings;
 }
+
+export interface RdpInternalClientPerformanceSettings {
+  wallpaper: boolean;
+  fullWindowDrag: boolean;
+  menuAnimations: boolean;
+  theming: boolean;
+  cursorShadow: boolean;
+  cursorSettings: boolean;
+  fontSmoothing: boolean;
+  desktopComposition: boolean;
+}
+
+export const DEFAULT_RDP_INTERNAL_CLIENT_PERFORMANCE_SETTINGS: RdpInternalClientPerformanceSettings = {
+  wallpaper: false,
+  fullWindowDrag: false,
+  menuAnimations: false,
+  theming: false,
+  cursorShadow: false,
+  cursorSettings: false,
+  fontSmoothing: false,
+  desktopComposition: false,
+};
 
 export type SyncProvider = "githubGist" | "s3" | "webdav" | "custom" | null;
 

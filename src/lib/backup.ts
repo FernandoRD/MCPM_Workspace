@@ -205,6 +205,7 @@ export function hydrateBackupData(
             terminal: backup.settings.terminal,
             ssh: backup.settings.ssh,
             rdp: backup.settings.rdp ?? {
+              launchMode: "native",
               linuxClient: "auto",
               fullscreen: false,
               dynamicResolution: true,
@@ -214,6 +215,16 @@ export function hydrateBackupData(
               clipboard: true,
               audioMode: "redirect",
               certificateMode: "ignore",
+              internalClientPerformance: {
+                wallpaper: false,
+                fullWindowDrag: false,
+                menuAnimations: false,
+                theming: false,
+                cursorShadow: false,
+                cursorSettings: false,
+                fontSmoothing: false,
+                desktopComposition: false,
+              },
             },
             security: {
               masterPasswordSet: false,

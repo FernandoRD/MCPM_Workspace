@@ -774,17 +774,25 @@ function ContextItem({
   label,
   onClick,
   danger,
+  disabled,
+  title,
 }: {
   icon: React.ElementType;
   label: string;
   onClick: () => void;
   danger?: boolean;
+  disabled?: boolean;
+  title?: string;
 }) {
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
+      title={title}
       className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-xs transition-colors ${
-        danger
+        disabled
+          ? "cursor-not-allowed text-[var(--text-muted)] opacity-60"
+          : danger
           ? "text-[var(--danger)] hover:bg-[var(--danger)]/10"
           : "text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
       }`}

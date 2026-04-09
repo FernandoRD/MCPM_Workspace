@@ -3,6 +3,7 @@ use tauri::AppHandle;
 
 const APP_DATA_DIR_NAME: &str = "mpcm-workspace";
 const LEGACY_APP_DATA_DIR_NAME: &str = "ssh-vault";
+pub const INTERNAL_RDP_SETTINGS_FILE_NAME: &str = "internal-rdp-client-settings.json";
 
 pub struct Storage {
     pub data_dir: PathBuf,
@@ -49,6 +50,10 @@ impl Storage {
 
         Ok(Self { data_dir })
     }
+}
+
+pub fn internal_rdp_settings_path(data_dir: &std::path::Path) -> PathBuf {
+    data_dir.join(INTERNAL_RDP_SETTINGS_FILE_NAME)
 }
 
 /// Retorna o diretório de dados da aplicação

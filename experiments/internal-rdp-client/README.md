@@ -30,9 +30,12 @@ O protótipo já consegue:
 - enviar input básico de teclado e mouse para a sessão remota
 - salvar um screenshot `.png` do desktop remoto
 - ajustar resolução e profundidade de cor pelo CLI
+- respeitar `fullscreen`, `width` e `height` vindos das settings do app, com override explícito por CLI
 - usar um perfil de sessão mais leve por padrão para melhorar responsividade
 - aplicar redraw parcial no viewer local para melhorar fluidez
 - controlar preferências visuais/performance da sessão por configuração de perfil e flags de CLI
+- carregar largura, altura e preferências do cliente interno a partir do contrato de settings do app ou de um backup `.sshvault`
+- descobrir automaticamente o perfil espelhado pelo app quando `--settings-file` não for informado
 
 Binário atual:
 
@@ -55,7 +58,8 @@ Viewer local:
 cargo run --manifest-path experiments/internal-rdp-client/Cargo.toml --bin viewer_mvp -- \
   --host <HOST> \
   --username <USERNAME> \
-  --password <PASSWORD>
+  --password <PASSWORD> \
+  --fullscreen
 ```
 
 Atalho via `package.json` na raiz do projeto:
@@ -71,19 +75,45 @@ Opções úteis para desempenho:
 
 - `--width 1280 --height 720` é o default atual
 - `--width 1024 --height 768` pode ajudar em máquinas mais lentas
+- `--fullscreen` e `--windowed` permitem sobrescrever o modo de exibição vindo do app
 - `--color-depth 16` é o default atual e reduz o volume de dados
 - `--no-lossy` desliga a compressão com perda, priorizando fidelidade em vez de fluidez
 
 Opções visuais configuráveis da sessão:
 
 - `--show-wallpaper`
+- `--hide-wallpaper`
 - `--full-window-drag`
+- `--no-full-window-drag`
 - `--menu-animations`
+- `--no-menu-animations`
 - `--theming`
+- `--no-theming`
 - `--cursor-shadow`
+- `--no-cursor-shadow`
 - `--cursor-settings`
+- `--no-cursor-settings`
 - `--font-smoothing`
+- `--no-font-smoothing`
 - `--desktop-composition`
+- `--no-desktop-composition`
+
+Arquivo de settings reutilizável:
+
+- `--settings-file <PATH>` aceita um JSON bruto com o shape de `AppSettings` do app, contendo `rdp`
+- `--settings-file <PATH>` também aceita um backup exportado `.sshvault`, lendo `settings.rdp`
+- sem `--settings-file`, o protótipo tenta usar `${data_dir}/mpcm-workspace/internal-rdp-client-settings.json`
+
+Quando `--settings-file` é usado:
+
+- `fullscreen`, `width` e `height` passam a vir desse arquivo por default
+- as preferências de `internalClientPerformance` também passam a vir dele
+- flags de CLI ainda podem sobrescrever pontualmente o valor carregado
+
+Espelhamento automático do app:
+
+- o app principal escreve um snapshot reduzido de `settings.rdp` em `internal-rdp-client-settings.json`
+- esse arquivo fica no diretório de dados da aplicação e serve como fonte automática para o protótipo
 
 Sem essas flags, o protótipo usa um perfil mais agressivo de responsividade, desabilitando os efeitos visuais para reduzir custo de render no host remoto.
 

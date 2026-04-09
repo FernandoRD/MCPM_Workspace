@@ -15,6 +15,7 @@ interface SelectProps {
   onChange?: (e: { target: { value: string } }) => void;
   className?: string;
   error?: string;
+  disabled?: boolean;
   children: ReactNode;
 }
 
@@ -37,7 +38,7 @@ function parseOptions(children: ReactNode): OptionData[] {
   return options;
 }
 
-export function Select({ id, label, value, onChange, className, error, children }: SelectProps) {
+export function Select({ id, label, value, onChange, className, error, disabled, children }: SelectProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -56,6 +57,7 @@ export function Select({ id, label, value, onChange, className, error, children 
   }, []);
 
   const handleSelect = (optValue: string) => {
+    if (disabled) return;
     setOpen(false);
     onChange?.({ target: { value: optValue } });
   };
@@ -71,12 +73,14 @@ export function Select({ id, label, value, onChange, className, error, children 
         <button
           id={id}
           type="button"
+          disabled={disabled}
           onClick={() => setOpen((v) => !v)}
           className={cn(
             "h-9 w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)]",
             "px-3 pr-8 text-sm text-[var(--text-primary)] text-left transition-colors",
             "focus:outline-none focus:border-[var(--border-focus)] focus:ring-1 focus:ring-[var(--border-focus)]",
             error && "border-[var(--danger)]",
+            disabled && "cursor-not-allowed opacity-60",
             className
           )}
         >
@@ -91,7 +95,7 @@ export function Select({ id, label, value, onChange, className, error, children 
           )}
         />
 
-        {open && (
+        {open && !disabled && (
           <div className="absolute z-50 mt-1 w-full rounded-md border border-[var(--border)] bg-[var(--bg-secondary)] shadow-lg py-1 max-h-60 overflow-auto">
             {options.map((opt) => (
               <button

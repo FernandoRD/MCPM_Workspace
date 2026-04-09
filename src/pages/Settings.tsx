@@ -18,16 +18,26 @@ import { invoke } from "@tauri-apps/api/core";
 import { useSettingsStore } from "@/store/settings";
 import { THEMES, ThemeId } from "@/themes";
 import { LOCALES } from "@/lib/i18n";
+import { Badge } from "@/components/ui/Badge";
 import { Select } from "@/components/ui/Select";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { SshConfigImportModal } from "@/components/SshConfigImportModal";
-import { AppSettings, LinuxRdpClient } from "@/types";
+import { AppSettings, LinuxRdpClient, RdpLaunchMode } from "@/types";
 
 export function Settings() {
   const { t } = useTranslation();
-  const { settings, setTheme, setLocale, updateTerminal, updateSecurity, updateSsh, updateRdp, resetSettings } =
-    useSettingsStore();
+  const {
+    settings,
+    setTheme,
+    setLocale,
+    updateTerminal,
+    updateSecurity,
+    updateSsh,
+    updateRdp,
+    updateRdpInternalClientPerformance,
+    resetSettings,
+  } = useSettingsStore();
   const [saved, setSaved] = useState(false);
   const [showSshConfigImport, setShowSshConfigImport] = useState(false);
 
@@ -35,6 +45,21 @@ export function Settings() {
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
   };
+
+  const internalClientOptions: Array<{
+    key: keyof AppSettings["rdp"]["internalClientPerformance"];
+    label: string;
+    support: "freerdpPreferred" | "internalOnly";
+  }> = [
+    { key: "wallpaper", label: t("settings.rdp.internalClient.options.wallpaper"), support: "freerdpPreferred" },
+    { key: "fullWindowDrag", label: t("settings.rdp.internalClient.options.fullWindowDrag"), support: "freerdpPreferred" },
+    { key: "menuAnimations", label: t("settings.rdp.internalClient.options.menuAnimations"), support: "freerdpPreferred" },
+    { key: "theming", label: t("settings.rdp.internalClient.options.theming"), support: "freerdpPreferred" },
+    { key: "cursorShadow", label: t("settings.rdp.internalClient.options.cursorShadow"), support: "internalOnly" },
+    { key: "cursorSettings", label: t("settings.rdp.internalClient.options.cursorSettings"), support: "freerdpPreferred" },
+    { key: "fontSmoothing", label: t("settings.rdp.internalClient.options.fontSmoothing"), support: "freerdpPreferred" },
+    { key: "desktopComposition", label: t("settings.rdp.internalClient.options.desktopComposition"), support: "freerdpPreferred" },
+  ];
 
   return (
     <div className="flex flex-col h-full">
@@ -312,10 +337,31 @@ export function Settings() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="max-w-sm">
                   <Select
+                    id="rdpLaunchMode"
+                    label={t("settings.rdp.launchMode")}
+                    value={settings.rdp.launchMode}
+                    onChange={(e) => updateRdp({ launchMode: e.target.value as RdpLaunchMode })}
+                  >
+                    <option value="native">{t("settings.rdp.launchModes.native")}</option>
+                    <option value="internalExperimental">{t("settings.rdp.launchModes.internalExperimental")}</option>
+                  </Select>
+                  <p className="mt-1 text-xs text-[var(--text-muted)]">
+                    {t("settings.rdp.launchModeHint")}
+                  </p>
+                  {settings.rdp.launchMode === "internalExperimental" && (
+                    <p className="mt-2 text-xs text-[var(--warning)]">
+                      {t("settings.rdp.internalExperimentalWorkspaceHint")}
+                    </p>
+                  )}
+                </div>
+
+                <div className="max-w-sm">
+                  <Select
                     id="linuxRdpClient"
                     label={t("settings.rdp.linuxClient")}
                     value={settings.rdp.linuxClient}
                     onChange={(e) => updateRdp({ linuxClient: e.target.value as LinuxRdpClient })}
+                    disabled={settings.rdp.launchMode === "internalExperimental"}
                   >
                     <option value="auto">{t("settings.rdp.clients.auto")}</option>
                     <option value="xfreerdp">{t("settings.rdp.clients.xfreerdp")}</option>
@@ -324,7 +370,9 @@ export function Settings() {
                     <option value="krdc">{t("settings.rdp.clients.krdc")}</option>
                   </Select>
                   <p className="mt-1 text-xs text-[var(--text-muted)]">
-                    {t("settings.rdp.linuxClientHint")}
+                    {settings.rdp.launchMode === "internalExperimental"
+                      ? t("settings.rdp.linuxClientDisabledHint")
+                      : t("settings.rdp.linuxClientHint")}
                   </p>
                 </div>
 
@@ -441,6 +489,62 @@ export function Settings() {
               <p className="text-xs text-[var(--text-muted)]">
                 {t("settings.rdp.optionsHint")}
               </p>
+
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] p-4">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium text-[var(--text-primary)]">
+                    {t("settings.rdp.internalClient.title")}
+                  </p>
+                  <p className="text-sm text-[var(--text-secondary)]">
+                    {t("settings.rdp.internalClient.description")}
+                  </p>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    {t("settings.rdp.internalClient.hint")}
+                  </p>
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Badge variant="accent">
+                    {t("settings.rdp.internalClient.support.freerdpPreferred")}
+                  </Badge>
+                  <Badge variant="warning">
+                    {t("settings.rdp.internalClient.support.internalOnly")}
+                  </Badge>
+                </div>
+                {settings.rdp.launchMode !== "internalExperimental" && (
+                  <p className="mt-2 text-xs text-[var(--text-muted)]">
+                    {t("settings.rdp.internalClient.internalOnlyHint")}
+                  </p>
+                )}
+
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  {internalClientOptions.map((option) => (
+                    <label
+                      key={option.key}
+                      className="flex items-start gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-primary)] px-3 py-2 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={settings.rdp.internalClientPerformance[option.key]}
+                        onChange={(e) =>
+                          updateRdpInternalClientPerformance({ [option.key]: e.target.checked })
+                        }
+                        className="mt-0.5 accent-[var(--accent)] w-4 h-4"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm text-[var(--text-primary)]">
+                            {option.label}
+                          </span>
+                          <Badge variant={option.support === "internalOnly" ? "warning" : "accent"}>
+                            {t(`settings.rdp.internalClient.support.${option.support}`)}
+                          </Badge>
+                        </div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
             </div>
           </Section>
 

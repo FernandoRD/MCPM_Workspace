@@ -244,7 +244,16 @@ export function mergePortableSettings(
     locale: incoming?.locale ?? current.locale,
     terminal: incoming?.terminal ? { ...current.terminal, ...incoming.terminal } : current.terminal,
     ssh: incoming?.ssh ? { ...current.ssh, ...incoming.ssh } : current.ssh,
-    rdp: incoming?.rdp ? { ...current.rdp, ...incoming.rdp } : current.rdp,
+    rdp: incoming?.rdp
+      ? {
+          ...current.rdp,
+          ...incoming.rdp,
+          internalClientPerformance: {
+            ...current.rdp.internalClientPerformance,
+            ...incoming.rdp.internalClientPerformance,
+          },
+        }
+      : current.rdp,
     security: {
       ...current.security,
       syncCredentials: incoming?.security?.syncCredentials ?? current.security.syncCredentials,

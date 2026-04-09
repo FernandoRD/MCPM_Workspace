@@ -203,7 +203,7 @@ Arquivo-base: [index.ts](/home/fernando/Documentos/ssh_vault/src/types/index.ts)
 - `ssh`
   `keepAliveInterval`, `inactivityTimeout`
 - `rdp`
-  `linuxClient`, `fullscreen`, `dynamicResolution`, `width`, `height`, `multimon`, `clipboard`, `audioMode`, `certificateMode`
+  `launchMode`, `linuxClient`, `fullscreen`, `dynamicResolution`, `width`, `height`, `multimon`, `clipboard`, `audioMode`, `certificateMode`, `internalClientPerformance`
 - `security`
   `masterPasswordSet`, `verificationPayload?`, `syncCredentials`
 - `sync`
@@ -316,11 +316,11 @@ Rotas atuais:
 ### RDP nativo
 
 - [rdp.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/rdp.rs)
-  Gera arquivos `.rdp` temporários, aplica opções de sessão e aciona o launcher nativo apropriado por plataforma.
+  Gera arquivos `.rdp` temporários, aplica opções de sessão, traduz preferências visuais para launchers compatíveis e aciona o launcher nativo apropriado por plataforma.
 - [RdpPage.tsx](/home/fernando/Documentos/ssh_vault/src/pages/RdpPage.tsx)
   Conecta a aba RDP ao backend, mostra launcher escolhido, preview dos argumentos e estado da sessão.
 - [Settings.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Settings.tsx)
-  Expõe preferências globais de cliente Linux, resolução, fullscreen, multimonitor, clipboard, áudio e certificado.
+  Expõe preferências globais de launcher, cliente Linux, resolução, fullscreen, multimonitor, clipboard, áudio, certificado e preferências visuais da sessão com indicação de compatibilidade.
 
 ### Protótipo isolado de cliente RDP interno
 
@@ -564,6 +564,47 @@ Para `RDP`, o formato suportado é `rdp://usuario@host:porta` e a sessão usa o 
 - macOS e outros ambientes:
   abertura do arquivo `.rdp` no app associado do sistema
 
+#### Matriz de preferências visuais RDP
+
+- `wallpaper`
+  Melhor com `xfreerdp` e `wlfreerdp`; também é serializado no `.rdp` temporário para clientes externos que respeitem esse atributo.
+- `fullWindowDrag`
+  Melhor com `xfreerdp` e `wlfreerdp`; também é serializado no `.rdp` temporário.
+- `menuAnimations`
+  Melhor com `xfreerdp` e `wlfreerdp`; também é serializado no `.rdp` temporário.
+- `theming`
+  Melhor com `xfreerdp` e `wlfreerdp`; também é serializado no `.rdp` temporário.
+- `cursorSettings`
+  Melhor com `xfreerdp` e `wlfreerdp`; também é serializado no `.rdp` temporário.
+- `fontSmoothing`
+  Melhor com `xfreerdp` e `wlfreerdp`; também é serializado no `.rdp` temporário.
+- `desktopComposition`
+  Melhor com `xfreerdp` e `wlfreerdp`; também é serializado no `.rdp` temporário.
+- `cursorShadow`
+  No estado atual, tratado como `somente viewer interno`. Ainda não há mapeamento externo confiável no backend.
+
+Regras práticas:
+
+- `xfreerdp` e `wlfreerdp`
+  Recebem flags explícitas de linha de comando e são os clientes externos com melhor aderência a essas preferências.
+- `mstsc`, `Remmina`, `KRDC` e abertura do `.rdp` no app associado
+  Podem aproveitar parte das preferências serializadas no arquivo `.rdp`, mas o comportamento depende do cliente e da plataforma.
+
+#### Checklist de fechamento do RDP
+
+- [x] Definir o destino de `cursorShadow`
+  Tratado oficialmente como `somente viewer interno`. A UI já sinaliza essa limitação e o backend nativo não tenta mapear essa preferência para launchers externos.
+- [ ] Validar a matriz de suporte em clientes reais
+  Confirmar comportamento prático em `xfreerdp`, `wlfreerdp`, `mstsc`, `Remmina` e `KRDC` para fullscreen, resolução, clipboard, áudio e preferências visuais. Este item ainda depende de ambientes com esses clientes instalados.
+- [x] Decidir o status de produto do viewer interno
+  O viewer interno permanece experimental. O caminho oficial do produto continua sendo o launcher nativo por plataforma.
+- [x] Fechar distribuição/empacotamento do viewer interno
+  No estado atual, o viewer interno não é empacotado como parte do app distribuído. Ele continua restrito ao workspace de desenvolvimento e ao laboratório isolado em `experiments/internal-rdp-client`.
+- [x] Ampliar cobertura de testes do backend RDP
+  O backend agora tem builders testáveis para argumentos do FreeRDP e serialização do arquivo `.rdp`, com testes unitários cobrindo display, áudio, preferências visuais, preview sanitizado e clamps de dimensão.
+- [x] Consolidar documentação final para usuário e manutenção
+  A matriz de compatibilidade e a política do viewer interno foram consolidadas nesta referência técnica, no README e na UI de configurações.
+
 ### Health check e fingerprints
 
 - Página: [Health.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Health.tsx)
@@ -622,6 +663,12 @@ Regras da importação CSV:
 
 O cliente RDP interno ainda não faz parte do app principal. Em vez disso, o repositório mantém um laboratório isolado em [experiments/internal-rdp-client/README.md](/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/README.md) para permitir evolução técnica sem risco para a aplicação atual.
 
+Decisão atual de produto:
+
+- o launcher RDP nativo continua sendo o caminho oficial distribuído
+- o viewer interno permanece experimental
+- o binário do protótipo não faz parte do app empacotado neste estágio
+
 Estado atual desse laboratório:
 
 - conexão real com servidor RDP usando `IronRDP`
@@ -660,6 +707,7 @@ Arquivos principais:
 
 Estado atual:
 
+- versão de referência atual do app: `0.3.3`
 - `package.json` é a fonte principal da versão do app
 - `tauri.conf.json` lê a versão a partir de `../package.json`
 - o frontend lê a versão a partir de `package.json` via `appInfo.ts`

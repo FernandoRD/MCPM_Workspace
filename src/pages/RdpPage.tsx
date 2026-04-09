@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { ExternalLink, Loader2, Monitor, RefreshCw, Wifi, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { APP_NAME } from "@/lib/appInfo";
+import { launchInternalRdpViewer } from "@/lib/internalRdpViewer";
 import { notify } from "@/lib/notifications";
 import { readSessionBootstrap, withStandaloneQuery } from "@/lib/windowMode";
 import { useConnectionLogsStore } from "@/store/connectionLogs";
@@ -22,6 +23,17 @@ interface RdpLaunchResult {
   passwordHandled: boolean;
   credentialMode: string;
   message: string;
+}
+
+interface RdpPageLaunchInfo {
+  kind: "native" | "internalExperimental";
+  launcherName: string;
+  executable: string;
+  argumentsPreview: string;
+  message: string;
+  passwordHandled?: boolean;
+  credentialMode?: string;
+  settingsSource?: string | null;
 }
 
 export function RdpPage() {
@@ -42,7 +54,7 @@ export function RdpPage() {
   const openLog = useConnectionLogsStore((s) => s.openLog);
   const closeLog = useConnectionLogsStore((s) => s.closeLog);
 
-  const [launchInfo, setLaunchInfo] = useState<RdpLaunchResult | null>(null);
+  const [launchInfo, setLaunchInfo] = useState<RdpPageLaunchInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [launching, setLaunching] = useState(false);
   const bootstrap = readSessionBootstrap(location.search);
@@ -57,6 +69,30 @@ export function RdpPage() {
   const targetHost = sessionConnection?.host ?? host?.host ?? "";
   const targetPort = sessionConnection?.port ?? host?.port ?? 3389;
   const logIdRef = useRef<string | null>(null);
+  const internalViewerDisplaySize = useMemo(() => {
+    if (!rdpSettings.fullscreen) {
+      return {
+        width: rdpSettings.width,
+        height: rdpSettings.height,
+      };
+    }
+
+    const screenWidth = Math.max(
+      window.screen?.availWidth ?? 0,
+      window.screen?.width ?? 0,
+      rdpSettings.width
+    );
+    const screenHeight = Math.max(
+      window.screen?.availHeight ?? 0,
+      window.screen?.height ?? 0,
+      rdpSettings.height
+    );
+
+    return {
+      width: screenWidth,
+      height: screenHeight,
+    };
+  }, [rdpSettings.fullscreen, rdpSettings.height, rdpSettings.width]);
 
   useEffect(() => {
     if (!tabId || tab || !bootstrap.standalone) return;
@@ -138,25 +174,65 @@ export function RdpPage() {
     updateTabStatus(tabId, "connecting");
 
     try {
-      const result = await invoke<RdpLaunchResult>("rdp_connect", {
-        sessionId: tabId,
-        host: targetHost,
-        port: targetPort,
-        username: username || null,
-        password,
-        options: {
-          preferredLinuxClient: rdpSettings.linuxClient,
-          fullscreen: rdpSettings.fullscreen,
-          dynamicResolution: rdpSettings.dynamicResolution,
-          width: rdpSettings.width,
-          height: rdpSettings.height,
-          multimon: rdpSettings.multimon,
-          clipboard: rdpSettings.clipboard,
-          audioMode: rdpSettings.audioMode,
-          certificateMode: rdpSettings.certificateMode,
-        },
-        title: tab.hostLabel,
-      });
+      let result: RdpPageLaunchInfo;
+      if (rdpSettings.launchMode === "internalExperimental") {
+        const internalResult = await launchInternalRdpViewer({
+          sessionId: tabId,
+          host: targetHost,
+          port: targetPort,
+          username,
+          password,
+          options: {
+            preferredLinuxClient: rdpSettings.linuxClient,
+            fullscreen: rdpSettings.fullscreen,
+            dynamicResolution: rdpSettings.dynamicResolution,
+            width: internalViewerDisplaySize.width,
+            height: internalViewerDisplaySize.height,
+            multimon: rdpSettings.multimon,
+            clipboard: rdpSettings.clipboard,
+            audioMode: rdpSettings.audioMode,
+            certificateMode: rdpSettings.certificateMode,
+          },
+        });
+        result = {
+          kind: "internalExperimental",
+          launcherName: internalResult.launcherName,
+          executable: internalResult.executable,
+          argumentsPreview: internalResult.argumentsPreview,
+          message: internalResult.message,
+          settingsSource: internalResult.settingsSource ?? null,
+        };
+      } else {
+        const nativeResult = await invoke<RdpLaunchResult>("rdp_connect", {
+          sessionId: tabId,
+          host: targetHost,
+          port: targetPort,
+          username: username || null,
+          password,
+          options: {
+            preferredLinuxClient: rdpSettings.linuxClient,
+            fullscreen: rdpSettings.fullscreen,
+            dynamicResolution: rdpSettings.dynamicResolution,
+            width: rdpSettings.width,
+            height: rdpSettings.height,
+            multimon: rdpSettings.multimon,
+            clipboard: rdpSettings.clipboard,
+            audioMode: rdpSettings.audioMode,
+            certificateMode: rdpSettings.certificateMode,
+            internalClientPerformance: rdpSettings.internalClientPerformance,
+          },
+          title: tab.hostLabel,
+        });
+        result = {
+          kind: "native",
+          launcherName: nativeResult.launcherName,
+          executable: nativeResult.executable,
+          argumentsPreview: nativeResult.argumentsPreview,
+          message: nativeResult.message,
+          passwordHandled: nativeResult.passwordHandled,
+          credentialMode: nativeResult.credentialMode,
+        };
+      }
 
       if (logIdRef.current) {
         closeLog(logIdRef.current, "disconnected");
@@ -176,17 +252,33 @@ export function RdpPage() {
       if (host && !sessionConnection) {
         setLastConnected(host.id);
       }
-      notify(APP_NAME, t("notifications.rdpConnected", { host: tab.hostLabel }));
+      notify(
+        APP_NAME,
+        t(
+          rdpSettings.launchMode === "internalExperimental"
+            ? "notifications.rdpInternalViewerLaunched"
+            : "notifications.rdpConnected",
+          { host: tab.hostLabel }
+        )
+      );
     } catch (err) {
       const message = String(err);
       setError(message);
       setLaunchInfo(null);
       updateTabStatus(tabId, "error");
-      notify(APP_NAME, t("notifications.rdpError", { host: tab?.hostLabel ?? "RDP" }));
+      notify(
+        APP_NAME,
+        t(
+          rdpSettings.launchMode === "internalExperimental"
+            ? "notifications.rdpInternalViewerError"
+            : "notifications.rdpError",
+          { host: tab?.hostLabel ?? "RDP" }
+        )
+      );
     } finally {
       setLaunching(false);
     }
-  }, [closeLog, host, openLog, password, rdpSettings, sessionConnection, setLastConnected, t, tab, tabId, targetHost, targetPort, updateTabStatus, username]);
+  }, [closeLog, host, internalViewerDisplaySize.height, internalViewerDisplaySize.width, openLog, password, rdpSettings, sessionConnection, setLastConnected, t, tab, tabId, targetHost, targetPort, updateTabStatus, username]);
 
   const disconnect = useCallback(async (status: "disconnected" | "error" = "disconnected") => {
     if (!tabId) return;
@@ -231,7 +323,7 @@ export function RdpPage() {
   }, [closeLog]);
 
   const securityHint = useMemo(() => {
-    if (!launchInfo) return null;
+    if (!launchInfo || launchInfo.kind !== "native") return null;
     return launchInfo.passwordHandled ? t("rdp.passwordHandled") : t("rdp.passwordPromptExpected");
   }, [launchInfo, t]);
 
@@ -302,7 +394,9 @@ export function RdpPage() {
             )}
             <div>
               <p className="text-sm font-medium text-[var(--text-primary)]">{t(`rdp.status.${tab.status}`)}</p>
-              <p className="text-xs text-[var(--text-muted)]">{t("rdp.externalClientHint")}</p>
+              <p className="text-xs text-[var(--text-muted)]">
+                {t(rdpSettings.launchMode === "internalExperimental" ? "rdp.internalClientHint" : "rdp.externalClientHint")}
+              </p>
             </div>
           </div>
         </section>
@@ -316,8 +410,17 @@ export function RdpPage() {
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <InfoCard label={t("rdp.launcher")} value={launchInfo.launcherName} />
               <InfoCard label={t("rdp.executable")} value={launchInfo.executable} />
-              <InfoCard label={t("rdp.authentication")} value={securityHint ?? "—"} />
-              <InfoCard label={t("rdp.credentialMode")} value={launchInfo.credentialMode} />
+              {launchInfo.kind === "native" ? (
+                <>
+                  <InfoCard label={t("rdp.authentication")} value={securityHint ?? "—"} />
+                  <InfoCard label={t("rdp.credentialMode")} value={launchInfo.credentialMode ?? "—"} />
+                </>
+              ) : (
+                <InfoCard
+                  label={t("rdp.internalViewerSettingsSource")}
+                  value={launchInfo.settingsSource ?? t("rdp.internalViewerSettingsSourceFallback")}
+                />
+              )}
               <InfoCard label={t("rdp.display")} value={displayHint} />
               <InfoCard label={t("rdp.certificate")} value={t(`settings.rdp.certificateModes.${rdpSettings.certificateMode}`)} />
             </div>

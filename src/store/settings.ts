@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
-import { AppSettings } from "@/types";
+import { AppSettings, RdpInternalClientPerformanceSettings, DEFAULT_RDP_INTERNAL_CLIENT_PERFORMANCE_SETTINGS } from "@/types";
 import { sanitizeSettingsInput } from "@/lib/inputSanitizers";
 import { applyTheme, isThemeId, ThemeId } from "@/themes";
 import i18n from "@/lib/i18n";
@@ -15,6 +15,9 @@ interface SettingsStore {
   updateSecurity: (security: Partial<AppSettings["security"]>) => void;
   updateSsh: (ssh: Partial<AppSettings["ssh"]>) => void;
   updateRdp: (rdp: Partial<AppSettings["rdp"]>) => void;
+  updateRdpInternalClientPerformance: (
+    performance: Partial<RdpInternalClientPerformanceSettings>
+  ) => void;
   updateSync: (sync: Partial<AppSettings["sync"]>) => void;
   updateGroups: (groups: string[]) => void;
   updateProductivity: (productivity: Partial<AppSettings["productivity"]>) => void;
@@ -42,6 +45,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     inactivityTimeout: 0,
   },
   rdp: {
+    launchMode: "native",
     linuxClient: "auto",
     fullscreen: false,
     dynamicResolution: true,
@@ -51,6 +55,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     clipboard: true,
     audioMode: "redirect",
     certificateMode: "ignore",
+    internalClientPerformance: DEFAULT_RDP_INTERNAL_CLIENT_PERFORMANCE_SETTINGS,
   },
   sync: {
     provider: null,
@@ -84,6 +89,10 @@ function normalizeSettings(settings?: Partial<AppSettings> | null): AppSettings 
     rdp: {
       ...DEFAULT_SETTINGS.rdp,
       ...(settings?.rdp ?? {}),
+      internalClientPerformance: {
+        ...DEFAULT_RDP_INTERNAL_CLIENT_PERFORMANCE_SETTINGS,
+        ...(settings?.rdp?.internalClientPerformance ?? {}),
+      },
     },
     sync: {
       ...DEFAULT_SETTINGS.sync,
@@ -205,7 +214,34 @@ export const useSettingsStore = create<SettingsStore>()((set, _get) => ({
     set((s) => {
       const settings = {
         ...s.settings,
-        rdp: { ...DEFAULT_SETTINGS.rdp, ...s.settings.rdp, ...rdp },
+        rdp: {
+          ...DEFAULT_SETTINGS.rdp,
+          ...s.settings.rdp,
+          ...rdp,
+          internalClientPerformance: {
+            ...DEFAULT_RDP_INTERNAL_CLIENT_PERFORMANCE_SETTINGS,
+            ...s.settings.rdp.internalClientPerformance,
+            ...rdp.internalClientPerformance,
+          },
+        },
+      };
+      persistSettings(settings);
+      return { settings };
+    }),
+
+  updateRdpInternalClientPerformance: (performance) =>
+    set((s) => {
+      const settings = {
+        ...s.settings,
+        rdp: {
+          ...DEFAULT_SETTINGS.rdp,
+          ...s.settings.rdp,
+          internalClientPerformance: {
+            ...DEFAULT_RDP_INTERNAL_CLIENT_PERFORMANCE_SETTINGS,
+            ...s.settings.rdp.internalClientPerformance,
+            ...performance,
+          },
+        },
       };
       persistSettings(settings);
       return { settings };

@@ -2,6 +2,7 @@ import {
   AppSettings,
   ConnectionProtocol,
   Credential,
+  DEFAULT_RDP_INTERNAL_CLIENT_PERFORMANCE_SETTINGS,
   HostEntry,
   SessionConnection,
   TunnelProfile,
@@ -94,6 +95,10 @@ export function sanitizeSettingsInput(settings: AppSettings): AppSettings {
       ...settings.rdp,
       width: Math.min(7680, Math.max(640, rdpWidth)),
       height: Math.min(4320, Math.max(480, rdpHeight)),
+      internalClientPerformance: {
+        ...DEFAULT_RDP_INTERNAL_CLIENT_PERFORMANCE_SETTINGS,
+        ...settings.rdp.internalClientPerformance,
+      },
     },
     groups: settings.groups.map((group) => group.trim()).filter(Boolean),
     sync: {

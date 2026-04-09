@@ -27,7 +27,7 @@ pub struct SessionProfile {
     pub performance: SessionPerformanceConfig,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct SessionPerformanceConfig {
     pub wallpaper: bool,
     pub full_window_drag: bool,
@@ -76,21 +76,6 @@ impl SessionPerformanceConfig {
         }
 
         flags
-    }
-}
-
-impl Default for SessionPerformanceConfig {
-    fn default() -> Self {
-        Self {
-            wallpaper: false,
-            full_window_drag: false,
-            menu_animations: false,
-            theming: false,
-            cursor_shadow: false,
-            cursor_settings: false,
-            font_smoothing: false,
-            desktop_composition: false,
-        }
     }
 }
 

@@ -1,12 +1,12 @@
 use keyring::{Entry, Error as KeyringError};
 use rand::Rng;
 use rusqlite::{params, Connection};
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::State;
 
-use crate::AppState;
+use crate::{storage, AppState};
 
 const KEYCHAIN_SERVICE: &str = "ssh-vault";
 const KEYCHAIN_DB_KEY_ACCOUNT: &str = "db-encryption-key";
@@ -248,7 +248,13 @@ pub fn db_get_settings(state: State<AppState>) -> Result<Option<Value>, String> 
     );
 
     match result {
-        Ok(data) => serde_json::from_str(&data).map(Some).map_err(|e| e.to_string()),
+        Ok(data) => {
+            let settings = serde_json::from_str(&data).map_err(|e| e.to_string())?;
+            if let Err(error) = mirror_internal_rdp_settings(&state, &settings) {
+                eprintln!("[mpcm-workspace] failed to mirror internal RDP settings: {error}");
+            }
+            Ok(Some(settings))
+        }
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
         Err(e) => Err(e.to_string()),
     }
@@ -263,7 +269,30 @@ pub fn db_save_settings(state: State<AppState>, settings: Value) -> Result<(), S
         params![data],
     )
     .map_err(|e| e.to_string())?;
+
+    if let Err(error) = mirror_internal_rdp_settings(&state, &settings) {
+        eprintln!("[mpcm-workspace] failed to mirror internal RDP settings: {error}");
+    }
+
     Ok(())
+}
+
+fn mirror_internal_rdp_settings(state: &State<AppState>, settings: &Value) -> Result<(), String> {
+    let data_dir = {
+        let storage = state.storage.lock().map_err(|e| e.to_string())?;
+        storage.data_dir.clone()
+    };
+    let target_path = storage::internal_rdp_settings_path(&data_dir);
+    let payload = json!({
+        "app": "ssh-vault",
+        "kind": "internal-rdp-client-settings",
+        "version": 1,
+        "rdp": settings.get("rdp").cloned().unwrap_or_else(|| json!({})),
+    });
+    let serialized = serde_json::to_string_pretty(&payload).map_err(|e| e.to_string())?;
+
+    std::fs::write(&target_path, serialized)
+        .map_err(|e| format!("write {}: {e}", target_path.display()))
 }
 
 #[tauri::command]

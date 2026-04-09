@@ -86,6 +86,7 @@ pub fn run() {
             telnet::telnet_disconnect,
             telnet::telnet_session_exists,
             rdp::rdp_connect,
+            rdp::rdp_launch_internal_viewer,
             rdp::rdp_disconnect,
             rdp::rdp_session_exists,
             ssh_config::ssh_import_config,

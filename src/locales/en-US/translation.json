@@ -115,6 +115,11 @@
     "host": {
       "connect": "Connect",
       "openDesktop": "Open Desktop",
+      "openInternalViewer": "Internal viewer (experimental)",
+      "internalViewerNeedsUsername": "The experimental internal viewer for {{host}} requires a username defined on the host or credential.",
+      "internalViewerNeedsPassword": "The experimental internal viewer for {{host}} requires a saved credential with a password.",
+      "internalViewerNeedsUsernameShort": "Internal viewer requires a defined username.",
+      "internalViewerNeedsPasswordShort": "Internal viewer requires a saved credential password.",
       "openSftp": "Open SFTP",
       "edit": "Edit",
       "delete": "Delete",
@@ -439,8 +444,12 @@
     },
     "rdp": {
       "description": "Global RDP launcher preferences, including preferred client, display mode, and session capabilities.",
+      "launchMode": "Launch mode",
+      "launchModeHint": "Choose whether the app should open RDP sessions in the system native launcher or in the experimental internal viewer.",
+      "internalExperimentalWorkspaceHint": "Experimental mode. Internal viewer availability may vary outside the development environment.",
       "linuxClient": "Preferred Linux client",
       "linuxClientHint": "In 'Automatic', the app tries supported clients in sequence. If you choose a specific client, it uses only that one.",
+      "linuxClientDisabledHint": "This choice only applies to the native launcher. When the experimental internal viewer is active, the external Linux client is ignored.",
       "displayMode": "Display mode",
       "width": "Remote desktop width",
       "height": "Remote desktop height",
@@ -457,6 +466,10 @@
         "remmina": "Remmina",
         "krdc": "KRDC"
       },
+      "launchModes": {
+        "native": "System native launcher",
+        "internalExperimental": "Experimental internal viewer"
+      },
       "displayModes": {
         "windowed": "Resizable window",
         "fullscreen": "Fullscreen"
@@ -469,6 +482,26 @@
       "certificateModes": {
         "ignore": "Ignore certificate warnings",
         "strict": "Validate certificate"
+      },
+      "internalClient": {
+        "title": "RDP session visual preferences",
+        "description": "These preferences control visual features and session optimizations. The internal viewer uses them directly, and compatible external clients now also honor these options.",
+        "hint": "xfreerdp and wlfreerdp apply most of these preferences. Other external launchers may ignore some of them depending on client support.",
+        "support": {
+          "freerdpPreferred": "Best with FreeRDP",
+          "internalOnly": "Internal viewer only"
+        },
+        "internalOnlyHint": "Options marked as 'Internal viewer only' only take effect when the launch mode is set to the experimental internal viewer.",
+        "options": {
+          "wallpaper": "Show wallpaper",
+          "fullWindowDrag": "Show full window contents while dragging or resizing",
+          "menuAnimations": "Keep menu animations",
+          "theming": "Keep remote system theming",
+          "cursorShadow": "Show cursor shadow",
+          "cursorSettings": "Use remote cursor preferences",
+          "fontSmoothing": "Font smoothing",
+          "desktopComposition": "Desktop composition"
+        }
       }
     },
     "appearance": {
@@ -870,6 +903,8 @@
     "terminalDropped": "Session dropped unexpectedly: {{host}}",
     "rdpConnected": "Remote desktop launched: {{host}}",
     "rdpError": "Failed to launch RDP: {{host}}",
+    "rdpInternalViewerLaunched": "Internal RDP viewer launched: {{host}}",
+    "rdpInternalViewerError": "Failed to launch internal RDP viewer: {{host}}",
     "syncPushSuccess": "Sync sent successfully",
     "syncPullSuccess": "Data imported successfully",
     "syncError": "Sync error"
@@ -880,7 +915,16 @@
     "reconnect": "Reconnect",
     "disconnect": "Disconnect",
     "externalClientHint": "This session is opened in the system native RDP client.",
+    "internalClientHint": "This session uses the experimental internal RDP viewer configured in preferences.",
     "launchDetails": "Launcher details",
+    "internalViewerTitle": "Experimental internal viewer",
+    "internalViewerDescription": "Launches the isolated internal RDP client prototype using the current host and the profile saved by the app.",
+    "internalViewerHint": "This does not replace the external launcher yet. It exists to validate the embedded viewer in parallel.",
+    "internalViewerMissingCredentials": "This experimental viewer requires a username and password available in the current connection or saved credential.",
+    "internalViewerLaunch": "Open internal viewer",
+    "internalViewerLaunching": "Opening internal viewer...",
+    "internalViewerSettingsSource": "Profile used",
+    "internalViewerSettingsSourceFallback": "Prototype default profile",
     "launcher": "Client used",
     "executable": "Executable",
     "authentication": "Authentication",
