@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { History, Trash2, Monitor, FolderOpen } from "lucide-react";
+import { History, Trash2, Monitor, FolderOpen, Terminal } from "lucide-react";
 import { useConnectionLogsStore } from "@/store/connectionLogs";
 import { Button } from "@/components/ui/Button";
 
@@ -10,6 +10,12 @@ function formatDuration(secs?: number): string {
   const h = Math.floor(secs / 3600);
   const m = Math.floor((secs % 3600) / 60);
   return `${h}h ${m}m`;
+}
+
+function SessionTypeIcon({ sessionType }: { sessionType: string }) {
+  if (sessionType === "terminal") return <Terminal size={13} />;
+  if (sessionType === "sftp") return <FolderOpen size={13} />;
+  return <Monitor size={13} />;
 }
 
 export function ConnectionLog() {
@@ -62,7 +68,7 @@ export function ConnectionLog() {
                   </td>
                   <td className="px-4 py-2.5">
                     <span className="flex items-center gap-1.5 text-[var(--text-secondary)]">
-                      {log.sessionType === "sftp" ? <FolderOpen size={13} /> : <Monitor size={13} />}
+                      <SessionTypeIcon sessionType={log.sessionType} />
                       {t(`connectionLog.sessionType.${log.sessionType}`)}
                     </span>
                   </td>

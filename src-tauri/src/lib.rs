@@ -11,6 +11,7 @@ mod storage;
 mod sync;
 mod telnet;
 mod totp;
+mod vnc;
 
 use database::Database;
 use session_bootstrap::QuickConnectBootstrapPayload;
@@ -19,6 +20,7 @@ use sftp::SftpManager;
 use ssh::SshManager;
 use storage::Storage;
 use telnet::TelnetManager;
+use vnc::VncManager;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -30,6 +32,7 @@ pub struct AppState {
     pub telnet: Arc<tokio::sync::Mutex<TelnetManager>>,
     pub sftp: Arc<tokio::sync::Mutex<SftpManager>>,
     pub rdp: Arc<tokio::sync::Mutex<RdpManager>>,
+    pub vnc: Arc<tokio::sync::Mutex<VncManager>>,
     pub rate_limiter: rate_limit::RateLimiter,
 }
 
@@ -52,6 +55,7 @@ pub fn run() {
             telnet: Arc::new(tokio::sync::Mutex::new(TelnetManager::new())),
             sftp: Arc::new(tokio::sync::Mutex::new(SftpManager::new())),
             rdp: Arc::new(tokio::sync::Mutex::new(RdpManager::new())),
+            vnc: Arc::new(tokio::sync::Mutex::new(VncManager::new())),
             rate_limiter: rate_limit::RateLimiter::new(),
         })
         .invoke_handler(tauri::generate_handler![
@@ -79,6 +83,8 @@ pub fn run() {
             ssh::ssh_start_tunnel,
             ssh::ssh_stop_tunnel,
             ssh::ssh_list_known_hosts,
+            ssh::ssh_set_known_host,
+            ssh::ssh_delete_known_host,
             ssh::ssh_health_check,
             telnet::telnet_connect,
             telnet::telnet_send_input,
@@ -89,6 +95,9 @@ pub fn run() {
             rdp::rdp_launch_internal_viewer,
             rdp::rdp_disconnect,
             rdp::rdp_session_exists,
+            vnc::vnc_connect,
+            vnc::vnc_disconnect,
+            vnc::vnc_session_exists,
             ssh_config::ssh_import_config,
             ssh_config::ssh_apply_imported_config,
             ssh_config::ssh_probe_host,

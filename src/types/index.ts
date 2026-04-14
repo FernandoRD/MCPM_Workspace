@@ -1,6 +1,7 @@
 export type AuthMethod = "password" | "privateKey" | "agent";
-export type ConnectionProtocol = "ssh" | "telnet" | "rdp";
+export type ConnectionProtocol = "ssh" | "telnet" | "rdp" | "vnc";
 export type LinuxRdpClient = "auto" | "xfreerdp" | "wlfreerdp" | "remmina" | "krdc";
+export type LinuxVncClient = "auto" | "tigervnc" | "remmina" | "krdc" | "vinagre" | "system";
 export type RdpAudioMode = "redirect" | "remote" | "disabled";
 export type RdpCertificateMode = "ignore" | "strict";
 export type RdpLaunchMode = "native" | "internalExperimental";
@@ -63,7 +64,7 @@ export interface HostEntry {
 /** @deprecated Use HostEntry. */
 export type SshHost = HostEntry;
 
-export type TabType = "terminal" | "sftp" | "rdp";
+export type TabType = "terminal" | "sftp" | "rdp" | "vnc";
 export type SplitDirection = "horizontal" | "vertical";
 
 export interface TerminalPaneState {
@@ -154,6 +155,12 @@ export const DEFAULT_RDP_INTERNAL_CLIENT_PERFORMANCE_SETTINGS: RdpInternalClient
   desktopComposition: false,
 };
 
+export interface VncSettings {
+  linuxClient: LinuxVncClient;
+  fullscreen: boolean;
+  viewOnly: boolean;
+}
+
 export type SyncProvider = "githubGist" | "s3" | "webdav" | "custom" | null;
 
 export interface GistSyncConfig {
@@ -199,6 +206,7 @@ export interface AppSettings {
     inactivityTimeout: number;
   };
   rdp: RdpSettings;
+  vnc: VncSettings;
   security: {
     /** true se uma senha mestra foi definida (a senha em si nunca é salva aqui) */
     masterPasswordSet: boolean;

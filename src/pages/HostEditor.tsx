@@ -70,7 +70,8 @@ export function HostEditor() {
     .filter(Boolean);
   const isTelnet = form.protocol === "telnet";
   const isRdp = form.protocol === "rdp";
-  const availableCredentials = isRdp
+  const isVnc = form.protocol === "vnc";
+  const availableCredentials = isRdp || isVnc
     ? credentials.filter((credential) => credential.authMethod === "password")
     : credentials;
 
@@ -135,7 +136,7 @@ export function HostEditor() {
 
   const handleProtocolChange = (protocol: ConnectionProtocol) => {
     const nextCredentialId =
-      protocol === "rdp" && form.credentialId
+      (protocol === "rdp" || protocol === "vnc") && form.credentialId
         ? credentials
             .filter((credential) => credential.authMethod === "password")
             .some((credential) => credential.id === form.credentialId)
@@ -151,7 +152,9 @@ export function HostEditor() {
         protocol === "telnet"
           ? prev.port === 22 ? 23 : prev.port
           : protocol === "rdp"
-          ? prev.port === 22 || prev.port === 23 ? 3389 : prev.port
+            ? prev.port === 22 || prev.port === 23 || prev.port === 5900 ? 3389 : prev.port
+          : protocol === "vnc"
+            ? prev.port === 22 || prev.port === 23 || prev.port === 3389 ? 5900 : prev.port
           : prev.port === 23 ? 22 : prev.port,
     }));
   };
@@ -229,6 +232,7 @@ export function HostEditor() {
                   <option value="ssh">{t("protocols.ssh")}</option>
                   <option value="telnet">{t("protocols.telnet")}</option>
                   <option value="rdp">{t("protocols.rdp")}</option>
+                  <option value="vnc">{t("protocols.vnc")}</option>
                 </Select>
               </div>
               <div className="sm:col-span-2">
@@ -248,7 +252,7 @@ export function HostEditor() {
                 min={1}
                 max={65535}
                 value={form.port}
-                onChange={(e) => set("port", parseInt(e.target.value) || (isTelnet ? 23 : isRdp ? 3389 : 22))}
+                onChange={(e) => set("port", parseInt(e.target.value) || (isTelnet ? 23 : isRdp ? 3389 : isVnc ? 5900 : 22))}
                 error={errors.port}
               />
             </div>
@@ -266,11 +270,11 @@ export function HostEditor() {
                 <div className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--bg-primary)] px-4 py-4 text-sm text-[var(--text-muted)]">
                   {t("hostEditor.telnet.authenticationHint")}
                 </div>
-              ) : isRdp ? (
+              ) : isRdp || isVnc ? (
                 availableCredentials.length === 0 ? (
                   <div className="flex flex-col items-center gap-3 py-6 text-center rounded-lg border border-dashed border-[var(--border)]">
                     <p className="text-sm text-[var(--text-muted)]">
-                      {t("hostEditor.rdp.authenticationHint")}
+                      {t(isRdp ? "hostEditor.rdp.authenticationHint" : "hostEditor.vnc.authenticationHint")}
                     </p>
                     <Button
                       variant="secondary"
@@ -284,7 +288,7 @@ export function HostEditor() {
                 ) : (
                   <>
                     <p className="text-xs text-[var(--text-muted)] mb-1">
-                      {t("hostEditor.rdp.authenticationHint")}
+                      {t(isRdp ? "hostEditor.rdp.authenticationHint" : "hostEditor.vnc.authenticationHint")}
                     </p>
                     <div className="grid grid-cols-2 gap-2">
                       {availableCredentials.map((cred) => (
@@ -451,7 +455,7 @@ export function HostEditor() {
                   ))}
                 </div>
               )}
-              {!isTelnet && !isRdp && otherHosts.length > 0 && (
+              {!isTelnet && !isRdp && !isVnc && otherHosts.length > 0 && (
                 <Select
                   id="jumpHost"
                   label={t("hostEditor.fields.jumpHost")}
@@ -478,7 +482,7 @@ export function HostEditor() {
           </Section>
 
           {/* SSH Compat Section */}
-          {!isTelnet && !isRdp && (
+          {!isTelnet && !isRdp && !isVnc && (
             <Section
               id="sshCompat"
               title={t("hostEditor.sshCompat.section")}

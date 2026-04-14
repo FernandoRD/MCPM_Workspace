@@ -37,7 +37,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Select } from "@/components/ui/Select";
 import { SshConfigImportModal } from "@/components/SshConfigImportModal";
 import { NewConnectionSplitButton } from "@/components/NewConnectionSplitButton";
-import { launchRdpSession, launchTerminalSession } from "@/lib/sessionLauncher";
+import { launchRdpSession, launchTerminalSession, launchVncSession } from "@/lib/sessionLauncher";
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { buildSessionRoute, isStandaloneWindow } from "@/lib/windowMode";
@@ -64,6 +64,7 @@ export function Dashboard() {
   const openSession = useSessionsStore((s) => s.openSession);
   const openSftpTab = useSessionsStore((s) => s.openSftpTab);
   const openRdpTab = useSessionsStore((s) => s.openRdpTab);
+  const openVncTab = useSessionsStore((s) => s.openVncTab);
   const credentials = useCredentialsStore((s) => s.credentials);
   const getCredential = useCredentialsStore((s) => s.getCredential);
   const locale = useSettingsStore((s) => s.settings.locale);
@@ -150,7 +151,8 @@ export function Dashboard() {
   const handleConnect = async (host: HostEntry) => {
     const credential = host.credentialId ? getCredential(host.credentialId) : undefined;
     const username = credential?.username ?? host.username ?? "";
-    const hostAddress = username ? `${username}@${host.host}` : host.host;
+    const isDesktopProtocol = host.protocol === "rdp" || host.protocol === "vnc";
+    const hostAddress = !isDesktopProtocol && username ? `${username}@${host.host}` : host.host;
     if (host.protocol === "rdp") {
       const route = await launchRdpSession({
         hostId: host.id,
@@ -158,6 +160,18 @@ export function Dashboard() {
         hostAddress,
         openMode: sessionOpenMode,
         openRdpTab,
+        standaloneWindow,
+      });
+      if (route) navigate(route);
+      return;
+    }
+    if (host.protocol === "vnc") {
+      const route = await launchVncSession({
+        hostId: host.id,
+        hostLabel: host.label,
+        hostAddress,
+        openMode: sessionOpenMode,
+        openVncTab,
         standaloneWindow,
       });
       if (route) navigate(route);
@@ -554,8 +568,8 @@ function HostCard({
           {menuOpen && (
             <div className="absolute right-0 top-8 z-20 w-40 rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] shadow-xl py-1">
               <ContextItem
-                icon={host.protocol === "rdp" ? Monitor : Terminal}
-                label={t(host.protocol === "rdp" ? "dashboard.host.openDesktop" : "dashboard.host.connect")}
+                icon={host.protocol === "rdp" || host.protocol === "vnc" ? Monitor : Terminal}
+                label={t(host.protocol === "rdp" || host.protocol === "vnc" ? "dashboard.host.openDesktop" : "dashboard.host.connect")}
                 onClick={() => onConnect(host)}
               />
               {host.protocol === "ssh" && (
@@ -590,8 +604,8 @@ function HostCard({
           {host.lastConnectedAt ? formatDate(host.lastConnectedAt, locale) : t("dashboard.host.neverConnected")}
         </p>
         <Button size="sm" onClick={() => onConnect(host)}>
-          {host.protocol === "rdp" ? <Monitor size={12} /> : <Terminal size={12} />}
-          {t(host.protocol === "rdp" ? "dashboard.host.openDesktop" : "dashboard.host.connect")}
+          {host.protocol === "rdp" || host.protocol === "vnc" ? <Monitor size={12} /> : <Terminal size={12} />}
+          {t(host.protocol === "rdp" || host.protocol === "vnc" ? "dashboard.host.openDesktop" : "dashboard.host.connect")}
         </Button>
       </div>
     </div>

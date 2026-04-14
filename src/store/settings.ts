@@ -15,6 +15,7 @@ interface SettingsStore {
   updateSecurity: (security: Partial<AppSettings["security"]>) => void;
   updateSsh: (ssh: Partial<AppSettings["ssh"]>) => void;
   updateRdp: (rdp: Partial<AppSettings["rdp"]>) => void;
+  updateVnc: (vnc: Partial<AppSettings["vnc"]>) => void;
   updateRdpInternalClientPerformance: (
     performance: Partial<RdpInternalClientPerformanceSettings>
   ) => void;
@@ -57,6 +58,11 @@ const DEFAULT_SETTINGS: AppSettings = {
     certificateMode: "ignore",
     internalClientPerformance: DEFAULT_RDP_INTERNAL_CLIENT_PERFORMANCE_SETTINGS,
   },
+  vnc: {
+    linuxClient: "auto",
+    fullscreen: false,
+    viewOnly: false,
+  },
   sync: {
     provider: null,
     autoSync: false,
@@ -93,6 +99,10 @@ function normalizeSettings(settings?: Partial<AppSettings> | null): AppSettings 
         ...DEFAULT_RDP_INTERNAL_CLIENT_PERFORMANCE_SETTINGS,
         ...(settings?.rdp?.internalClientPerformance ?? {}),
       },
+    },
+    vnc: {
+      ...DEFAULT_SETTINGS.vnc,
+      ...(settings?.vnc ?? {}),
     },
     sync: {
       ...DEFAULT_SETTINGS.sync,
@@ -224,6 +234,16 @@ export const useSettingsStore = create<SettingsStore>()((set, _get) => ({
             ...rdp.internalClientPerformance,
           },
         },
+      };
+      persistSettings(settings);
+      return { settings };
+    }),
+
+  updateVnc: (vnc) =>
+    set((s) => {
+      const settings = {
+        ...s.settings,
+        vnc: { ...DEFAULT_SETTINGS.vnc, ...s.settings.vnc, ...vnc },
       };
       persistSettings(settings);
       return { settings };

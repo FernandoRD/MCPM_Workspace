@@ -14,12 +14,14 @@ interface SessionsStore {
     connection: SessionConnection,
     hostLabel: string,
     hostAddress: string,
-    type?: Extract<TabType, "terminal" | "rdp">
+    type?: Extract<TabType, "terminal" | "rdp" | "vnc">
   ) => string;
   /** Abre uma aba de SFTP. */
   openSftpTab: (hostId: string, hostLabel: string, hostAddress: string) => string;
   /** Abre uma aba de RDP. */
   openRdpTab: (hostId: string, hostLabel: string, hostAddress: string) => string;
+  /** Abre uma aba de VNC. */
+  openVncTab: (hostId: string, hostLabel: string, hostAddress: string) => string;
   /** Garante que um tab exista na store atual. Útil para janelas dedicadas. */
   ensureSession: (tab: SessionTab) => void;
   closeSession: (tabId: string) => void;
@@ -103,6 +105,23 @@ export const useSessionsStore = create<SessionsStore>()((set, get) => ({
     const tab: SessionTab = {
       id,
       type: "rdp",
+      hostId,
+      hostLabel,
+      hostAddress,
+      status: "connecting",
+      panes: [],
+      splitDirection: "horizontal",
+      createdAt: new Date().toISOString(),
+    };
+    set((s) => ({ tabs: [...s.tabs, tab], activeTabId: id }));
+    return id;
+  },
+
+  openVncTab: (hostId, hostLabel, hostAddress) => {
+    const id = uuidv4();
+    const tab: SessionTab = {
+      id,
+      type: "vnc",
       hostId,
       hostLabel,
       hostAddress,

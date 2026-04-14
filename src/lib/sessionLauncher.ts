@@ -25,9 +25,9 @@ interface LaunchQuickConnectSessionParams {
     connection: SessionConnection,
     hostLabel: string,
     hostAddress: string,
-    type?: "terminal" | "rdp"
+    type?: "terminal" | "rdp" | "vnc"
   ) => string;
-  sessionType?: "terminal" | "rdp";
+  sessionType?: "terminal" | "rdp" | "vnc";
   standaloneWindow?: boolean;
 }
 
@@ -40,11 +40,20 @@ interface LaunchRdpSessionParams {
   standaloneWindow?: boolean;
 }
 
+interface LaunchVncSessionParams {
+  hostId: string;
+  hostLabel: string;
+  hostAddress: string;
+  openMode: AppSettings["terminal"]["sessionOpenMode"];
+  openVncTab: (hostId: string, hostLabel: string, hostAddress: string) => string;
+  standaloneWindow?: boolean;
+}
+
 async function createStandaloneSessionWindow(
   route: string,
   hostLabel: string,
   sessionId: string,
-  kind: "terminal" | "rdp"
+  kind: "terminal" | "rdp" | "vnc"
 ): Promise<boolean> {
   // Uma URL relativa ("/terminal/abc123?...") não tem contexto de base no WebKit/WebView2
   // e resulta em janela em branco. Prefixar com window.location.origin resolve
@@ -203,6 +212,38 @@ export async function launchRdpSession({
 
   const sessionId = openRdpTab(hostId, hostLabel, hostAddress);
   return buildSessionRoute("rdp", sessionId, {
+    standalone: standaloneWindow,
+    hostId: standaloneWindow ? hostId : undefined,
+    hostLabel: standaloneWindow ? hostLabel : undefined,
+    hostAddress: standaloneWindow ? hostAddress : undefined,
+  });
+}
+
+export async function launchVncSession({
+  hostId,
+  hostLabel,
+  hostAddress,
+  openMode,
+  openVncTab,
+  standaloneWindow = false,
+}: LaunchVncSessionParams): Promise<string | null> {
+  if (openMode === "window") {
+    const sessionId = uuidv4();
+    const route = buildSessionRoute("vnc", sessionId, {
+      standalone: true,
+      hostId,
+      hostLabel,
+      hostAddress,
+    });
+
+    const opened = await createStandaloneSessionWindow(route, hostLabel, sessionId, "vnc");
+    if (opened) return null;
+
+    notify(APP_NAME, `Não foi possível abrir janela separada para ${hostLabel}. Abrindo em aba.`);
+  }
+
+  const sessionId = openVncTab(hostId, hostLabel, hostAddress);
+  return buildSessionRoute("vnc", sessionId, {
     standalone: standaloneWindow,
     hostId: standaloneWindow ? hostId : undefined,
     hostLabel: standaloneWindow ? hostLabel : undefined,

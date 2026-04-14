@@ -22,7 +22,7 @@ export const CSV_HOST_IMPORT_HEADERS = [
 type CsvHostImportHeader = (typeof CSV_HOST_IMPORT_HEADERS)[number];
 
 const REQUIRED_HEADERS: CsvHostImportHeader[] = ["label", "protocol", "host"];
-const SUPPORTED_PROTOCOLS: ConnectionProtocol[] = ["ssh", "telnet", "rdp"];
+const SUPPORTED_PROTOCOLS: ConnectionProtocol[] = ["ssh", "telnet", "rdp", "vnc"];
 const SUPPORTED_AUTH_METHODS: AuthMethod[] = ["password", "privateKey", "agent"];
 const SUPPORTED_SSH_COMPAT_PRESETS: SshCompatPreset[] = ["modern", "legacy", "very-legacy"];
 
@@ -130,6 +130,22 @@ export function buildCsvHostTemplate(includeExample = false): string {
       "windows;financeiro",
       "Acesso ao sistema legado",
       "#d29922",
+      "",
+      "",
+      "",
+    ]);
+    rows.push([
+      "",
+      "Console VNC Datacenter",
+      "vnc",
+      "192.168.30.15",
+      "5900",
+      "",
+      "password",
+      "Infra",
+      "linux;console;datacenter",
+      "Acesso VNC para manutenção visual",
+      "#1f6feb",
       "",
       "",
       "",
@@ -416,6 +432,7 @@ function parseProtocol(value: string): ConnectionProtocol | null {
 function defaultPortForProtocol(protocol: ConnectionProtocol): number {
   if (protocol === "telnet") return 23;
   if (protocol === "rdp") return 3389;
+  if (protocol === "vnc") return 5900;
   return 22;
 }
 

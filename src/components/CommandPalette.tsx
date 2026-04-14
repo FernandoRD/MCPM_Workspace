@@ -8,7 +8,7 @@ import { useSessionsStore } from "@/store/sessions";
 import { useSettingsStore } from "@/store/settings";
 import { Modal } from "@/components/ui/Modal";
 import { matchesHostSearch, sortHosts } from "@/lib/hostSearch";
-import { launchQuickConnectSession, launchRdpSession, launchTerminalSession } from "@/lib/sessionLauncher";
+import { launchQuickConnectSession, launchRdpSession, launchTerminalSession, launchVncSession } from "@/lib/sessionLauncher";
 import { buildAppRoute, buildSessionRoute, isStandaloneWindow } from "@/lib/windowMode";
 import { ConnectionProtocol, SessionConnection } from "@/types";
 
@@ -135,8 +135,32 @@ function parseRdpQuickConnect(value: string): ParsedQuickConnect | null {
   };
 }
 
+function parseVncQuickConnect(value: string): ParsedQuickConnect | null {
+  const input = value.trim();
+  const lowerInput = input.toLowerCase();
+  if (!lowerInput.startsWith("vnc://") && !lowerInput.startsWith("vnc ")) return null;
+
+  const target = lowerInput.startsWith("vnc://")
+    ? input.slice("vnc://".length).trim()
+    : input.slice("vnc".length).trim();
+  if (!target || /\s/.test(target)) return null;
+
+  const parsedTarget = parseTargetHost(target, 5900);
+  if (!parsedTarget) return null;
+  const displayHost = target.startsWith("[") ? `[${parsedTarget.host}]` : parsedTarget.host;
+
+  return {
+    protocol: "vnc",
+    username: "",
+    host: parsedTarget.host,
+    port: parsedTarget.port,
+    hostAddress: displayHost,
+    label: `vnc ${displayHost}:${parsedTarget.port}`,
+  };
+}
+
 function parseQuickConnect(value: string): ParsedQuickConnect | null {
-  return parseTelnetQuickConnect(value) ?? parseRdpQuickConnect(value) ?? parseSshQuickConnect(value);
+  return parseTelnetQuickConnect(value) ?? parseRdpQuickConnect(value) ?? parseVncQuickConnect(value) ?? parseSshQuickConnect(value);
 }
 
 export function CommandPalette({ open, onClose }: CommandPaletteProps) {
@@ -155,6 +179,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const openQuickConnectSession = useSessionsStore((s) => s.openQuickConnectSession);
   const openSftpTab = useSessionsStore((s) => s.openSftpTab);
   const openRdpTab = useSessionsStore((s) => s.openRdpTab);
+  const openVncTab = useSessionsStore((s) => s.openVncTab);
   const sessionOpenMode = useSettingsStore((s) => s.settings.terminal.sessionOpenMode);
   const standaloneWindow = isStandaloneWindow(location.search);
 
@@ -218,14 +243,15 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
     },
   ].filter((item) => item.label.toLowerCase().includes(query.trim().toLowerCase()));
 
-  const connectToHost = async (hostId: string, mode: "terminal" | "sftp" | "rdp") => {
+  const connectToHost = async (hostId: string, mode: "terminal" | "sftp" | "rdp" | "vnc") => {
     const host = hosts.find((entry) => entry.id === hostId);
     if (!host) return;
     if (mode === "sftp" && host.protocol !== "ssh") return;
     if (mode === "rdp" && host.protocol !== "rdp") return;
+    if (mode === "vnc" && host.protocol !== "vnc") return;
     const credential = host.credentialId ? getCredential(host.credentialId) : undefined;
     const username = credential?.username ?? host.username ?? "";
-    const hostAddress = host.protocol === "telnet"
+    const hostAddress = host.protocol === "telnet" || host.protocol === "vnc"
       ? host.host
       : username ? `${username}@${host.host}` : host.host;
 
@@ -238,6 +264,18 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
         hostAddress,
         openMode: sessionOpenMode,
         openRdpTab,
+        standaloneWindow,
+      });
+      if (route) navigate(route);
+      return;
+    }
+    if (mode === "vnc") {
+      const route = await launchVncSession({
+        hostId: host.id,
+        hostLabel: host.label,
+        hostAddress,
+        openMode: sessionOpenMode,
+        openVncTab,
         standaloneWindow,
       });
       if (route) navigate(route);
@@ -292,11 +330,15 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
           ? "password"
           : quickConnectCandidate.protocol === "rdp"
             ? "password"
+            : quickConnectCandidate.protocol === "vnc"
+            ? "password"
             : quickConnectAuthMethod,
       password:
         quickConnectCandidate.protocol === "ssh" && quickConnectAuthMethod === "password"
           ? quickConnectPassword
           : quickConnectCandidate.protocol === "rdp"
+            ? quickConnectPassword || null
+            : quickConnectCandidate.protocol === "vnc"
             ? quickConnectPassword || null
             : null,
       privateKeyContent: quickConnectCandidate.protocol === "ssh" && quickConnectAuthMethod === "privateKey" ? quickConnectPrivateKey : null,
@@ -311,7 +353,12 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
       hostAddress: quickConnectCandidate.hostAddress,
       openMode: sessionOpenMode,
       openQuickConnectSession,
-      sessionType: quickConnectCandidate.protocol === "rdp" ? "rdp" : "terminal",
+      sessionType:
+        quickConnectCandidate.protocol === "rdp"
+          ? "rdp"
+          : quickConnectCandidate.protocol === "vnc"
+            ? "vnc"
+            : "terminal",
       standaloneWindow,
     });
     if (route) navigate(route);
@@ -383,6 +430,8 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                         ? "commandPalette.directConnectTelnetHint"
                         : quickConnectCandidate.protocol === "rdp"
                           ? "commandPalette.directConnectRdpHint"
+                          : quickConnectCandidate.protocol === "vnc"
+                            ? "commandPalette.directConnectVncHint"
                         : "commandPalette.directConnectHint"
                     )}
                   </p>
@@ -448,6 +497,22 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                       setQuickConnectError(null);
                     }}
                     placeholder={t("commandPalette.directConnectRdpPasswordPlaceholder")}
+                    className="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--border-focus)]"
+                  />
+                </label>
+              )}
+
+              {quickConnectCandidate.protocol === "vnc" && (
+                <label className="flex flex-col gap-1 text-xs text-[var(--text-muted)]">
+                  {t("credentials.fields.password")}
+                  <input
+                    type="password"
+                    value={quickConnectPassword}
+                    onChange={(event) => {
+                      setQuickConnectPassword(event.target.value);
+                      setQuickConnectError(null);
+                    }}
+                    placeholder={t("commandPalette.directConnectVncPasswordPlaceholder")}
                     className="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--border-focus)]"
                   />
                 </label>
@@ -532,12 +597,12 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                       </div>
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => connectToHost(host.id, host.protocol === "rdp" ? "rdp" : "terminal")}
+                          onClick={() => connectToHost(host.id, host.protocol === "rdp" ? "rdp" : host.protocol === "vnc" ? "vnc" : "terminal")}
                           className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--text-primary)] hover:border-[var(--border-focus)]"
                         >
                           <span className="inline-flex items-center gap-1">
-                            {host.protocol === "rdp" ? <Monitor size={12} /> : null}
-                            {t(host.protocol === "rdp" ? "commandPalette.desktop" : "commandPalette.terminal")}
+                            {host.protocol === "rdp" || host.protocol === "vnc" ? <Monitor size={12} /> : null}
+                            {t(host.protocol === "rdp" || host.protocol === "vnc" ? "commandPalette.desktop" : "commandPalette.terminal")}
                           </span>
                         </button>
                         {host.protocol === "ssh" && (

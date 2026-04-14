@@ -40,6 +40,7 @@
       "sftp": "SFTP (over SSH)",
       "telnet": "Telnet",
       "rdp": "RDP",
+      "vnc": "VNC",
       "future": "Future extensions"
     },
     "protocolStatusTitle": "Current protocol status",
@@ -48,6 +49,7 @@
       "sftp": "SFTP available only for SSH hosts.",
       "telnet": "Telnet with interactive sessions and tab/workspace management.",
       "rdp": "RDP with a native launcher, dedicated page, and tab/window integration.",
+      "vnc": "VNC with a native launcher, dedicated page, and tab/window integration.",
       "future": "Other protocols will build on the same multi-protocol foundation."
     },
     "highlightsTitle": "Highlights",
@@ -138,8 +140,11 @@
     "empty": "No hosts match the current filters.",
     "actions": {
       "loadInventory": "Load inventory",
+      "addInventory": "New entry",
       "runAll": "Run all",
       "check": "Check",
+      "editInventory": "Edit",
+      "deleteInventory": "Delete",
       "unsupported": "Unavailable"
     },
     "summary": {
@@ -175,6 +180,24 @@
     "orphaned": {
       "title": "Inventory has orphaned entries",
       "description": "{{count}} stored fingerprint(s) no longer match hosts registered on this machine."
+    },
+    "editor": {
+      "createTitle": "New inventory entry",
+      "editTitle": "Edit inventory entry",
+      "description": "Manually edit the host key and fingerprint stored in the application's internal known_hosts inventory.",
+      "hostKeyLabel": "Host key",
+      "hostKeyPlaceholder": "E.g.: [server.example.com]:22",
+      "fingerprintLabel": "Fingerprint",
+      "fingerprintPlaceholder": "E.g.: SHA256:abc123...",
+      "save": "Save entry",
+      "cancel": "Cancel",
+      "validation": "Fill in both host key and fingerprint before saving.",
+      "saveSuccess": "Entry {{hostKey}} saved successfully.",
+      "saveError": "Could not save the entry: {{error}}",
+      "deleteConfirm": "Delete the {{hostKey}} inventory entry?",
+      "deleteSuccess": "Entry {{hostKey}} removed from the inventory.",
+      "deleteError": "Could not delete the entry: {{error}}",
+      "loadError": "Could not load the inventory: {{error}}"
     }
   },
   "hostEditor": {
@@ -233,6 +256,9 @@
     "rdp": {
       "authenticationHint": "RDP hosts use username/password credentials. In this MVP, the app launches the system native RDP client and it may ask for the password again depending on the operating system."
     },
+    "vnc": {
+      "authenticationHint": "VNC hosts use the system native launcher. You can still attach a password credential to preserve context in the app, but the external client may ask for authentication again."
+    },
     "sshCompat": {
       "section": "SSH Compatibility",
       "description": "Configure the algorithms accepted when connecting. Use 'Legacy' for older servers that don't support modern algorithms.",
@@ -271,7 +297,8 @@
   "protocols": {
     "ssh": "SSH",
     "telnet": "Telnet",
-    "rdp": "RDP"
+    "rdp": "RDP",
+    "vnc": "VNC"
   },
   "csvImport": {
     "title": "Bulk CSV import",
@@ -282,12 +309,12 @@
       "requiredTitle": "Required fields",
       "required": {
         "label": "label: visible host name inside the workspace",
-        "protocol": "protocol: ssh, telnet, or rdp",
+        "protocol": "protocol: ssh, telnet, rdp, or vnc",
         "host": "host: IP, hostname, or FQDN"
       },
       "allowedTitle": "Allowed values",
       "allowed": {
-        "protocols": "protocol accepts: ssh, telnet, rdp",
+        "protocols": "protocol accepts: ssh, telnet, rdp, vnc",
         "authMethods": "authMethod accepts: password, privateKey, agent",
         "tags": "tags can be separated with ; or ,"
       },
@@ -295,7 +322,8 @@
       "defaults": {
         "ssh": "SSH uses port 22 and authMethod agent when the column is blank.",
         "telnet": "Telnet uses port 23 and authMethod password when the column is blank.",
-        "rdp": "RDP uses port 3389 and authMethod password when the column is blank."
+        "rdp": "RDP uses port 3389 and authMethod password when the column is blank.",
+        "vnc": "VNC uses port 5900 and authMethod password when the column is blank."
       },
       "matchingTitle": "Update rules",
       "matching": {
@@ -430,6 +458,7 @@
       "terminal": "Terminal",
       "ssh": "SSH",
       "rdp": "RDP",
+      "vnc": "VNC",
       "security": "Security",
       "sync": "Sync"
     },
@@ -503,6 +532,26 @@
           "fontSmoothing": "Font smoothing",
           "desktopComposition": "Desktop composition"
         }
+      }
+    },
+    "vnc": {
+      "description": "Global VNC launcher preferences, including the preferred Linux client and how sessions should open.",
+      "linuxClient": "Preferred Linux client",
+      "linuxClientHint": "In 'Automatic', the app tries supported clients in sequence. If you choose a specific client, it uses only that one.",
+      "displayMode": "Display mode",
+      "viewOnly": "Open in view-only mode when the client supports it",
+      "optionsHint": "TigerVNC usually honors fullscreen and view-only more reliably. External clients like Remmina, KRDC, and Vinagre may ignore part of these preferences.",
+      "clients": {
+        "auto": "Automatic",
+        "tigervnc": "TigerVNC Viewer",
+        "remmina": "Remmina",
+        "krdc": "KRDC",
+        "vinagre": "Vinagre",
+        "system": "System default app"
+      },
+      "displayModes": {
+        "windowed": "Windowed",
+        "fullscreen": "Fullscreen"
       }
     },
     "appearance": {
@@ -662,7 +711,7 @@
       "cancelled": "Export cancelled.",
       "hostsCount": "{{count}} host(s)",
       "protocolsPreserved": "Each host protocol is preserved in the backup.",
-      "protocolBreakdown": "SSH: {{ssh}} • Telnet: {{telnet}} • RDP: {{rdp}}"
+      "protocolBreakdown": "SSH: {{ssh}} • Telnet: {{telnet}} • RDP: {{rdp}} • VNC: {{vnc}}"
     },
     "import": {
       "title": "Import Backup",
@@ -671,7 +720,7 @@
       "preview": "Backup preview",
       "exportedAt": "Exported at: {{date}}",
       "hostsFound": "{{count}} host(s) found",
-      "protocolBreakdown": "SSH: {{ssh}} • Telnet: {{telnet}} • RDP: {{rdp}}",
+      "protocolBreakdown": "SSH: {{ssh}} • Telnet: {{telnet}} • RDP: {{rdp}} • VNC: {{vnc}}",
       "hasCredentials": "Contains encrypted credentials",
       "noCredentials": "No encrypted credentials",
       "enterPassword": "Enter the master password used during export to decrypt credentials.",
@@ -827,7 +876,8 @@
     "sessionType": {
       "terminal": "Terminal",
       "sftp": "SFTP",
-      "rdp": "RDP"
+      "rdp": "RDP",
+      "vnc": "VNC"
     },
     "statusLabel": {
       "connected": "Active",
@@ -859,14 +909,16 @@
     "importToVault": "Import to Vault"
   },
   "commandPalette": {
-    "searchPlaceholder": "Search hosts or use user@host:port / telnet://host:port / rdp://user@host:port",
+    "searchPlaceholder": "Search hosts or use user@host:port / telnet://host:port / rdp://user@host:port / vnc://host:port",
     "quickActions": "Quick actions",
     "quickConnect": "Hosts",
     "directConnect": "Quick Connect",
     "directConnectHint": "Connects without saving the host and lets you choose password, private key or SSH agent.",
     "directConnectTelnetHint": "Opens a Telnet session without saving the host. Authentication, when required, happens inside the remote session itself.",
     "directConnectRdpHint": "Opens an RDP session without saving the host. If you provide a password, the launcher will try to reuse it when the client supports it.",
+    "directConnectVncHint": "Opens a VNC session without saving the host. The password can remain in the app, but the external client may still ask for it again.",
     "directConnectRdpPasswordPlaceholder": "Optional: leave empty to let the client ask for it",
+    "directConnectVncPasswordPlaceholder": "Optional: some VNC clients will still prompt for the password",
     "directConnectPasswordRequired": "Enter a password to use this method in Quick Connect.",
     "directConnectKeyRequired": "Paste the private key to use this method in Quick Connect.",
     "directConnectAction": "Connect",
@@ -906,6 +958,8 @@
     "rdpError": "Failed to launch RDP: {{host}}",
     "rdpInternalViewerLaunched": "Internal RDP viewer launched: {{host}}",
     "rdpInternalViewerError": "Failed to launch internal RDP viewer: {{host}}",
+    "vncConnected": "VNC session launched: {{host}}",
+    "vncError": "Failed to launch VNC: {{host}}",
     "syncPushSuccess": "Sync sent successfully",
     "syncPullSuccess": "Data imported successfully",
     "syncError": "Sync error"
@@ -951,6 +1005,39 @@
     },
     "displayModes": {
       "fullscreen": "Fullscreen"
+    }
+  },
+  "vnc": {
+    "loadingSession": "Loading VNC session...",
+    "sessionNotFound": "VNC session not found",
+    "reconnect": "Reconnect",
+    "disconnect": "Disconnect",
+    "externalClientHint": "This session is opened in the system native or associated VNC client.",
+    "launchDetails": "Launcher details",
+    "launcher": "Client used",
+    "executable": "Executable",
+    "authentication": "Authentication",
+    "credentialMode": "Credential flow",
+    "address": "Address",
+    "transport": "Protocol",
+    "display": "Display",
+    "accessMode": "Access",
+    "passwordHandled": "Password passed automatically",
+    "passwordPromptExpected": "The external client may prompt for the password",
+    "viewOnlyEnabled": "View only",
+    "viewOnlyDisabled": "Interactive control",
+    "errorTitle": "Failed to launch the VNC session",
+    "milestoneTitle": "MVP scope",
+    "milestones": {
+      "host": "Host registration and persistence",
+      "launch": "Native launcher",
+      "ready": "Ready"
+    },
+    "status": {
+      "connecting": "Starting VNC client...",
+      "connected": "VNC client started",
+      "disconnected": "Session closed",
+      "error": "Launch error"
     }
   }
 }

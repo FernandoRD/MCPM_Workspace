@@ -6,7 +6,20 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 
 ## Versão atual
 
-`0.3.3`
+`0.3.5`
+
+## Novidades da 0.3.5
+
+- Edição manual do inventário `known_hosts` interno da aplicação pela tela `Health`, com criação, atualização e remoção de entradas
+- Tratamento explícito de entradas órfãs no inventário de fingerprints, facilitando revisão e limpeza do estado local
+- Health page agora diferencia melhor o inventário interno do app em `known_hosts.json`, sem confundir com o `~/.ssh/known_hosts` do sistema
+
+## Novidades da 0.3.4
+
+- Viewer `RDP` interno experimental integrado ao app principal como modo opcional de abertura, sem substituir o launcher nativo como caminho oficial recomendado
+- Empacotamento do viewer interno no build desktop atual, com ponte de configurações entre o app e o binário experimental
+- Página e configurações de `RDP` atualizadas para refletir melhor o modo ativo de abertura e as limitações específicas do viewer interno
+- Campo de busca do dashboard agora tem ação rápida para limpar o filtro atual
 
 ## Novidades da 0.3.3
 
@@ -38,7 +51,7 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 - Credenciais reutilizáveis separadas dos hosts
 - Chaves SSH próprias, com geração de fingerprint e vínculo por credencial
 - Terminal integrado com `xterm.js`, múltiplas abas, split pane e reanexação de sessão por aba
-- Página dedicada para sessões `RDP`, com monitoramento da sessão lançada no cliente nativo do sistema
+- Página dedicada para sessões `RDP`, com monitoramento da sessão lançada no launcher nativo do sistema ou no viewer interno experimental
 - SFTP integrado para hosts `SSH`, com navegação remota, upload, download, rename, delete e mkdir
 - `Quick Connect` na command palette para conexões temporárias `SSH`, `Telnet` e `RDP` sem salvar host
 - Opção para abrir sessões na `mesma janela` ou em `janelas dedicadas`
@@ -46,32 +59,32 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 - Importação em massa de hosts via `.csv`, com template/export de exemplo, preview e merge controlado
 - Acesso às importações direto pelo `+ Nova Conexão`, sem atrapalhar o fluxo principal de cadastro individual
 - Operações com snippets, túneis e workspaces com compatibilidade por protocolo
-- `Health check` de hosts e inventário de fingerprints salvas para hosts `SSH`
+- `Health check` de hosts e inventário de fingerprints salvas para hosts `SSH`, com edição manual do `known_hosts` interno do app
 - Backup/restore com arquivo `.sshvault`, preservando o protocolo de cada host
 - Sincronização remota com `GitHub Gist`, `S3/MinIO`, `WebDAV/Nextcloud` ou endpoint customizado
 - Auto-sync periódico de estado portátil
 - MFA/TOTP por host `SSH`
 - Interface traduzida para `pt-BR` e `en-US`
 
-Hoje o app já opera como `Multi-Protocol Connection Manager`, com `SSH` e `Telnet` compartilhando a infraestrutura de terminal e `RDP` sendo tratado como sessão gráfica aberta no cliente nativo da plataforma.
+Hoje o app já opera como `Multi-Protocol Connection Manager`, com `SSH` e `Telnet` compartilhando a infraestrutura de terminal e `RDP` usando uma rota própria para abrir o launcher nativo da plataforma ou, em modo experimental, o viewer interno empacotado com o app.
 
-Em paralelo, o repositório agora mantém um laboratório isolado para o futuro cliente RDP interno em [experiments/internal-rdp-client/README.md](/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/README.md). Esse protótipo já consegue conectar, autenticar, renderizar a sessão remota, enviar input e capturar screenshots, continua experimental, mas agora já pode ser empacotado junto com o app compilado para a plataforma atual.
+Em paralelo, o repositório mantém um laboratório isolado para a evolução do cliente RDP interno em [experiments/internal-rdp-client/README.md](/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/README.md). Esse protótipo já consegue conectar, autenticar, renderizar a sessão remota, enviar input e capturar screenshots, continua experimental, e agora também pode ser acionado pelo app principal quando o modo de abertura interno está ativo.
 
 ## Escopo por protocolo
 
 - `SSH`
-  Terminal completo, SFTP, snippets remotos, batch execution, túneis, health check, inventário de fingerprints, MFA/TOTP, import de `~/.ssh/config`, importação em massa via `.csv`, jump host e presets de compatibilidade.
+  Terminal completo, SFTP, snippets remotos, batch execution, túneis, health check, inventário de fingerprints com edição manual do `known_hosts` interno do app, MFA/TOTP, import de `~/.ssh/config`, importação em massa via `.csv`, jump host e presets de compatibilidade.
 - `Telnet`
   Terminal interativo com múltiplas abas, quick connect, workspaces, preservação de sessão entre trocas de aba e suporte ao cadastro/import em massa via `.csv`.
 - `RDP`
-  Sessão gráfica via launcher nativo, quick connect, abertura em aba ou janela dedicada, escolha de cliente no Linux, opções globais de resolução, fullscreen, multimonitor, clipboard, áudio e certificado, além de suporte ao cadastro/import em massa via `.csv`.
+  Sessão gráfica via launcher nativo ou viewer interno experimental, quick connect, abertura em aba ou janela dedicada, escolha de cliente no Linux para o modo nativo, opções globais de resolução, fullscreen, multimonitor, clipboard, áudio e certificado, além de suporte ao cadastro/import em massa via `.csv`.
 - `SFTP`
   Continua sendo um recurso derivado de `SSH`, então não aparece para hosts `Telnet`.
 
 ## Arquitetura em alto nível
 
 - `Frontend`
-  React Router organiza as páginas, Zustand mantém estado local e persistido, e a UI roda dentro do WebView do Tauri. O terminal do frontend foi neutralizado para servir `SSH` e `Telnet` com a mesma infraestrutura visual, enquanto `RDP` usa uma página de sessão própria para orquestrar o launcher nativo. Os fluxos de onboarding agora incluem cadastro único, importação de `~/.ssh/config` e importação em massa por `.csv`.
+  React Router organiza as páginas, Zustand mantém estado local e persistido, e a UI roda dentro do WebView do Tauri. O terminal do frontend foi neutralizado para servir `SSH` e `Telnet` com a mesma infraestrutura visual, enquanto `RDP` usa uma página de sessão própria para orquestrar o launcher nativo ou o viewer interno experimental. Os fluxos de onboarding agora incluem cadastro único, importação de `~/.ssh/config` e importação em massa por `.csv`.
 - `Backend`
   O backend em Rust expõe comandos Tauri para terminal `SSH`/`Telnet`, SFTP, `RDP`, sync, criptografia, TOTP e persistência.
 - `Persistência`
@@ -215,12 +228,12 @@ O projeto já cobre o núcleo operacional multi-protocolo atual e inclui:
 - Quick Connect
 - janelas dedicadas de sessão
 - suporte consolidado a `Telnet`
-- suporte inicial a `RDP` via launcher nativo
+- suporte a `RDP` via launcher nativo e viewer interno experimental
 - importação em massa via `.csv`
 - fluxo de `+ Nova Conexão` com menu de ações
 - seleção de cliente RDP no Linux
 - opções globais de sessão RDP
-- health check e inventário de fingerprints
+- health check, inventário de fingerprints e edição manual do `known_hosts` interno
 - edição em massa de hosts
 - sync/backup alinhados com hosts, credenciais, chaves SSH, protocolo e settings portáveis
 - página `About` com identidade e posicionamento do produto

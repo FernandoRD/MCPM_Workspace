@@ -34,6 +34,7 @@ export function Backup() {
   const sshHostCount = hosts.filter((host) => host.protocol === "ssh").length;
   const telnetHostCount = hosts.filter((host) => host.protocol === "telnet").length;
   const rdpHostCount = hosts.filter((host) => host.protocol === "rdp").length;
+  const vncHostCount = hosts.filter((host) => host.protocol === "vnc").length;
 
   // ── Estado geral ────────────────────────────────────────────────────────────
   const [toast, setToast] = useState<Toast>(null);
@@ -223,7 +224,7 @@ export function Backup() {
               </span>
             </div>
             <div className="rounded-lg bg-[var(--bg-primary)] border border-[var(--border)] px-3 py-2.5 text-sm text-[var(--text-secondary)]">
-              <p>{t("backup.export.protocolBreakdown", { ssh: sshHostCount, telnet: telnetHostCount, rdp: rdpHostCount })}</p>
+              <p>{t("backup.export.protocolBreakdown", { ssh: sshHostCount, telnet: telnetHostCount, rdp: rdpHostCount, vnc: vncHostCount })}</p>
               <p className="mt-1 text-xs text-[var(--text-muted)]">{t("backup.export.protocolsPreserved")}</p>
             </div>
 
@@ -343,6 +344,7 @@ function ImportPreviewPanel({
   const sshHostCount = backup.hosts.filter((host) => host.protocol === "ssh").length;
   const telnetHostCount = backup.hosts.filter((host) => host.protocol === "telnet").length;
   const rdpHostCount = backup.hosts.filter((host) => host.protocol === "rdp").length;
+  const vncHostCount = backup.hosts.filter((host) => host.protocol === "vnc").length;
 
   const handleConfirm = () => {
     if (importMode === "replace" && !confirmReplace) {
@@ -362,7 +364,7 @@ function ImportPreviewPanel({
         <div className="flex flex-col gap-1.5">
           <InfoRow icon={<FileArchive size={13} />} label={t("backup.import.exportedAt", { date: formatDate(backup.exportedAt) })} />
           <InfoRow icon={<Server size={13} />} label={t("backup.import.hostsFound", { count: backup.hosts.length })} />
-          <InfoRow icon={<Server size={13} />} label={t("backup.import.protocolBreakdown", { ssh: sshHostCount, telnet: telnetHostCount, rdp: rdpHostCount })} />
+          <InfoRow icon={<Server size={13} />} label={t("backup.import.protocolBreakdown", { ssh: sshHostCount, telnet: telnetHostCount, rdp: rdpHostCount, vnc: vncHostCount })} />
           <InfoRow
             icon={hasEncryptedCredentials
               ? <ShieldCheck size={13} className="text-[var(--success)]" />

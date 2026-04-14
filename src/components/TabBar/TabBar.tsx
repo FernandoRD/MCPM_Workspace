@@ -49,8 +49,10 @@ export function TabBar() {
       );
     } else if (tab.type === "sftp") {
       await invoke("sftp_disconnect", { sessionId: tab.id }).catch(() => {});
-    } else {
+    } else if (tab.type === "rdp") {
       await invoke("rdp_disconnect", { sessionId: tab.id }).catch(() => {});
+    } else {
+      await invoke("vnc_disconnect", { sessionId: tab.id }).catch(() => {});
     }
 
     closeSession(tab.id);
@@ -84,7 +86,7 @@ export function TabBar() {
         >
           <StatusIcon status={tab.status} />
           {tab.type === "sftp" && <FolderOpen size={10} className="text-[var(--accent)] shrink-0" />}
-          {tab.type === "rdp" && <Monitor size={10} className="text-[var(--accent)] shrink-0" />}
+          {(tab.type === "rdp" || tab.type === "vnc") && <Monitor size={10} className="text-[var(--accent)] shrink-0" />}
           <span className="truncate">{tab.hostLabel}</span>
           <span
             onClick={(e) => void handleClose(e, tab)}

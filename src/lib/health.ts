@@ -25,6 +25,22 @@ export async function listKnownHosts(): Promise<KnownHostEntry[]> {
   return invoke<KnownHostEntry[]>("ssh_list_known_hosts");
 }
 
+export async function setKnownHost(
+  hostKey: string,
+  fingerprint: string,
+  previousHostKey?: string | null
+): Promise<void> {
+  return invoke<void>("ssh_set_known_host", {
+    hostKey,
+    fingerprint,
+    previousHostKey: previousHostKey ?? null,
+  });
+}
+
+export async function deleteKnownHost(hostKey: string): Promise<void> {
+  return invoke<void>("ssh_delete_known_host", { hostKey });
+}
+
 export async function runHealthCheck(
   host: string,
   port: number,

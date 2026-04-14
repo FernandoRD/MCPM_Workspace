@@ -30,9 +30,9 @@ O MPCM Workspace é uma aplicação desktop Tauri com frontend React e backend R
 - sincronização remota
 - backup/restore
 - importação em massa via `.csv`
-- health check e inventário de fingerprints
+- health check, inventário de fingerprints e edição manual do inventário `known_hosts`
 
-O posicionamento atual do produto é `Multi-Protocol Connection Manager` e isso já se reflete na arquitetura de sessão: `SSH` e `Telnet` compartilham a camada de terminal, `RDP` usa uma rota e uma orquestração próprias para abrir o cliente nativo da plataforma, e recursos específicos como `SFTP`, túneis, inventário de fingerprints, `~/.ssh/config` e MFA/TOTP continuam restritos a `SSH`.
+O posicionamento atual do produto é `Multi-Protocol Connection Manager` e isso já se reflete na arquitetura de sessão: `SSH` e `Telnet` compartilham a camada de terminal, `RDP` usa uma rota e uma orquestração próprias para abrir o launcher nativo da plataforma ou, em modo experimental, o viewer interno empacotado com o app, e recursos específicos como `SFTP`, túneis, inventário de fingerprints, `~/.ssh/config` e MFA/TOTP continuam restritos a `SSH`.
 
 No onboarding de hosts, o app agora combina três caminhos principais:
 
@@ -313,25 +313,29 @@ Rotas atuais:
 - [csvHostImport.ts](/home/fernando/Documentos/ssh_vault/src/lib/csvHostImport.ts)
   Centraliza parsing, validação, matching, template e plano de aplicação para importação em massa por `.csv`.
 
-### RDP nativo
+### RDP no app principal
 
 - [rdp.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/rdp.rs)
-  Gera arquivos `.rdp` temporários, aplica opções de sessão, traduz preferências visuais para launchers compatíveis e aciona o launcher nativo apropriado por plataforma.
+  Gera arquivos `.rdp` temporários, aplica opções de sessão, traduz preferências visuais para launchers compatíveis, aciona o launcher nativo apropriado por plataforma e também expõe o comando `rdp_launch_internal_viewer` para o modo experimental.
 - [RdpPage.tsx](/home/fernando/Documentos/ssh_vault/src/pages/RdpPage.tsx)
-  Conecta a aba RDP ao backend, mostra launcher escolhido, preview dos argumentos e estado da sessão.
+  Conecta a aba RDP ao backend, escolhe entre launcher nativo e viewer interno experimental conforme `launchMode`, e mostra launcher escolhido, preview dos argumentos e estado da sessão.
 - [Settings.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Settings.tsx)
-  Expõe preferências globais de launcher, cliente Linux, resolução, fullscreen, multimonitor, clipboard, áudio, certificado e preferências visuais da sessão com indicação de compatibilidade.
+  Expõe preferências globais de `launchMode`, cliente Linux, resolução, fullscreen, multimonitor, clipboard, áudio, certificado e preferências visuais da sessão com indicação de compatibilidade.
+- [internalRdpViewer.ts](/home/fernando/Documentos/ssh_vault/src/lib/internalRdpViewer.ts)
+  Ponte do frontend para o comando Tauri que abre o viewer interno experimental.
 
-### Protótipo isolado de cliente RDP interno
+### Base técnica do viewer RDP interno
 
 - [experiments/internal-rdp-client/README.md](/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/README.md)
-  Documento-base do laboratório isolado.
+  Documento-base do laboratório isolado que continua servindo como base técnica do viewer experimental usado pelo app principal.
 - [experiments/internal-rdp-client/src/mvp_runtime.rs](/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/src/mvp_runtime.rs)
   Contrato atual de conexão, perfil de sessão, loop ativo e coleta de regiões alteradas.
 - [experiments/internal-rdp-client/src/viewer_input.rs](/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/src/viewer_input.rs)
   Tradutor de input local do `minifb` para eventos FastPath do RDP.
 - [experiments/internal-rdp-client/src/viewer_renderer.rs](/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/src/viewer_renderer.rs)
   Buffer local e redraw parcial do viewer.
+- [experiments/internal-rdp-client/src/settings_bridge.rs](/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/src/settings_bridge.rs)
+  Ponte entre o payload vindo do app principal e as configurações efetivamente consumidas pelo viewer experimental.
 - [experiments/internal-rdp-client/src/bin/viewer_mvp.rs](/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/src/bin/viewer_mvp.rs)
   Viewer MVP para conexão real.
 - [experiments/internal-rdp-client/src/bin/screenshot_mvp.rs](/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/src/bin/screenshot_mvp.rs)
@@ -393,6 +397,8 @@ Arquivo-base: [lib.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/lib.rs)
 - `ssh_start_tunnel`
 - `ssh_stop_tunnel`
 - `ssh_list_known_hosts`
+- `ssh_set_known_host`
+- `ssh_delete_known_host`
 - `ssh_health_check`
 
 ### Telnet
@@ -528,10 +534,12 @@ O restore preserva IDs e restaura entidades com `replace*`, evitando perder vín
 
 ### Fingerprints
 
-O backend mantém inventário TOFU em `known_hosts.json` e agora expõe leitura desse inventário e health check com comparação entre:
+O backend mantém inventário TOFU em `known_hosts.json` e agora expõe leitura, criação, edição e remoção desse inventário, além do health check com comparação entre:
 
 - fingerprint atual do host
 - fingerprint armazenada localmente
+
+Esse `known_hosts.json` é interno da aplicação e não substitui nem edita o arquivo `~/.ssh/known_hosts` do sistema operacional.
 
 Esse fluxo continua sendo específico de `SSH`; hosts `Telnet` ficam fora do inventário e do health check de fingerprint.
 Hosts `RDP` também ficam fora desse escopo.
@@ -546,7 +554,7 @@ Arquivo principal: [ssh.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/ss
 - Abre sessão temporária para `SSH`, `Telnet` e `RDP`
 - Não cria host salvo
 
-Para `RDP`, o formato suportado é `rdp://usuario@host:porta` e a sessão usa o mesmo fluxo de launcher nativo dos hosts persistidos.
+Para `RDP`, o formato suportado é `rdp://usuario@host:porta` e a sessão usa o mesmo fluxo dos hosts persistidos, respeitando o `launchMode` ativo entre launcher nativo e viewer interno experimental.
 
 ### Sessões em janela dedicada
 
@@ -610,6 +618,10 @@ Regras práticas:
 - Página: [Health.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Health.tsx)
 - Backend: [ssh.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/ssh.rs)
 - Escopo atual: somente hosts `SSH`
+- O inventário é persistido em `known_hosts.json` dentro do diretório de dados do app
+- A UI permite criar, editar e excluir entradas manualmente
+- Entradas órfãs, que já não correspondem a hosts cadastrados, são destacadas para revisão/limpeza
+- O health check continua comparando a fingerprint lida no host com a fingerprint armazenada localmente
 
 ### Edição em massa de hosts
 
@@ -661,13 +673,14 @@ Regras da importação CSV:
 
 ## 12. Laboratório RDP interno
 
-O cliente RDP interno ainda não faz parte do app principal. Em vez disso, o repositório mantém um laboratório isolado em [experiments/internal-rdp-client/README.md](/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/README.md) para permitir evolução técnica sem risco para a aplicação atual.
+O cliente RDP interno já pode ser acionado pelo app principal em modo experimental. Ainda assim, o repositório mantém um laboratório isolado em [experiments/internal-rdp-client/README.md](/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/README.md) para permitir evolução técnica contínua sem acoplar toda a experimentação diretamente ao restante da aplicação.
 
 Decisão atual de produto:
 
-- o launcher RDP nativo continua sendo o caminho oficial distribuído
+- o launcher RDP nativo continua sendo o caminho oficial recomendado
 - o viewer interno permanece experimental
 - o binário do protótipo pode ser incluído no app compilado por meio do empacotamento de recursos do Tauri
+- o app principal pode abrir esse viewer quando `launchMode = internalExperimental`
 
 Estado atual desse laboratório:
 
@@ -707,7 +720,7 @@ Arquivos principais:
 
 Estado atual:
 
-- versão de referência atual do app: `0.3.3`
+- versão de referência atual do app: `0.3.5`
 - `package.json` é a fonte principal da versão do app
 - `tauri.conf.json` lê a versão a partir de `../package.json`
 - o frontend lê a versão a partir de `package.json` via `appInfo.ts`

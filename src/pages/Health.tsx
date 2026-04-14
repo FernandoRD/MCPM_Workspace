@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ElementType } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Activity,
@@ -6,17 +6,30 @@ import {
   CheckCircle2,
   Copy,
   Loader2,
+  Pencil,
+  Plus,
   RefreshCw,
   Search,
   ShieldAlert,
   ShieldCheck,
   ShieldQuestion,
+  Trash2,
   WifiOff,
 } from "lucide-react";
 import { useHostsStore } from "@/store/hosts";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import { listKnownHosts, runHealthCheck, formatHostKey, HealthCheckResult } from "@/lib/health";
+import { Input } from "@/components/ui/Input";
+import { Modal } from "@/components/ui/Modal";
+import {
+  deleteKnownHost,
+  formatHostKey,
+  HealthCheckResult,
+  KnownHostEntry,
+  listKnownHosts,
+  runHealthCheck,
+  setKnownHost,
+} from "@/lib/health";
 import { HostEntry } from "@/types";
 import { isSshHost } from "@/lib/productivity";
 import { cn } from "@/lib/utils";
@@ -27,14 +40,34 @@ interface HostHealthRecord {
   checkedAt?: string;
 }
 
+interface KnownHostDraft {
+  previousHostKey: string | null;
+  hostKey: string;
+  fingerprint: string;
+}
+
+type InventoryFeedback =
+  | {
+      tone: "success" | "error";
+      message: string;
+    }
+  | null;
+
+const HEALTH_GRID_CLASSES =
+  "grid grid-cols-[minmax(0,1.8fr)_100px_100px_120px_140px_minmax(0,1.1fr)_minmax(0,1.1fr)_220px] gap-3";
+
 export function Health() {
   const { t } = useTranslation();
   const hosts = useHostsStore((s) => s.hosts);
   const [search, setSearch] = useState("");
   const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [inventorySaving, setInventorySaving] = useState(false);
   const [runningAll, setRunningAll] = useState(false);
   const [records, setRecords] = useState<Record<string, HostHealthRecord>>({});
-  const [orphanedEntries, setOrphanedEntries] = useState<string[]>([]);
+  const [inventoryEntries, setInventoryEntries] = useState<KnownHostEntry[]>([]);
+  const [feedback, setFeedback] = useState<InventoryFeedback>(null);
+  const [editorDraft, setEditorDraft] = useState<KnownHostDraft | null>(null);
+  const [editorError, setEditorError] = useState<string | null>(null);
 
   const visibleHosts = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -60,13 +93,21 @@ export function Health() {
     return keys;
   }, [hosts]);
 
-  const inventoryCount = useMemo(() => {
-    let count = 0;
-    for (const record of Object.values(records)) {
-      if (record.result?.stored_fingerprint) count += 1;
-    }
-    return count;
-  }, [records]);
+  const inventoryMap = useMemo(
+    () => new Map(inventoryEntries.map((entry) => [entry.host_key, entry.fingerprint])),
+    [inventoryEntries]
+  );
+
+  const orphanedEntries = useMemo(
+    () => inventoryEntries.filter((entry) => !inventoryHostKeys.has(entry.host_key)),
+    [inventoryEntries, inventoryHostKeys]
+  );
+
+  const inventoryCount = useMemo(
+    () =>
+      visibleSshHosts.filter((host) => inventoryMap.has(formatHostKey(host.host, host.port))).length,
+    [inventoryMap, visibleSshHosts]
+  );
 
   const onlineCount = useMemo(
     () => Object.values(records).filter((record) => record.result?.reachable).length,
@@ -82,42 +123,71 @@ export function Health() {
     [records]
   );
 
-  const loadInventory = async () => {
+  const syncInventoryIntoRecords = (knownHosts: KnownHostEntry[]) => {
+    setInventoryEntries(knownHosts);
+    setRecords((current) => {
+      const next = { ...current };
+      const nextInventoryMap = new Map(knownHosts.map((entry) => [entry.host_key, entry.fingerprint]));
+
+      for (const host of hosts.filter((entry) => isSshHost(entry))) {
+        const hostKey = formatHostKey(host.host, host.port);
+        const previousRecord = next[host.id];
+        const previousResult = previousRecord?.result;
+        const storedFingerprint = nextInventoryMap.get(hostKey) ?? null;
+
+        let fingerprintStatus: HealthCheckResult["fingerprint_status"] | "unknown" =
+          previousResult?.fingerprint_status ?? "unknown";
+
+        if (previousResult?.fingerprint) {
+          fingerprintStatus = storedFingerprint
+            ? previousResult.fingerprint === storedFingerprint
+              ? "match"
+              : "mismatch"
+            : "new";
+        } else if (previousResult?.fingerprint_status !== "unreachable") {
+          fingerprintStatus = storedFingerprint ? "stored-only" : "unknown";
+        }
+
+        next[host.id] = {
+          ...previousRecord,
+          loading: previousRecord?.loading ?? false,
+          checkedAt: previousRecord?.checkedAt,
+          result: {
+            reachable: previousResult?.reachable ?? false,
+            latency_ms: previousResult?.latency_ms ?? null,
+            error: previousResult?.error ?? null,
+            host_key: hostKey,
+            fingerprint: previousResult?.fingerprint ?? null,
+            stored_fingerprint: storedFingerprint,
+            fingerprint_status: fingerprintStatus,
+          },
+        };
+      }
+
+      return next;
+    });
+  };
+
+  const loadInventory = async (silent = false) => {
     setInventoryLoading(true);
+    if (!silent) setFeedback(null);
     try {
       const knownHosts = await listKnownHosts();
-      setOrphanedEntries(
-        knownHosts
-          .map((entry) => entry.host_key)
-          .filter((hostKey) => !inventoryHostKeys.has(hostKey))
-      );
-      setRecords((current) => {
-        const next = { ...current };
-        for (const host of hosts.filter((entry) => isSshHost(entry))) {
-          const hostKey = formatHostKey(host.host, host.port);
-          const inventoryEntry = knownHosts.find((entry) => entry.host_key === hostKey);
-          if (!inventoryEntry) continue;
-          next[host.id] = {
-            ...next[host.id],
-            result: {
-              reachable: next[host.id]?.result?.reachable ?? false,
-              latency_ms: next[host.id]?.result?.latency_ms ?? null,
-              error: next[host.id]?.result?.error ?? null,
-              host_key: hostKey,
-              fingerprint: next[host.id]?.result?.fingerprint ?? null,
-              stored_fingerprint: inventoryEntry.fingerprint,
-              fingerprint_status: next[host.id]?.result?.fingerprint_status ?? "stored-only",
-            },
-            checkedAt: next[host.id]?.checkedAt,
-            loading: false,
-          };
-        }
-        return next;
+      syncInventoryIntoRecords(knownHosts);
+    } catch (error) {
+      setFeedback({
+        tone: "error",
+        message: t("health.editor.loadError", { error: String(error) }),
       });
     } finally {
       setInventoryLoading(false);
     }
   };
+
+  useEffect(() => {
+    void loadInventory(true);
+    // Recarrega ao mudar a lista de hosts para manter órfãos e linhas alinhados.
+  }, [hosts]);
 
   const runCheck = async (host: HostEntry) => {
     if (!isSshHost(host)) return;
@@ -169,17 +239,89 @@ export function Health() {
     }
   };
 
+  const openNewEntryEditor = () => {
+    setEditorError(null);
+    setEditorDraft({
+      previousHostKey: null,
+      hostKey: "",
+      fingerprint: "",
+    });
+  };
+
+  const openEntryEditor = (entry: { host_key: string; fingerprint?: string | null }) => {
+    setEditorError(null);
+    setEditorDraft({
+      previousHostKey: entry.host_key,
+      hostKey: entry.host_key,
+      fingerprint: entry.fingerprint ?? "",
+    });
+  };
+
+  const saveInventoryEntry = async () => {
+    if (!editorDraft) return;
+
+    const hostKey = editorDraft.hostKey.trim();
+    const fingerprint = editorDraft.fingerprint.trim();
+
+    if (!hostKey || !fingerprint) {
+      setEditorError(t("health.editor.validation"));
+      return;
+    }
+
+    setInventorySaving(true);
+    setEditorError(null);
+    try {
+      await setKnownHost(hostKey, fingerprint, editorDraft.previousHostKey);
+      await loadInventory(true);
+      setEditorDraft(null);
+      setFeedback({
+        tone: "success",
+        message: t("health.editor.saveSuccess", { hostKey }),
+      });
+    } catch (error) {
+      setEditorError(t("health.editor.saveError", { error: String(error) }));
+    } finally {
+      setInventorySaving(false);
+    }
+  };
+
+  const deleteInventoryEntry = async (hostKey: string) => {
+    if (!window.confirm(t("health.editor.deleteConfirm", { hostKey }))) return;
+
+    setInventorySaving(true);
+    setFeedback(null);
+    try {
+      await deleteKnownHost(hostKey);
+      await loadInventory(true);
+      setFeedback({
+        tone: "success",
+        message: t("health.editor.deleteSuccess", { hostKey }),
+      });
+    } catch (error) {
+      setFeedback({
+        tone: "error",
+        message: t("health.editor.deleteError", { error: String(error) }),
+      });
+    } finally {
+      setInventorySaving(false);
+    }
+  };
+
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b border-[var(--border)] px-6 py-4">
         <div>
           <h1 className="text-lg font-semibold text-[var(--text-primary)]">{t("health.title")}</h1>
-          <p className="text-sm text-[var(--text-muted)] mt-0.5">{t("health.description")}</p>
+          <p className="mt-0.5 text-sm text-[var(--text-muted)]">{t("health.description")}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="secondary" onClick={loadInventory} disabled={inventoryLoading}>
+          <Button variant="secondary" onClick={() => void loadInventory()} disabled={inventoryLoading || inventorySaving}>
             {inventoryLoading ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
             {t("health.actions.loadInventory")}
+          </Button>
+          <Button variant="secondary" onClick={openNewEntryEditor} disabled={inventorySaving}>
+            <Plus size={14} />
+            {t("health.actions.addInventory")}
           </Button>
           <Button onClick={runAllChecks} disabled={runningAll || visibleSshHosts.length === 0}>
             {runningAll ? <Loader2 size={14} className="animate-spin" /> : <Activity size={14} />}
@@ -189,8 +331,8 @@ export function Health() {
       </div>
 
       <div className="flex-1 overflow-auto">
-        <div className="max-w-6xl mx-auto px-6 py-6 flex flex-col gap-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+        <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-6">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <SummaryCard
               icon={CheckCircle2}
               label={t("health.summary.online")}
@@ -221,6 +363,19 @@ export function Health() {
             {t("health.sshOnlyHint")}
           </div>
 
+          {feedback && (
+            <div
+              className={cn(
+                "rounded-xl border px-4 py-3 text-sm",
+                feedback.tone === "success"
+                  ? "border-[var(--success)]/20 bg-[var(--success)]/10 text-[var(--success)]"
+                  : "border-[var(--danger)]/20 bg-[var(--danger)]/8 text-[var(--danger)]"
+              )}
+            >
+              {feedback.message}
+            </div>
+          )}
+
           <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] p-4">
             <div className="relative max-w-md">
               <Search
@@ -232,7 +387,7 @@ export function Health() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder={t("health.searchPlaceholder")}
-                className="w-full h-9 rounded-md border border-[var(--border)] bg-[var(--bg-primary)] pl-9 pr-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-focus)]"
+                className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] pl-9 pr-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--border-focus)] focus:outline-none"
               />
             </div>
           </div>
@@ -240,14 +395,47 @@ export function Health() {
           {orphanedEntries.length > 0 && (
             <div className="rounded-xl border border-[var(--danger)]/20 bg-[var(--danger)]/8 px-4 py-3">
               <p className="text-sm font-medium text-[var(--text-primary)]">{t("health.orphaned.title")}</p>
-              <p className="text-xs text-[var(--text-muted)] mt-1">
+              <p className="mt-1 text-xs text-[var(--text-muted)]">
                 {t("health.orphaned.description", { count: orphanedEntries.length })}
               </p>
+              <div className="mt-3 flex flex-col gap-2">
+                {orphanedEntries.map((entry) => (
+                  <div
+                    key={entry.host_key}
+                    className="flex flex-col gap-3 rounded-lg border border-[var(--danger)]/15 bg-[var(--bg-secondary)]/70 px-3 py-3 lg:flex-row lg:items-center lg:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-[var(--text-primary)]">{entry.host_key}</p>
+                      <p className="truncate text-xs text-[var(--text-muted)]">{entry.fingerprint}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => openEntryEditor(entry)}
+                        disabled={inventorySaving}
+                      >
+                        <Pencil size={14} />
+                        {t("health.actions.editInventory")}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={() => void deleteInventoryEntry(entry.host_key)}
+                        disabled={inventorySaving}
+                      >
+                        <Trash2 size={14} />
+                        {t("health.actions.deleteInventory")}
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
-          <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] overflow-hidden">
-            <div className="grid grid-cols-[minmax(0,1.8fr)_100px_100px_120px_140px_minmax(0,1.1fr)_minmax(0,1.1fr)_110px] gap-3 border-b border-[var(--border)] px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
+          <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)]">
+            <div className={cn(HEALTH_GRID_CLASSES, "border-b border-[var(--border)] px-4 py-3 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]")}>
               <span>{t("health.table.host")}</span>
               <span>{t("health.table.protocol")}</span>
               <span>{t("health.table.status")}</span>
@@ -266,13 +454,80 @@ export function Health() {
                   key={host.id}
                   host={host}
                   record={records[host.id]}
-                  onRun={() => runCheck(host)}
+                  inventorySaving={inventorySaving}
+                  onRun={() => void runCheck(host)}
+                  onEditInventory={(entry) => openEntryEditor(entry)}
+                  onDeleteInventory={(hostKey) => void deleteInventoryEntry(hostKey)}
                 />
               ))
             )}
           </div>
         </div>
       </div>
+
+      <Modal
+        open={!!editorDraft}
+        onClose={() => {
+          if (inventorySaving) return;
+          setEditorDraft(null);
+          setEditorError(null);
+        }}
+        title={t(editorDraft?.previousHostKey ? "health.editor.editTitle" : "health.editor.createTitle")}
+        size="md"
+      >
+        {editorDraft && (
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-[var(--text-muted)]">{t("health.editor.description")}</p>
+
+            <Input
+              id="known-host-key"
+              label={t("health.editor.hostKeyLabel")}
+              value={editorDraft.hostKey}
+              onChange={(event) => {
+                const hostKey = event.target.value;
+                setEditorDraft((current) => (current ? { ...current, hostKey } : current));
+              }}
+              placeholder={t("health.editor.hostKeyPlaceholder")}
+              disabled={inventorySaving}
+            />
+
+            <Input
+              id="known-host-fingerprint"
+              label={t("health.editor.fingerprintLabel")}
+              value={editorDraft.fingerprint}
+              onChange={(event) => {
+                const fingerprint = event.target.value;
+                setEditorDraft((current) => (current ? { ...current, fingerprint } : current));
+              }}
+              placeholder={t("health.editor.fingerprintPlaceholder")}
+              disabled={inventorySaving}
+            />
+
+            {editorError && (
+              <div className="rounded-lg border border-[var(--danger)]/20 bg-[var(--danger)]/8 px-3 py-2 text-sm text-[var(--danger)]">
+                {editorError}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setEditorDraft(null);
+                  setEditorError(null);
+                }}
+                disabled={inventorySaving}
+              >
+                {t("health.editor.cancel")}
+              </Button>
+              <Button onClick={() => void saveInventoryEntry()} disabled={inventorySaving}>
+                {inventorySaving ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
+                {t("health.editor.save")}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
@@ -283,7 +538,7 @@ function SummaryCard({
   value,
   tone,
 }: {
-  icon: React.ElementType;
+  icon: ElementType;
   label: string;
   value: string;
   tone: "success" | "danger" | "accent" | "muted";
@@ -309,16 +564,24 @@ function SummaryCard({
 function HealthRow({
   host,
   record,
+  inventorySaving,
   onRun,
+  onEditInventory,
+  onDeleteInventory,
 }: {
   host: HostEntry;
   record?: HostHealthRecord;
+  inventorySaving: boolean;
   onRun: () => void;
+  onEditInventory: (entry: { host_key: string; fingerprint?: string | null }) => void;
+  onDeleteInventory: (hostKey: string) => void;
 }) {
   const { t } = useTranslation();
   const sshHost = isSshHost(host);
   const result = record?.result;
   const status = sshHost ? result?.fingerprint_status ?? "unknown" : "unsupported";
+  const hostKey = result?.host_key ?? formatHostKey(host.host, host.port);
+  const canDeleteInventory = !!result?.stored_fingerprint;
 
   const handleCopy = async (value?: string | null) => {
     if (!value) return;
@@ -326,10 +589,10 @@ function HealthRow({
   };
 
   return (
-    <div className="grid grid-cols-[minmax(0,1.8fr)_100px_100px_120px_140px_minmax(0,1.1fr)_minmax(0,1.1fr)_110px] gap-3 border-b border-[var(--border)] px-4 py-3 last:border-b-0">
+    <div className={cn(HEALTH_GRID_CLASSES, "border-b border-[var(--border)] px-4 py-3 last:border-b-0")}>
       <div className="min-w-0">
-        <p className="text-sm font-medium text-[var(--text-primary)] truncate">{host.label}</p>
-        <p className="text-xs text-[var(--text-muted)] truncate">
+        <p className="truncate text-sm font-medium text-[var(--text-primary)]">{host.label}</p>
+        <p className="truncate text-xs text-[var(--text-muted)]">
           {host.host}:{host.port}
         </p>
       </div>
@@ -357,13 +620,15 @@ function HealthRow({
       </div>
 
       <div className="flex items-center text-xs text-[var(--text-muted)]">
-        {result?.host_key ?? formatHostKey(host.host, host.port)}
+        {hostKey}
       </div>
 
       <FingerprintCell
         value={result?.fingerprint}
         onCopy={handleCopy}
-        emptyLabel={!sshHost ? t("health.fingerprint.unsupported") : result?.reachable ? t("health.fingerprint.notRead") : "—"}
+        emptyLabel={
+          !sshHost ? t("health.fingerprint.unsupported") : result?.reachable ? t("health.fingerprint.notRead") : "—"
+        }
       />
 
       <FingerprintCell
@@ -376,6 +641,24 @@ function HealthRow({
         <Button size="sm" variant="ghost" onClick={onRun} disabled={record?.loading || !sshHost}>
           {record?.loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
           {sshHost ? t("health.actions.check") : t("health.actions.unsupported")}
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => onEditInventory({ host_key: hostKey, fingerprint: result?.stored_fingerprint ?? result?.fingerprint })}
+          disabled={!sshHost || inventorySaving}
+        >
+          <Pencil size={14} />
+          {t("health.actions.editInventory")}
+        </Button>
+        <Button
+          size="sm"
+          variant="danger"
+          onClick={() => onDeleteInventory(hostKey)}
+          disabled={!sshHost || !canDeleteInventory || inventorySaving}
+        >
+          <Trash2 size={14} />
+          {t("health.actions.deleteInventory")}
         </Button>
       </div>
 

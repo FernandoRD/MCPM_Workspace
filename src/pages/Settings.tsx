@@ -23,7 +23,7 @@ import { Select } from "@/components/ui/Select";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { SshConfigImportModal } from "@/components/SshConfigImportModal";
-import { AppSettings, LinuxRdpClient, RdpLaunchMode } from "@/types";
+import { AppSettings, LinuxRdpClient, LinuxVncClient, RdpLaunchMode } from "@/types";
 
 export function Settings() {
   const { t } = useTranslation();
@@ -35,6 +35,7 @@ export function Settings() {
     updateSecurity,
     updateSsh,
     updateRdp,
+    updateVnc,
     updateRdpInternalClientPerformance,
     resetSettings,
   } = useSettingsStore();
@@ -123,6 +124,68 @@ export function Settings() {
                   </button>
                 ))}
               </div>
+            </div>
+          </Section>
+
+          {/* VNC */}
+          <Section title={t("settings.sections.vnc")}>
+            <div className="flex flex-col gap-4">
+              <p className="text-sm text-[var(--text-secondary)]">
+                {t("settings.vnc.description")}
+              </p>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="max-w-sm">
+                  <Select
+                    id="linuxVncClient"
+                    label={t("settings.vnc.linuxClient")}
+                    value={settings.vnc.linuxClient}
+                    onChange={(e) => updateVnc({ linuxClient: e.target.value as LinuxVncClient })}
+                  >
+                    <option value="auto">{t("settings.vnc.clients.auto")}</option>
+                    <option value="tigervnc">{t("settings.vnc.clients.tigervnc")}</option>
+                    <option value="remmina">{t("settings.vnc.clients.remmina")}</option>
+                    <option value="krdc">{t("settings.vnc.clients.krdc")}</option>
+                    <option value="vinagre">{t("settings.vnc.clients.vinagre")}</option>
+                    <option value="system">{t("settings.vnc.clients.system")}</option>
+                  </Select>
+                  <p className="mt-1 text-xs text-[var(--text-muted)]">
+                    {t("settings.vnc.linuxClientHint")}
+                  </p>
+                </div>
+
+                <label className="flex flex-col gap-1">
+                  <span className="text-sm font-medium text-[var(--text-primary)]">
+                    {t("settings.vnc.displayMode")}
+                  </span>
+                  <Select
+                    id="vncDisplayMode"
+                    value={settings.vnc.fullscreen ? "fullscreen" : "windowed"}
+                    onChange={(e) => updateVnc({ fullscreen: e.target.value === "fullscreen" })}
+                  >
+                    <option value="windowed">{t("settings.vnc.displayModes.windowed")}</option>
+                    <option value="fullscreen">{t("settings.vnc.displayModes.fullscreen")}</option>
+                  </Select>
+                </label>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={settings.vnc.viewOnly}
+                    onChange={(e) => updateVnc({ viewOnly: e.target.checked })}
+                    className="accent-[var(--accent)] w-4 h-4"
+                  />
+                  <span className="text-sm text-[var(--text-primary)]">
+                    {t("settings.vnc.viewOnly")}
+                  </span>
+                </label>
+              </div>
+
+              <p className="text-xs text-[var(--text-muted)]">
+                {t("settings.vnc.optionsHint")}
+              </p>
             </div>
           </Section>
 

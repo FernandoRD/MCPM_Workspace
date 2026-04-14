@@ -40,6 +40,7 @@
       "sftp": "SFTP (via SSH)",
       "telnet": "Telnet",
       "rdp": "RDP",
+      "vnc": "VNC",
       "future": "Extensoes futuras"
     },
     "protocolStatusTitle": "Estado atual dos protocolos",
@@ -48,6 +49,7 @@
       "sftp": "SFTP disponível apenas para hosts SSH.",
       "telnet": "Telnet com sessão interativa e gerenciamento de abas/workspaces.",
       "rdp": "RDP com launcher nativo, página dedicada e integração com abas/janelas.",
+      "vnc": "VNC com launcher nativo, página dedicada e integração com abas/janelas.",
       "future": "Outros protocolos entrarão sobre a mesma base multi-protocolo."
     },
     "highlightsTitle": "Destaques",
@@ -138,8 +140,11 @@
     "empty": "Nenhum host encontrado para os filtros atuais.",
     "actions": {
       "loadInventory": "Carregar inventário",
+      "addInventory": "Nova entrada",
       "runAll": "Verificar todos",
       "check": "Verificar",
+      "editInventory": "Editar",
+      "deleteInventory": "Excluir",
       "unsupported": "Indisponível"
     },
     "summary": {
@@ -175,6 +180,24 @@
     "orphaned": {
       "title": "Inventário com entradas órfãs",
       "description": "{{count}} fingerprint(s) salvas não correspondem mais a hosts cadastrados nesta máquina."
+    },
+    "editor": {
+      "createTitle": "Nova entrada do inventário",
+      "editTitle": "Editar entrada do inventário",
+      "description": "Edite manualmente a chave do host e a fingerprint armazenadas no known_hosts interno da aplicação.",
+      "hostKeyLabel": "Host key",
+      "hostKeyPlaceholder": "Ex: [servidor.exemplo.com]:22",
+      "fingerprintLabel": "Fingerprint",
+      "fingerprintPlaceholder": "Ex: SHA256:abc123...",
+      "save": "Salvar entrada",
+      "cancel": "Cancelar",
+      "validation": "Preencha a host key e a fingerprint antes de salvar.",
+      "saveSuccess": "Entrada {{hostKey}} salva com sucesso.",
+      "saveError": "Não foi possível salvar a entrada: {{error}}",
+      "deleteConfirm": "Excluir a entrada {{hostKey}} do inventário?",
+      "deleteSuccess": "Entrada {{hostKey}} removida do inventário.",
+      "deleteError": "Não foi possível excluir a entrada: {{error}}",
+      "loadError": "Não foi possível carregar o inventário: {{error}}"
     }
   },
   "hostEditor": {
@@ -233,6 +256,9 @@
     "rdp": {
       "authenticationHint": "Hosts RDP usam credenciais de usuário e senha. Para este MVP, o app abre o cliente RDP nativo do sistema e pode solicitar a senha novamente conforme o sistema operacional."
     },
+    "vnc": {
+      "authenticationHint": "Hosts VNC usam o launcher nativo do sistema. Você pode vincular uma credencial de senha para manter o contexto no app, mas o cliente externo ainda pode solicitar a autenticação novamente."
+    },
     "sshCompat": {
       "section": "Compatibilidade SSH",
       "description": "Configure os algoritmos aceitos ao conectar. Use 'Legado' para servidores mais antigos que não suportam algoritmos modernos.",
@@ -271,7 +297,8 @@
   "protocols": {
     "ssh": "SSH",
     "telnet": "Telnet",
-    "rdp": "RDP"
+    "rdp": "RDP",
+    "vnc": "VNC"
   },
   "csvImport": {
     "title": "Importação em massa via CSV",
@@ -282,12 +309,12 @@
       "requiredTitle": "Campos obrigatórios",
       "required": {
         "label": "label: nome visível do host dentro do workspace",
-        "protocol": "protocol: ssh, telnet ou rdp",
+        "protocol": "protocol: ssh, telnet, rdp ou vnc",
         "host": "host: IP, hostname ou FQDN"
       },
       "allowedTitle": "Valores aceitos",
       "allowed": {
-        "protocols": "protocol aceita: ssh, telnet, rdp",
+        "protocols": "protocol aceita: ssh, telnet, rdp, vnc",
         "authMethods": "authMethod aceita: password, privateKey, agent",
         "tags": "tags podem ser separadas por ; ou ,"
       },
@@ -295,7 +322,8 @@
       "defaults": {
         "ssh": "SSH usa porta 22 e authMethod agent quando a coluna vier vazia.",
         "telnet": "Telnet usa porta 23 e authMethod password quando a coluna vier vazia.",
-        "rdp": "RDP usa porta 3389 e authMethod password quando a coluna vier vazia."
+        "rdp": "RDP usa porta 3389 e authMethod password quando a coluna vier vazia.",
+        "vnc": "VNC usa porta 5900 e authMethod password quando a coluna vier vazia."
       },
       "matchingTitle": "Regras de atualização",
       "matching": {
@@ -430,6 +458,7 @@
       "terminal": "Terminal",
       "ssh": "SSH",
       "rdp": "RDP",
+      "vnc": "VNC",
       "security": "Segurança",
       "sync": "Sincronização"
     },
@@ -503,6 +532,26 @@
           "fontSmoothing": "Suavização de fontes",
           "desktopComposition": "Composição de desktop"
         }
+      }
+    },
+    "vnc": {
+      "description": "Preferências globais do launcher VNC, incluindo cliente preferido no Linux e modo de abertura.",
+      "linuxClient": "Cliente preferido no Linux",
+      "linuxClientHint": "Em 'Automático', o app tenta os clientes suportados em sequência. Se você escolher um cliente específico, ele usa somente aquele.",
+      "displayMode": "Modo de exibição",
+      "viewOnly": "Abrir em modo somente leitura quando o cliente suportar",
+      "optionsHint": "TigerVNC costuma aplicar melhor fullscreen e view-only. Clientes externos como Remmina, KRDC e Vinagre podem ignorar parte dessas preferências.",
+      "clients": {
+        "auto": "Automático",
+        "tigervnc": "TigerVNC Viewer",
+        "remmina": "Remmina",
+        "krdc": "KRDC",
+        "vinagre": "Vinagre",
+        "system": "Aplicativo padrão do sistema"
+      },
+      "displayModes": {
+        "windowed": "Janela",
+        "fullscreen": "Tela cheia"
       }
     },
     "appearance": {
@@ -662,7 +711,7 @@
       "cancelled": "Exportação cancelada.",
       "hostsCount": "{{count}} host(s)",
       "protocolsPreserved": "O protocolo de cada host é preservado no backup.",
-      "protocolBreakdown": "SSH: {{ssh}} • Telnet: {{telnet}} • RDP: {{rdp}}"
+      "protocolBreakdown": "SSH: {{ssh}} • Telnet: {{telnet}} • RDP: {{rdp}} • VNC: {{vnc}}"
     },
     "import": {
       "title": "Importar Backup",
@@ -671,7 +720,7 @@
       "preview": "Prévia do backup",
       "exportedAt": "Exportado em: {{date}}",
       "hostsFound": "{{count}} host(s) encontrado(s)",
-      "protocolBreakdown": "SSH: {{ssh}} • Telnet: {{telnet}} • RDP: {{rdp}}",
+      "protocolBreakdown": "SSH: {{ssh}} • Telnet: {{telnet}} • RDP: {{rdp}} • VNC: {{vnc}}",
       "hasCredentials": "Contém credenciais cifradas",
       "noCredentials": "Sem credenciais cifradas",
       "enterPassword": "Informe a senha mestra usada na exportação para decifrar as credenciais.",
@@ -827,7 +876,8 @@
     "sessionType": {
       "terminal": "Terminal",
       "sftp": "SFTP",
-      "rdp": "RDP"
+      "rdp": "RDP",
+      "vnc": "VNC"
     },
     "statusLabel": {
       "connected": "Ativa",
@@ -859,14 +909,16 @@
     "importToVault": "Importar para o Vault"
   },
   "commandPalette": {
-    "searchPlaceholder": "Buscar hosts ou usar user@host:porta / telnet://host:porta / rdp://usuario@host:porta",
+    "searchPlaceholder": "Buscar hosts ou usar user@host:porta / telnet://host:porta / rdp://usuario@host:porta / vnc://host:porta",
     "quickActions": "Acoes rapidas",
     "quickConnect": "Hosts",
     "directConnect": "Quick Connect",
     "directConnectHint": "Conecta sem cadastrar o host e permite escolher senha, chave privada ou SSH agent.",
     "directConnectTelnetHint": "Abre uma sessão Telnet sem cadastrar o host. A autenticação, quando existir, acontece dentro da própria sessão remota.",
     "directConnectRdpHint": "Abre uma sessão RDP sem cadastrar o host. Se você informar senha, o launcher tenta reutilizá-la quando o cliente suportar.",
+    "directConnectVncHint": "Abre uma sessão VNC sem cadastrar o host. A senha pode ficar no app, mas o cliente externo ainda pode solicitá-la novamente.",
     "directConnectRdpPasswordPlaceholder": "Opcional: deixe vazio para o cliente pedir a senha",
+    "directConnectVncPasswordPlaceholder": "Opcional: alguns clientes VNC ainda pedirão a senha",
     "directConnectPasswordRequired": "Informe a senha para usar este metodo no Quick Connect.",
     "directConnectKeyRequired": "Cole a chave privada para usar este metodo no Quick Connect.",
     "directConnectAction": "Conectar",
@@ -906,6 +958,8 @@
     "rdpError": "Falha ao iniciar RDP: {{host}}",
     "rdpInternalViewerLaunched": "Viewer RDP interno iniciado: {{host}}",
     "rdpInternalViewerError": "Falha ao iniciar viewer RDP interno: {{host}}",
+    "vncConnected": "Sessão VNC iniciada: {{host}}",
+    "vncError": "Falha ao iniciar VNC: {{host}}",
     "syncPushSuccess": "Sincronização enviada com sucesso",
     "syncPullSuccess": "Dados importados com sucesso",
     "syncError": "Erro na sincronização"
@@ -951,6 +1005,39 @@
     },
     "displayModes": {
       "fullscreen": "Tela cheia"
+    }
+  },
+  "vnc": {
+    "loadingSession": "Carregando sessão VNC...",
+    "sessionNotFound": "Sessão VNC não encontrada",
+    "reconnect": "Reconectar",
+    "disconnect": "Encerrar",
+    "externalClientHint": "Esta sessão é aberta no cliente VNC nativo ou associado no sistema.",
+    "launchDetails": "Detalhes do launcher",
+    "launcher": "Cliente usado",
+    "executable": "Executável",
+    "authentication": "Autenticação",
+    "credentialMode": "Fluxo de credenciais",
+    "address": "Endereço",
+    "transport": "Protocolo",
+    "display": "Exibição",
+    "accessMode": "Acesso",
+    "passwordHandled": "Senha repassada automaticamente",
+    "passwordPromptExpected": "O cliente externo pode solicitar a senha",
+    "viewOnlyEnabled": "Somente leitura",
+    "viewOnlyDisabled": "Controle interativo",
+    "errorTitle": "Falha ao iniciar a sessão VNC",
+    "milestoneTitle": "Escopo deste MVP",
+    "milestones": {
+      "host": "Cadastro e persistência",
+      "launch": "Launcher nativo",
+      "ready": "Pronto"
+    },
+    "status": {
+      "connecting": "Iniciando cliente VNC...",
+      "connected": "Cliente VNC iniciado",
+      "disconnected": "Sessão encerrada",
+      "error": "Erro ao iniciar"
     }
   }
 }

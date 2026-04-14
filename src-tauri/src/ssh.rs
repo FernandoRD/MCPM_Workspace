@@ -302,6 +302,53 @@ pub fn ssh_list_known_hosts(
     Ok(entries)
 }
 
+#[tauri::command]
+pub fn ssh_set_known_host(
+    state: tauri::State<'_, crate::AppState>,
+    host_key: String,
+    fingerprint: String,
+    previous_host_key: Option<String>,
+) -> Result<(), String> {
+    let host_key = trim_owned(host_key);
+    let fingerprint = trim_owned(fingerprint);
+    let previous_host_key = trim_optional_owned(previous_host_key);
+
+    if host_key.is_empty() {
+        return Err("Host key não pode ficar vazia".to_string());
+    }
+    if fingerprint.is_empty() {
+        return Err("Fingerprint não pode ficar vazia".to_string());
+    }
+
+    let data_dir = state.storage.lock().unwrap().data_dir.clone();
+    let mut known_hosts = load_known_hosts(&data_dir);
+
+    if let Some(previous_host_key) = previous_host_key.filter(|value| value != &host_key) {
+        known_hosts.remove(&previous_host_key);
+    }
+
+    known_hosts.insert(host_key, fingerprint);
+    save_known_hosts(&data_dir, &known_hosts);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn ssh_delete_known_host(
+    state: tauri::State<'_, crate::AppState>,
+    host_key: String,
+) -> Result<(), String> {
+    let host_key = trim_owned(host_key);
+    if host_key.is_empty() {
+        return Err("Host key não pode ficar vazia".to_string());
+    }
+
+    let data_dir = state.storage.lock().unwrap().data_dir.clone();
+    let mut known_hosts = load_known_hosts(&data_dir);
+    known_hosts.remove(&host_key);
+    save_known_hosts(&data_dir, &known_hosts);
+    Ok(())
+}
+
 /// Armazena explicitamente a fingerprint de um host nos known_hosts.
 /// Chamado pelo frontend após o usuário confirmar a fingerprint de um host novo.
 #[tauri::command]

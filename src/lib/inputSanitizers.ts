@@ -26,6 +26,7 @@ function sanitizeTags(tags: string[] | undefined): string[] | undefined {
 function sanitizeProtocol(protocol: ConnectionProtocol | string | undefined): ConnectionProtocol {
   if (protocol === "telnet") return "telnet";
   if (protocol === "rdp") return "rdp";
+  if (protocol === "vnc") return "vnc";
   return "ssh";
 }
 
