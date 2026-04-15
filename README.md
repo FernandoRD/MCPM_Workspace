@@ -6,7 +6,12 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 
 ## Versão atual
 
-`0.3.5`
+`0.3.6`
+
+## Novidades da 0.3.6
+
+- Barra de abas das sessões agora permite reorganização por drag and drop, facilitando ajustar a ordem de trabalho sem fechar e reabrir conexões
+- Bump de versão e documentação atualizados para refletir o comportamento novo das abas
 
 ## Novidades da 0.3.5
 
@@ -50,7 +55,7 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 - Cadastro de hosts com protocolo `SSH`, `Telnet` ou `RDP`, além de `grupos`, `tags`, `notas`, `cores`, `jump host` e presets de compatibilidade SSH
 - Credenciais reutilizáveis separadas dos hosts
 - Chaves SSH próprias, com geração de fingerprint e vínculo por credencial
-- Terminal integrado com `xterm.js`, múltiplas abas, split pane e reanexação de sessão por aba
+- Terminal integrado com `xterm.js`, múltiplas abas com reorganização por drag and drop, split pane e reanexação de sessão por aba
 - Página dedicada para sessões `RDP`, com monitoramento da sessão lançada no launcher nativo do sistema ou no viewer interno experimental
 - SFTP integrado para hosts `SSH`, com navegação remota, upload, download, rename, delete e mkdir
 - `Quick Connect` na command palette para conexões temporárias `SSH`, `Telnet` e `RDP` sem salvar host

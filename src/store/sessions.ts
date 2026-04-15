@@ -26,6 +26,7 @@ interface SessionsStore {
   ensureSession: (tab: SessionTab) => void;
   closeSession: (tabId: string) => void;
   setActiveTab: (tabId: string) => void;
+  moveTab: (tabId: string, targetTabId: string, position: "before" | "after") => void;
   /** Atualiza status do pane pelo paneId (busca em todos os tabs). */
   updatePaneStatus: (paneId: string, status: SessionTab["status"]) => void;
   /** Compat. retroativa — delega para updatePaneStatus. */
@@ -165,6 +166,24 @@ export const useSessionsStore = create<SessionsStore>()((set, get) => ({
   },
 
   setActiveTab: (tabId) => set({ activeTabId: tabId }),
+
+  moveTab: (tabId, targetTabId, position) =>
+    set((s) => {
+      const sourceIndex = s.tabs.findIndex((tab) => tab.id === tabId);
+      const targetIndex = s.tabs.findIndex((tab) => tab.id === targetTabId);
+
+      if (sourceIndex === -1 || targetIndex === -1 || sourceIndex === targetIndex) {
+        return s;
+      }
+
+      const nextTabs = [...s.tabs];
+      const [draggedTab] = nextTabs.splice(sourceIndex, 1);
+      const adjustedTargetIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+      const insertIndex = position === "before" ? adjustedTargetIndex : adjustedTargetIndex + 1;
+
+      nextTabs.splice(insertIndex, 0, draggedTab);
+      return { tabs: nextTabs };
+    }),
 
   updatePaneStatus: (paneId, status) =>
     set((s) => ({

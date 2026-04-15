@@ -26,6 +26,7 @@ O MPCM Workspace é uma aplicação desktop Tauri com frontend React e backend R
 - credenciais reutilizáveis
 - chaves SSH
 - sessões de terminal multi-protocolo, sessões gráficas `RDP` e SFTP
+- barra de abas de sessão com reorganização manual por drag and drop
 - snippets, túneis e workspaces
 - sincronização remota
 - backup/restore
@@ -186,7 +187,7 @@ Arquivo-base: [index.ts](/home/fernando/Documentos/ssh_vault/src/types/index.ts)
 - `SshKey`
   Chave SSH persistida separadamente com `privateKeyContent`, `publicKeyContent?` e `passphrase?`.
 - `SessionTab`
-  Estado volátil de sessão de terminal, SFTP ou RDP na janela atual.
+  Estado volátil de sessão de terminal, SFTP ou RDP na janela atual. A ordem do array também define a ordem visual das abas e pode ser reorganizada pelo usuário.
 - `TerminalPaneState`
   Estado de cada pane de terminal, compartilhado por sessões `SSH` e `Telnet`.
 - `AppSettings`
@@ -250,7 +251,7 @@ O campo `protocol` do host é parte desse estado portátil e é preservado em sy
 ### Voláteis
 
 - [sessions.ts](/home/fernando/Documentos/ssh_vault/src/store/sessions.ts)
-  Abas/sessões abertas na janela atual.
+  Abas/sessões abertas na janela atual, incluindo a ordem visual usada pela `TabBar` e a ação de reordenação manual.
 - [uiStore.ts](/home/fernando/Documentos/ssh_vault/src/store/uiStore.ts)
   Busca, filtros do dashboard e estado da command palette.
 - [tunnelRuntime.ts](/home/fernando/Documentos/ssh_vault/src/store/tunnelRuntime.ts)
@@ -720,7 +721,7 @@ Arquivos principais:
 
 Estado atual:
 
-- versão de referência atual do app: `0.3.5`
+- versão de referência atual do app: `0.3.6`
 - `package.json` é a fonte principal da versão do app
 - `tauri.conf.json` lê a versão a partir de `../package.json`
 - o frontend lê a versão a partir de `package.json` via `appInfo.ts`
