@@ -1,6 +1,4 @@
-use std::borrow::Cow;
 use std::collections::HashMap;
-use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -9,10 +7,8 @@ use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
 use cfg_if::cfg_if;
 use rusqlite::{params, Connection};
-use russh::{cipher, compression, kex, mac};
 use russh::client;
 use russh::Channel;
-use russh::Preferred;
 use russh::ChannelMsg;
 use russh_keys::agent::client::AgentClient;
 use russh_keys::key::PublicKey;
@@ -25,64 +21,10 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::mpsc;
 use tokio::time::{sleep, timeout};
 
-// ─── Algoritmos legado (KEX + ciphers + MACs + host-key) ─────────────────────
-
-// KEX: inclui DH-Group14-SHA1 para servidores com OpenSSH ≤ 7
-static LEGACY_KEX: &[kex::Name] = &[
-    kex::CURVE25519,
-    kex::CURVE25519_PRE_RFC_8731,
-    kex::DH_G16_SHA512,
-    kex::DH_G14_SHA256,
-    kex::ECDH_SHA2_NISTP256,
-    kex::ECDH_SHA2_NISTP384,
-    kex::ECDH_SHA2_NISTP521,
-    kex::DH_G14_SHA1,   // legado: OpenSSH ≤ 7, equipamentos de rede
-];
-
-// KEX muito legado: adiciona DH-Group1-SHA1 (Oakley Group 2)
-static VERY_LEGACY_KEX: &[kex::Name] = &[
-    kex::CURVE25519,
-    kex::CURVE25519_PRE_RFC_8731,
-    kex::DH_G16_SHA512,
-    kex::DH_G14_SHA256,
-    kex::ECDH_SHA2_NISTP256,
-    kex::ECDH_SHA2_NISTP384,
-    kex::ECDH_SHA2_NISTP521,
-    kex::DH_G14_SHA1,
-    kex::DH_G1_SHA1,    // muito legado: CentOS 5, RHEL 5
-];
-
-static LEGACY_CIPHER: &[cipher::Name] = &[
-    cipher::CHACHA20_POLY1305,
-    cipher::AES_256_GCM,
-    cipher::AES_256_CTR,
-    cipher::AES_192_CTR,
-    cipher::AES_128_CTR,
-    cipher::AES_256_CBC,  // legado: servidor sem suporte a CTR
-    cipher::AES_192_CBC,
-    cipher::AES_128_CBC,
-];
-
-static LEGACY_MAC: &[mac::Name] = &[
-    mac::HMAC_SHA256_ETM,
-    mac::HMAC_SHA512_ETM,
-    mac::HMAC_SHA256,
-    mac::HMAC_SHA512,
-    mac::HMAC_SHA1_ETM,
-    mac::HMAC_SHA1,     // legado
-];
-
-static LEGACY_KEY: &[russh_keys::key::Name] = &[
-    russh_keys::key::ED25519,
-    russh_keys::key::ECDSA_SHA2_NISTP256,
-    russh_keys::key::ECDSA_SHA2_NISTP384,
-    russh_keys::key::ECDSA_SHA2_NISTP521,
-    russh_keys::key::RSA_SHA2_256,
-    russh_keys::key::RSA_SHA2_512,
-    russh_keys::key::SSH_RSA, // legado: ssh-rsa com SHA-1
-];
-
-static LEGACY_COMPRESSION: &[compression::Name] = &[compression::NONE];
+use crate::ssh_common::{
+    build_ssh_config, format_host_key, load_known_hosts, save_known_hosts,
+    trim_optional_owned, trim_owned, KnownHostsHandler,
+};
 
 // ─── Eventos emitidos ao frontend ─────────────────────────────────────────────
 
@@ -111,6 +53,8 @@ enum SshCommand {
 
 struct LiveSession {
     tx: mpsc::Sender<SshCommand>,
+    /// Handle para encerrar forçadamente a task SSH se o canal não responder.
+    abort_handle: tokio::task::AbortHandle,
 }
 
 // ─── Túnel ativo ──────────────────────────────────────────────────────────────
@@ -135,42 +79,7 @@ impl SshManager {
     }
 }
 
-// ─── Known hosts (TOFU) ───────────────────────────────────────────────────────
-
-fn known_hosts_path(data_dir: &Path) -> std::path::PathBuf {
-    data_dir.join("known_hosts.json")
-}
-
-fn load_known_hosts(data_dir: &Path) -> HashMap<String, String> {
-    let path = known_hosts_path(data_dir);
-    std::fs::read_to_string(&path)
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default()
-}
-
-fn save_known_hosts(data_dir: &Path, hosts: &HashMap<String, String>) {
-    let path = known_hosts_path(data_dir);
-    if let Ok(json) = serde_json::to_string_pretty(hosts) {
-        let _ = std::fs::write(path, json);
-    }
-}
-
-// ─── Handler russh com TOFU known_hosts ──────────────────────────────────────
-
-struct ClientHandler {
-    host_key: String,
-    known_hosts: Arc<std::sync::Mutex<HashMap<String, String>>>,
-}
-
-impl ClientHandler {
-    fn new(host: &str, port: u16, known_hosts: Arc<std::sync::Mutex<HashMap<String, String>>>) -> Self {
-        Self {
-            host_key: format!("[{}]:{}", host, port),
-            known_hosts,
-        }
-    }
-}
+// ─── Handler de sonda de fingerprint ────────────────────────────────────────
 
 struct FingerprintProbeHandler {
     fingerprint: Arc<std::sync::Mutex<Option<String>>>,
@@ -183,31 +92,6 @@ impl FingerprintProbeHandler {
 }
 
 #[async_trait]
-impl client::Handler for ClientHandler {
-    type Error = russh::Error;
-
-    async fn check_server_key(
-        &mut self,
-        server_public_key: &PublicKey,
-    ) -> Result<bool, Self::Error> {
-        let fingerprint = server_public_key.fingerprint();
-        let mut kh = self.known_hosts.lock().unwrap();
-        match kh.get(&self.host_key).cloned() {
-            None => {
-                // TOFU: primeira conexão — armazena e aceita
-                kh.insert(self.host_key.clone(), fingerprint);
-                Ok(true)
-            }
-            Some(stored) if stored == fingerprint => Ok(true),
-            Some(_) => {
-                // Fingerprint diferente — possível MITM
-                Err(russh::Error::WrongServerSig)
-            }
-        }
-    }
-}
-
-#[async_trait]
 impl client::Handler for FingerprintProbeHandler {
     type Error = russh::Error;
 
@@ -215,7 +99,11 @@ impl client::Handler for FingerprintProbeHandler {
         &mut self,
         server_public_key: &PublicKey,
     ) -> Result<bool, Self::Error> {
-        *self.fingerprint.lock().unwrap() = Some(server_public_key.fingerprint());
+        *self
+            .fingerprint
+            .lock()
+            .expect("fingerprint mutex não pode ser envenenado") =
+            Some(server_public_key.fingerprint());
         Ok(true)
     }
 }
@@ -235,25 +123,6 @@ pub struct SshHealthCheckResult {
     pub fingerprint: Option<String>,
     pub stored_fingerprint: Option<String>,
     pub fingerprint_status: String,
-}
-
-fn format_host_key(host: &str, port: u16) -> String {
-    format!("[{}]:{}", host, port)
-}
-
-fn trim_owned(value: String) -> String {
-    value.trim().to_string()
-}
-
-fn trim_optional_owned(value: Option<String>) -> Option<String> {
-    value.and_then(|value| {
-        let trimmed = value.trim();
-        if trimmed.is_empty() {
-            None
-        } else {
-            Some(trimmed.to_string())
-        }
-    })
 }
 
 async fn fetch_server_fingerprint(
@@ -280,7 +149,7 @@ async fn fetch_server_fingerprint(
 
     let fingerprint = captured
         .lock()
-        .unwrap()
+        .map_err(|_| "Falha interna ao ler fingerprint capturada".to_string())?
         .clone()
         .ok_or_else(|| "Servidor respondeu sem expor fingerprint".to_string())?;
     Ok(fingerprint)
@@ -290,7 +159,7 @@ async fn fetch_server_fingerprint(
 pub fn ssh_list_known_hosts(
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<Vec<KnownHostEntry>, String> {
-    let data_dir = state.storage.lock().unwrap().data_dir.clone();
+    let data_dir = state.storage.lock().map_err(|e| e.to_string())?.data_dir.clone();
     let mut entries = load_known_hosts(&data_dir)
         .into_iter()
         .map(|(host_key, fingerprint)| KnownHostEntry {
@@ -320,7 +189,7 @@ pub fn ssh_set_known_host(
         return Err("Fingerprint não pode ficar vazia".to_string());
     }
 
-    let data_dir = state.storage.lock().unwrap().data_dir.clone();
+    let data_dir = state.storage.lock().map_err(|e| e.to_string())?.data_dir.clone();
     let mut known_hosts = load_known_hosts(&data_dir);
 
     if let Some(previous_host_key) = previous_host_key.filter(|value| value != &host_key) {
@@ -342,7 +211,7 @@ pub fn ssh_delete_known_host(
         return Err("Host key não pode ficar vazia".to_string());
     }
 
-    let data_dir = state.storage.lock().unwrap().data_dir.clone();
+    let data_dir = state.storage.lock().map_err(|e| e.to_string())?.data_dir.clone();
     let mut known_hosts = load_known_hosts(&data_dir);
     known_hosts.remove(&host_key);
     save_known_hosts(&data_dir, &known_hosts);
@@ -359,7 +228,7 @@ pub fn ssh_trust_host(
     fingerprint: String,
 ) -> Result<(), String> {
     let host = trim_owned(host);
-    let data_dir = state.storage.lock().unwrap().data_dir.clone();
+    let data_dir = state.storage.lock().map_err(|e| e.to_string())?.data_dir.clone();
     let mut known_hosts = load_known_hosts(&data_dir);
     known_hosts.insert(format_host_key(&host, port), fingerprint);
     save_known_hosts(&data_dir, &known_hosts);
@@ -377,7 +246,7 @@ pub async fn ssh_health_check(
     let host = trim_owned(host);
     let timeout_duration = Duration::from_millis(timeout_ms.unwrap_or(4000));
     let host_key = format_host_key(&host, port);
-    let data_dir = state.storage.lock().unwrap().data_dir.clone();
+    let data_dir = state.storage.lock().map_err(|e| e.to_string())?.data_dir.clone();
     let known_hosts = load_known_hosts(&data_dir);
     let stored_fingerprint = known_hosts.get(&host_key).cloned();
 
@@ -434,56 +303,10 @@ pub async fn ssh_health_check(
     }
 }
 
-// ─── Configuração SSH por preset de compatibilidade ──────────────────────────
-
-fn build_ssh_config(
-    preset: &str,
-    keepalive_secs: u32,
-    timeout_secs: u32,
-) -> Arc<client::Config> {
-    let mut config = client::Config::default();
-
-    // Aplica preset de compatibilidade
-    match preset {
-        "legacy" => {
-            config.preferred = Preferred {
-                kex: Cow::Borrowed(LEGACY_KEX),
-                key: Cow::Borrowed(LEGACY_KEY),
-                cipher: Cow::Borrowed(LEGACY_CIPHER),
-                mac: Cow::Borrowed(LEGACY_MAC),
-                compression: Cow::Borrowed(LEGACY_COMPRESSION),
-            };
-        }
-        "very-legacy" => {
-            config.preferred = Preferred {
-                kex: Cow::Borrowed(VERY_LEGACY_KEX),
-                key: Cow::Borrowed(LEGACY_KEY),
-                cipher: Cow::Borrowed(LEGACY_CIPHER),
-                mac: Cow::Borrowed(LEGACY_MAC),
-                compression: Cow::Borrowed(LEGACY_COMPRESSION),
-            };
-        }
-        _ => {} // "modern" ou desconhecido → padrão seguro
-    }
-
-    // Keepalive
-    if keepalive_secs > 0 {
-        config.keepalive_interval = Some(Duration::from_secs(keepalive_secs as u64));
-        config.keepalive_max = 3;
-    }
-
-    // Timeout de inatividade
-    if timeout_secs > 0 {
-        config.inactivity_timeout = Some(Duration::from_secs(timeout_secs as u64));
-    }
-
-    Arc::new(config)
-}
-
 // ─── Auth por agente (genérico sobre o tipo de stream) ───────────────────────
 
 async fn try_agent_auth<S>(
-    session: &mut client::Handle<ClientHandler>,
+    session: &mut client::Handle<KnownHostsHandler>,
     username: &str,
     agent: AgentClient<S>,
 ) -> Result<bool, String>
@@ -541,7 +364,8 @@ pub async fn ssh_connect(
 ) -> Result<(), String> {
     let host = trim_owned(host);
     let username = trim_owned(username);
-    state.rate_limiter.check("ssh_connect", 10, std::time::Duration::from_secs(60))?;
+    // Rate limit por host: evita flood de tentativas de conexão a um único alvo.
+    state.rate_limiter.check(&format!("ssh_connect:{host}"), 5, std::time::Duration::from_secs(60))?;
     let _ = app.emit(
         "terminal-status",
         TerminalStatusEvent {
@@ -556,7 +380,7 @@ pub async fn ssh_connect(
     let timeout = connection_timeout.unwrap_or(30);
     let config = build_ssh_config(preset, keepalive, timeout);
 
-    let data_dir = state.storage.lock().unwrap().data_dir.clone();
+    let data_dir = state.storage.lock().map_err(|e| e.to_string())?.data_dir.clone();
     let known_hosts_map = load_known_hosts(&data_dir);
 
     // Antes de conectar: se o host não está nos known_hosts, busca a fingerprint
@@ -577,7 +401,7 @@ pub async fn ssh_connect(
     let mut session = client::connect(
         config,
         addr,
-        ClientHandler::new(&host, port, known_hosts.clone()),
+        KnownHostsHandler::new(&host, port, known_hosts.clone()),
     )
     .await
     .map_err(|e| e.to_string())?;
@@ -654,7 +478,10 @@ pub async fn ssh_connect(
     }
 
     // Persiste known_hosts atualizados após autenticação bem-sucedida
-    save_known_hosts(&data_dir, &known_hosts.lock().unwrap());
+    save_known_hosts(
+        &data_dir,
+        &*known_hosts.lock().map_err(|e| e.to_string())?,
+    );
 
     let mut channel = session
         .channel_open_session()
@@ -681,11 +508,7 @@ pub async fn ssh_connect(
 
     let (tx, mut rx) = mpsc::channel::<SshCommand>(64);
 
-    {
-        let mut mgr = state.ssh.lock().await;
-        mgr.sessions.insert(tab_id.clone(), LiveSession { tx });
-    }
-
+    log::info!("SSH conectado: {}@{}:{} tab={}", username, host, port, tab_id);
     let _ = app.emit(
         "terminal-status",
         TerminalStatusEvent {
@@ -699,7 +522,7 @@ pub async fn ssh_connect(
     let tab_id_task = tab_id.clone();
     let ssh_arc = Arc::clone(&state.ssh);
 
-    tokio::spawn(async move {
+    let join_handle = tokio::spawn(async move {
         loop {
             tokio::select! {
                 msg = channel.wait() => {
@@ -735,6 +558,7 @@ pub async fn ssh_connect(
         }
 
         ssh_arc.lock().await.sessions.remove(&tab_id_task);
+        log::info!("SSH desconectado: tab={}", tab_id_task);
         let _ = app_task.emit(
             "terminal-status",
             TerminalStatusEvent {
@@ -744,6 +568,17 @@ pub async fn ssh_connect(
             },
         );
     });
+
+    {
+        let mut mgr = state.ssh.lock().await;
+        mgr.sessions.insert(
+            tab_id.clone(),
+            LiveSession {
+                tx,
+                abort_handle: join_handle.abort_handle(),
+            },
+        );
+    }
 
     Ok(())
 }
@@ -790,7 +625,12 @@ pub async fn ssh_disconnect(
 ) -> Result<(), String> {
     let mgr = state.ssh.lock().await;
     if let Some(session) = mgr.sessions.get(&tab_id) {
-        let _ = session.tx.send(SshCommand::Disconnect).await;
+        // try_send evita segurar o mutex enquanto aguarda espaço no canal.
+        // Se o canal estiver cheio ou o receiver dropado, abort_handle garante
+        // que a task seja encerrada de qualquer forma.
+        if session.tx.try_send(SshCommand::Disconnect).is_err() {
+            session.abort_handle.abort();
+        }
     }
     Ok(())
 }
@@ -824,7 +664,7 @@ pub async fn ssh_copy_id(
     // Zeroiza credenciais sensíveis ao sair de escopo
     let password = Zeroizing::new(password);
 
-    let data_dir = state.storage.lock().unwrap().data_dir.clone();
+    let data_dir = state.storage.lock().map_err(|e| e.to_string())?.data_dir.clone();
     let known_hosts_map = load_known_hosts(&data_dir);
 
     // Rejeita host desconhecido — o usuário deve confirmar a fingerprint primeiro
@@ -843,7 +683,7 @@ pub async fn ssh_copy_id(
     let mut session = client::connect(
         config,
         addr,
-        ClientHandler::new(&host, port, known_hosts),
+        KnownHostsHandler::new(&host, port, known_hosts),
     )
     .await
     .map_err(|e| format!("Erro ao conectar: {e}"))?;
@@ -918,7 +758,7 @@ pub async fn ssh_copy_id(
 // ─── Helper: autenticação extraída ────────────────────────────────────────────
 
 async fn authenticate_session(
-    session: &mut client::Handle<ClientHandler>,
+    session: &mut client::Handle<KnownHostsHandler>,
     auth_method: &str,
     username: &str,
     password: Option<&str>,
@@ -1249,12 +1089,12 @@ pub async fn ssh_exec(
 
     let config = build_ssh_config(preset, keepalive_interval, connection_timeout);
 
-    let data_dir = state.storage.lock().unwrap().data_dir.clone();
+    let data_dir = state.storage.lock().map_err(|e| e.to_string())?.data_dir.clone();
     let known_hosts_map = load_known_hosts(&data_dir);
     let known_hosts = Arc::new(std::sync::Mutex::new(known_hosts_map));
 
     let addr = format!("{}:{}", host_name, port);
-    let mut session = client::connect(config, addr, ClientHandler::new(&host_name, port, known_hosts.clone()))
+    let mut session = client::connect(config, addr, KnownHostsHandler::new(&host_name, port, known_hosts.clone()))
         .await
         .map_err(|e| e.to_string())?;
 
@@ -1271,7 +1111,7 @@ pub async fn ssh_exec(
     if !ok {
         return Err("Autenticação falhou. Verifique as credenciais.".into());
     }
-    save_known_hosts(&data_dir, &known_hosts.lock().unwrap());
+    save_known_hosts(&data_dir, &*known_hosts.lock().map_err(|e| e.to_string())?);
 
     let mut channel = session.channel_open_session().await.map_err(|e| e.to_string())?;
     let start = std::time::Instant::now();
@@ -1355,12 +1195,12 @@ pub async fn ssh_start_tunnel(
     let preset = ssh_compat_preset.as_deref().unwrap_or("modern");
     let config = build_ssh_config(preset, keepalive_interval.unwrap_or(0), connection_timeout.unwrap_or(30));
 
-    let data_dir = state.storage.lock().unwrap().data_dir.clone();
+    let data_dir = state.storage.lock().map_err(|e| e.to_string())?.data_dir.clone();
     let known_hosts_map = load_known_hosts(&data_dir);
     let known_hosts = Arc::new(std::sync::Mutex::new(known_hosts_map));
 
     let addr = format!("{}:{}", host, port);
-    let mut session = client::connect(config, addr, ClientHandler::new(&host, port, known_hosts.clone()))
+    let mut session = client::connect(config, addr, KnownHostsHandler::new(&host, port, known_hosts.clone()))
         .await
         .map_err(|e| e.to_string())?;
 
@@ -1377,7 +1217,7 @@ pub async fn ssh_start_tunnel(
     if !ok {
         return Err("Autenticação falhou. Verifique as credenciais.".into());
     }
-    save_known_hosts(&data_dir, &known_hosts.lock().unwrap());
+    save_known_hosts(&data_dir, &*known_hosts.lock().map_err(|e| e.to_string())?);
 
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
 

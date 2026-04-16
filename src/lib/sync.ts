@@ -69,8 +69,11 @@ export interface SyncResult {
 
 /**
  * Serializa o estado local em um JSON para upload.
- * - Sem senha mestra: credenciais incluem password/passphrase em texto claro.
- * - Com senha mestra: credenciais vão sem segredos + `encryptedSecrets` cifrado.
+ * - Segredos (passwords, chaves privadas, TOTP, tokens de sync) são SEMPRE
+ *   removidos das entidades em texto claro via sanitize*.
+ * - Se masterPassword + settings.security.syncCredentials estiverem ativos,
+ *   os segredos vão cifrados em `encryptedSecrets` (Argon2id + AES-256-GCM).
+ * - Metadados de hosts, credenciais e chaves sempre viajam em texto claro.
  */
 export async function buildSyncPayload(
   hosts: HostEntry[],
@@ -84,7 +87,11 @@ export async function buildSyncPayload(
   const exportedSshKeys = sanitizeSshKeys(sshKeys);
   let encryptedSecrets: EncryptedCredentials | undefined;
 
-  if (masterPassword) {
+  // Só cifra os segredos quando a flag syncCredentials está habilitada E uma
+  // senha mestra foi fornecida. Verificar os dois garante que: (a) a função se
+  // comporta corretamente independente do call site, e (b) nenhum segredo é
+  // cifrado em push manual com syncCredentials=false.
+  if (masterPassword && settings.security.syncCredentials) {
     const secretsPayload = buildTransferSecretsPayload(hosts, credentials, sshKeys, settings);
     if (secretsPayload) {
       const payloadJson = await invoke<string>("encrypt_credentials", {

@@ -49,6 +49,15 @@ export function useAutoSync() {
       const currentSettings = settingsRef.current;
       if (!currentSettings.sync.autoSync || !currentSettings.sync.provider) return;
 
+      // Auto-sync não tem acesso à senha mestra, portanto não pode incluir
+      // segredos cifrados no payload. Se syncCredentials estiver ativo, executar
+      // o push sobrescreveria o remote com um payload sem encryptedSecrets,
+      // destruindo silenciosamente o blob cifrado gravado pelo último push manual.
+      if (
+        currentSettings.security.syncCredentials &&
+        currentSettings.security.masterPasswordSet
+      ) return;
+
       try {
         const payload = await buildSyncPayload(
           hostsRef.current,

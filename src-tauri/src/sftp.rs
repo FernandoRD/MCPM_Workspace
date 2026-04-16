@@ -1,21 +1,22 @@
-use std::borrow::Cow;
 use std::collections::HashMap;
 use std::future::Future;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
-use async_trait::async_trait;
 use cfg_if::cfg_if;
 use russh::client;
-use russh_keys::key::PublicKey;
 use russh_sftp::client::SftpSession;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, State};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::Mutex;
 
+use crate::ssh_common::{
+    build_ssh_config, load_known_hosts, save_known_hosts, trim_optional_owned, trim_owned,
+    KnownHostsHandler,
+};
 use crate::AppState;
 
 // ─── Eventos emitidos ao frontend ─────────────────────────────────────────────
@@ -47,9 +48,9 @@ pub struct SftpEntry {
 
 struct SftpConnection {
     /// Mantém a sessão SSH do host alvo viva
-    _handle: client::Handle<SftpClientHandler>,
+    _handle: client::Handle<KnownHostsHandler>,
     /// Mantém a sessão SSH do jump host viva (quando usado)
-    _jump_handle: Option<client::Handle<SftpClientHandler>>,
+    _jump_handle: Option<client::Handle<KnownHostsHandler>>,
     sftp: SftpSession,
 }
 
@@ -67,91 +68,10 @@ impl SftpManager {
     }
 }
 
-// ─── Known hosts (TOFU) ───────────────────────────────────────────────────────
-
-fn known_hosts_path(data_dir: &Path) -> PathBuf {
-    data_dir.join("known_hosts.json")
-}
-
-fn trim_owned(value: String) -> String {
-    value.trim().to_string()
-}
-
-fn trim_optional_owned(value: Option<String>) -> Option<String> {
-    value.and_then(|value| {
-        let trimmed = value.trim();
-        if trimmed.is_empty() {
-            None
-        } else {
-            Some(trimmed.to_string())
-        }
-    })
-}
-
-fn load_known_hosts(data_dir: &Path) -> HashMap<String, String> {
-    let path = known_hosts_path(data_dir);
-    std::fs::read_to_string(&path)
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_default()
-}
-
-fn save_known_hosts(data_dir: &Path, hosts: &HashMap<String, String>) {
-    let path = known_hosts_path(data_dir);
-    if let Ok(json) = serde_json::to_string_pretty(hosts) {
-        let _ = std::fs::write(path, json);
-    }
-}
-
-// ─── Handler SSH com known_hosts TOFU ────────────────────────────────────────
-
-pub struct SftpClientHandler {
-    host_key: String,
-    known_hosts: Arc<std::sync::Mutex<HashMap<String, String>>>,
-}
-
-impl SftpClientHandler {
-    fn new(
-        host: &str,
-        port: u16,
-        known_hosts: Arc<std::sync::Mutex<HashMap<String, String>>>,
-    ) -> Self {
-        Self {
-            host_key: format!("[{}]:{}", host, port),
-            known_hosts,
-        }
-    }
-}
-
-#[async_trait]
-impl client::Handler for SftpClientHandler {
-    type Error = russh::Error;
-
-    async fn check_server_key(
-        &mut self,
-        server_public_key: &PublicKey,
-    ) -> Result<bool, Self::Error> {
-        let fingerprint = server_public_key.fingerprint();
-        let mut kh = self.known_hosts.lock().unwrap();
-        match kh.get(&self.host_key).cloned() {
-            None => {
-                // TOFU: primeira conexão — armazena e aceita
-                kh.insert(self.host_key.clone(), fingerprint);
-                Ok(true)
-            }
-            Some(stored) if stored == fingerprint => Ok(true),
-            Some(_) => {
-                // Fingerprint diferente — possível MITM
-                Err(russh::Error::WrongServerSig)
-            }
-        }
-    }
-}
-
 // ─── Helper de autenticação ───────────────────────────────────────────────────
 
 async fn authenticate(
-    session: &mut client::Handle<SftpClientHandler>,
+    session: &mut client::Handle<KnownHostsHandler>,
     username: &str,
     auth_method: &str,
     password: Option<String>,
@@ -244,79 +164,6 @@ fn sftp_remove_recursive<'a>(
     })
 }
 
-// ─── Configuração SSH por preset (reusa as constantes de ssh.rs) ──────────────
-
-fn build_sftp_config(
-    preset: &str,
-    keepalive_secs: u32,
-    timeout_secs: u32,
-) -> Arc<client::Config> {
-    use russh::{cipher, compression, kex, mac};
-    use russh::Preferred;
-
-    static LEGACY_KEX: &[kex::Name] = &[
-        kex::CURVE25519, kex::CURVE25519_PRE_RFC_8731, kex::DH_G16_SHA512,
-        kex::DH_G14_SHA256, kex::ECDH_SHA2_NISTP256, kex::ECDH_SHA2_NISTP384,
-        kex::ECDH_SHA2_NISTP521, kex::DH_G14_SHA1,
-    ];
-    static VERY_LEGACY_KEX: &[kex::Name] = &[
-        kex::CURVE25519, kex::CURVE25519_PRE_RFC_8731, kex::DH_G16_SHA512,
-        kex::DH_G14_SHA256, kex::ECDH_SHA2_NISTP256, kex::ECDH_SHA2_NISTP384,
-        kex::ECDH_SHA2_NISTP521, kex::DH_G14_SHA1, kex::DH_G1_SHA1,
-    ];
-    static LEGACY_CIPHER: &[cipher::Name] = &[
-        cipher::CHACHA20_POLY1305, cipher::AES_256_GCM, cipher::AES_256_CTR,
-        cipher::AES_192_CTR, cipher::AES_128_CTR, cipher::AES_256_CBC,
-        cipher::AES_192_CBC, cipher::AES_128_CBC,
-    ];
-    static LEGACY_MAC: &[mac::Name] = &[
-        mac::HMAC_SHA256_ETM, mac::HMAC_SHA512_ETM, mac::HMAC_SHA256,
-        mac::HMAC_SHA512, mac::HMAC_SHA1_ETM, mac::HMAC_SHA1,
-    ];
-    static LEGACY_KEY: &[russh_keys::key::Name] = &[
-        russh_keys::key::ED25519, russh_keys::key::ECDSA_SHA2_NISTP256,
-        russh_keys::key::ECDSA_SHA2_NISTP384, russh_keys::key::ECDSA_SHA2_NISTP521,
-        russh_keys::key::RSA_SHA2_256, russh_keys::key::RSA_SHA2_512,
-        russh_keys::key::SSH_RSA,
-    ];
-    static LEGACY_COMPRESSION: &[compression::Name] = &[compression::NONE];
-
-    let mut config = client::Config::default();
-
-    match preset {
-        "legacy" => {
-            config.preferred = Preferred {
-                kex: Cow::Borrowed(LEGACY_KEX),
-                key: Cow::Borrowed(LEGACY_KEY),
-                cipher: Cow::Borrowed(LEGACY_CIPHER),
-                mac: Cow::Borrowed(LEGACY_MAC),
-                compression: Cow::Borrowed(LEGACY_COMPRESSION),
-            };
-        }
-        "very-legacy" => {
-            config.preferred = Preferred {
-                kex: Cow::Borrowed(VERY_LEGACY_KEX),
-                key: Cow::Borrowed(LEGACY_KEY),
-                cipher: Cow::Borrowed(LEGACY_CIPHER),
-                mac: Cow::Borrowed(LEGACY_MAC),
-                compression: Cow::Borrowed(LEGACY_COMPRESSION),
-            };
-        }
-        _ => {}
-    }
-
-    if keepalive_secs > 0 {
-        config.keepalive_interval = Some(Duration::from_secs(keepalive_secs as u64));
-        config.keepalive_max = 3;
-    }
-
-    if timeout_secs > 0 {
-        config.inactivity_timeout = Some(Duration::from_secs(timeout_secs as u64));
-    }
-
-    Arc::new(config)
-}
-
 // ─── Comandos Tauri ───────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -346,14 +193,14 @@ pub async fn sftp_connect(
     let username = trim_owned(username);
     let jump_host = trim_optional_owned(jump_host);
     let jump_username = trim_optional_owned(jump_username);
-    let data_dir = state.storage.lock().unwrap().data_dir.clone();
+    let data_dir = state.storage.lock().map_err(|e| e.to_string())?.data_dir.clone();
     let known_hosts_map = load_known_hosts(&data_dir);
     let known_hosts = Arc::new(std::sync::Mutex::new(known_hosts_map));
 
     let preset = ssh_compat_preset.as_deref().unwrap_or("modern");
     let keepalive = keepalive_interval.unwrap_or(0);
     let timeout = connection_timeout.unwrap_or(30);
-    let config = build_sftp_config(preset, keepalive, timeout);
+    let config = build_ssh_config(preset, keepalive, timeout);
 
     // ─── Conecta ao host alvo (direto ou via jump host) ────────────────────────
 
@@ -365,7 +212,7 @@ pub async fn sftp_connect(
         let mut jump_session = client::connect(
             config.clone(),
             format!("{}:{}", jhost, jport),
-            SftpClientHandler::new(jhost, jport, known_hosts.clone()),
+            KnownHostsHandler::new(jhost, jport, known_hosts.clone()),
         )
         .await
         .map_err(|e| format!("Erro ao conectar ao jump host '{jhost}': {e}"))?;
@@ -393,7 +240,7 @@ pub async fn sftp_connect(
         let target_session = client::connect_stream(
             config.clone(),
             channel.into_stream(),
-            SftpClientHandler::new(&host, port, known_hosts.clone()),
+            KnownHostsHandler::new(&host, port, known_hosts.clone()),
         )
         .await
         .map_err(|e| format!("Erro ao conectar ao host via jump: {e}"))?;
@@ -403,7 +250,7 @@ pub async fn sftp_connect(
         let s = client::connect(
             config.clone(),
             format!("{}:{}", host, port),
-            SftpClientHandler::new(&host, port, known_hosts.clone()),
+            KnownHostsHandler::new(&host, port, known_hosts.clone()),
         )
         .await
         .map_err(|e| format!("Erro ao conectar: {e}"))?;
@@ -427,7 +274,7 @@ pub async fn sftp_connect(
 
     // ─── Persiste known_hosts atualizados ─────────────────────────────────────
 
-    save_known_hosts(&data_dir, &known_hosts.lock().unwrap());
+    save_known_hosts(&data_dir, &*known_hosts.lock().map_err(|e| e.to_string())?);
 
     // ─── Abre sessão SFTP ──────────────────────────────────────────────────────
 

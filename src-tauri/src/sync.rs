@@ -81,6 +81,12 @@ pub async fn sync_gist_push(
     payload_json: String,
 ) -> Result<String, String> {
     state.rate_limiter.check("sync_gist_push", 5, std::time::Duration::from_secs(60))?;
+    let _sync_guard = state
+        .sync_lock
+        .try_lock()
+        .map_err(|_| "Sincronização já em andamento. Aguarde a operação anterior terminar.".to_string())?;
+    log::info!("sync: gist_push iniciado");
+    validate_encrypted_payload(&payload_json)?;
     let client = build_client()?;
 
     let files = serde_json::json!({ "vault.json": { "content": payload_json } });
@@ -130,6 +136,11 @@ pub async fn sync_gist_push(
 #[tauri::command]
 pub async fn sync_gist_pull(state: State<'_, AppState>, token: String, gist_id: String) -> Result<String, String> {
     state.rate_limiter.check("sync_gist_pull", 5, std::time::Duration::from_secs(60))?;
+    let _sync_guard = state
+        .sync_lock
+        .try_lock()
+        .map_err(|_| "Sincronização já em andamento. Aguarde a operação anterior terminar.".to_string())?;
+    log::info!("sync: gist_pull iniciado");
     let client = build_client()?;
     let url = format!("https://api.github.com/gists/{gist_id}");
 
@@ -202,6 +213,12 @@ pub async fn sync_webdav_push(
     payload_json: String,
 ) -> Result<(), String> {
     state.rate_limiter.check("sync_webdav_push", 5, std::time::Duration::from_secs(60))?;
+    let _sync_guard = state
+        .sync_lock
+        .try_lock()
+        .map_err(|_| "Sincronização já em andamento. Aguarde a operação anterior terminar.".to_string())?;
+    log::info!("sync: webdav_push iniciado");
+    validate_encrypted_payload(&payload_json)?;
     let client = build_client()?;
     let base_url = ensure_https_url(&url, "WebDAV")?;
     let full_url = format!(
@@ -237,6 +254,11 @@ pub async fn sync_webdav_pull(
     path: String,
 ) -> Result<String, String> {
     state.rate_limiter.check("sync_webdav_pull", 5, std::time::Duration::from_secs(60))?;
+    let _sync_guard = state
+        .sync_lock
+        .try_lock()
+        .map_err(|_| "Sincronização já em andamento. Aguarde a operação anterior terminar.".to_string())?;
+    log::info!("sync: webdav_pull iniciado");
     let client = build_client()?;
     let base_url = ensure_https_url(&url, "WebDAV")?;
     let full_url = format!(
@@ -297,6 +319,12 @@ pub async fn sync_s3_push(
     payload_json: String,
 ) -> Result<(), String> {
     state.rate_limiter.check("sync_s3_push", 5, std::time::Duration::from_secs(60))?;
+    let _sync_guard = state
+        .sync_lock
+        .try_lock()
+        .map_err(|_| "Sincronização já em andamento. Aguarde a operação anterior terminar.".to_string())?;
+    log::info!("sync: s3_push iniciado");
+    validate_encrypted_payload(&payload_json)?;
     let client = build_client()?;
     let payload = payload_json.as_bytes();
     let (host, url) = s3_url(&endpoint, &bucket, &region)?;
@@ -335,6 +363,11 @@ pub async fn sync_s3_pull(
     secret_key: String,
 ) -> Result<String, String> {
     state.rate_limiter.check("sync_s3_pull", 5, std::time::Duration::from_secs(60))?;
+    let _sync_guard = state
+        .sync_lock
+        .try_lock()
+        .map_err(|_| "Sincronização já em andamento. Aguarde a operação anterior terminar.".to_string())?;
+    log::info!("sync: s3_pull iniciado");
     let client = build_client()?;
     let (host, url) = s3_url(&endpoint, &bucket, &region)?;
     let path = format!("/{bucket}/{S3_OBJECT_KEY}");
@@ -368,6 +401,12 @@ pub async fn sync_s3_pull(
 #[tauri::command]
 pub async fn sync_custom_push(state: State<'_, AppState>, url: String, payload_json: String) -> Result<(), String> {
     state.rate_limiter.check("sync_custom_push", 5, std::time::Duration::from_secs(60))?;
+    let _sync_guard = state
+        .sync_lock
+        .try_lock()
+        .map_err(|_| "Sincronização já em andamento. Aguarde a operação anterior terminar.".to_string())?;
+    log::info!("sync: custom_push iniciado");
+    validate_encrypted_payload(&payload_json)?;
     let client = build_client()?;
     let validated_url = ensure_https_url(&url, "endpoint customizado")?;
 
@@ -391,6 +430,11 @@ pub async fn sync_custom_push(state: State<'_, AppState>, url: String, payload_j
 #[tauri::command]
 pub async fn sync_custom_pull(state: State<'_, AppState>, url: String) -> Result<String, String> {
     state.rate_limiter.check("sync_custom_pull", 5, std::time::Duration::from_secs(60))?;
+    let _sync_guard = state
+        .sync_lock
+        .try_lock()
+        .map_err(|_| "Sincronização já em andamento. Aguarde a operação anterior terminar.".to_string())?;
+    log::info!("sync: custom_pull iniciado");
     let client = build_client()?;
     let validated_url = ensure_https_url(&url, "endpoint customizado")?;
 
@@ -413,6 +457,26 @@ pub async fn sync_custom_pull(state: State<'_, AppState>, url: String) -> Result
 }
 
 // ── Utilitários ───────────────────────────────────────────────────────────────
+
+/// Valida que o payload é um arquivo de sync legítimo do aplicativo.
+/// O formato de sync sempre inclui `hosts`, `credentials` e `sshKeys` em texto
+/// claro (metadados apenas, sem segredos — removidos pelo frontend via sanitize*).
+/// A verificação correta é confirmar o marcador `app: "ssh-vault"`, não rejeitar
+/// campos que fazem parte do formato esperado.
+fn validate_encrypted_payload(payload: &str) -> Result<(), String> {
+    let v = serde_json::from_str::<serde_json::Value>(payload)
+        .map_err(|_| "Payload de sync inválido: não é um JSON válido.".to_string())?;
+
+    if v.get("app").and_then(|a| a.as_str()) != Some("ssh-vault") {
+        return Err(
+            "Payload de sync inválido: campo 'app' ausente ou incorreto. \
+             Use o fluxo de sincronização do aplicativo para gerar o payload."
+                .to_string(),
+        );
+    }
+
+    Ok(())
+}
 
 fn ensure_https_url(raw_url: &str, label: &str) -> Result<reqwest::Url, String> {
     let url = reqwest::Url::parse(raw_url.trim())

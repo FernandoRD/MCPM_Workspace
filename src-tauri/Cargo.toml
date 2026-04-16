@@ -1,6 +1,6 @@
 [package]
 name = "ssh-vault"
-version = "0.3.6"
+version = "0.3.7"
 description = "SSH Vault — Gerenciador de conexões SSH com sincronização remota"
 authors = ["SSH Vault"]
 edition = "2021"
@@ -43,7 +43,8 @@ hex = "0.4"
 russh = "0.44"
 russh-keys = "0.44"
 russh-sftp = "2"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "time", "net", "io-util", "macros", "fs"] }
+log = "0.4"
 async-trait = "0.1"
 cfg-if = "1"
 ed25519-dalek = { version = "2.2.0", features = ["rand_core"] }

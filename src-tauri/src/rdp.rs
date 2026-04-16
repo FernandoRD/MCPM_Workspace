@@ -1044,32 +1044,45 @@ pub async fn rdp_session_exists(
     session_id: String,
 ) -> Result<bool, String> {
     let mut manager = state.rdp.lock().await;
-    if let Some(session) = manager.sessions.get_mut(&session_id) {
-        if let Some(child) = session.child.as_mut() {
-            return match child.try_wait() {
-                Ok(Some(_)) => {
-                    let mut finished = manager.sessions.remove(&session_id).unwrap();
-                    cleanup_session(&mut finished);
-                    Ok(false)
-                }
-                Ok(None) => Ok(true),
-                Err(e) => Err(format!("Falha ao consultar processo RDP: {e}")),
-            };
-        }
 
-        return Ok(true);
+    // Verifica sessão RDP externa
+    let external_done = if let Some(session) = manager.sessions.get_mut(&session_id) {
+        if let Some(child) = session.child.as_mut() {
+            match child.try_wait() {
+                Ok(Some(_)) => true,  // processo encerrou
+                Ok(None) => return Ok(true),
+                Err(e) => return Err(format!("Falha ao consultar processo RDP: {e}")),
+            }
+        } else {
+            return Ok(true);
+        }
+    } else {
+        false
+    };
+
+    if external_done {
+        if let Some(mut finished) = manager.sessions.remove(&session_id) {
+            cleanup_session(&mut finished);
+        }
+        return Ok(false);
     }
 
-    if let Some(child) = manager.internal_viewers.get_mut(&session_id) {
-        return match child.try_wait() {
-            Ok(Some(_)) => {
-                let mut finished = manager.internal_viewers.remove(&session_id).unwrap();
-                let _ = finished.wait();
-                Ok(false)
-            }
-            Ok(None) => Ok(true),
-            Err(e) => Err(format!("Falha ao consultar viewer RDP interno: {e}")),
+    // Verifica viewer interno
+    let viewer_done = if let Some(child) = manager.internal_viewers.get_mut(&session_id) {
+        match child.try_wait() {
+            Ok(Some(_)) => true,
+            Ok(None) => return Ok(true),
+            Err(e) => return Err(format!("Falha ao consultar viewer RDP interno: {e}")),
         }
+    } else {
+        false
+    };
+
+    if viewer_done {
+        if let Some(mut finished) = manager.internal_viewers.remove(&session_id) {
+            let _ = finished.wait();
+        }
+        return Ok(false);
     }
 
     Ok(false)

@@ -619,6 +619,9 @@
     "credentialsEncrypted": "credenciais cifradas",
     "noMasterPasswordNotice": "Defina uma senha mestra em Configurações → Segurança para habilitar o sync de credenciais.",
     "credentialsSyncDisabledNotice": "Sync de credenciais desabilitado. Ative em Configurações → Segurança.",
+    "errors": {
+      "syncCredentialsNoMasterPassword": "Sync de credenciais está ativo, mas nenhuma senha mestra foi definida. Defina a senha mestra em Configurações → Segurança antes de sincronizar."
+    },
     "masterPasswordPushPrompt": "Informe a senha mestra para cifrar as credenciais antes de enviar.",
     "masterPasswordPullPrompt": "Informe a senha mestra para decifrar as credenciais recebidas.",
     "status": {

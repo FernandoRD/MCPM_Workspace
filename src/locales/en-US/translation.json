@@ -619,6 +619,9 @@
     "credentialsEncrypted": "encrypted credentials",
     "noMasterPasswordNotice": "Set a master password in Settings → Security to enable credential sync.",
     "credentialsSyncDisabledNotice": "Credential sync is disabled. Enable it in Settings → Security.",
+    "errors": {
+      "syncCredentialsNoMasterPassword": "Credential sync is enabled, but no master password has been set. Set the master password in Settings → Security before syncing."
+    },
     "masterPasswordPushPrompt": "Enter the master password to encrypt credentials before uploading.",
     "masterPasswordPullPrompt": "Enter the master password to decrypt credentials received from remote.",
     "status": {

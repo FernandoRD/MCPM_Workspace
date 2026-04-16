@@ -149,15 +149,18 @@ src-tauri/
     crypto.rs
     database.rs
     lib.rs
+    rate_limit.rs
     rdp.rs
     sftp.rs
     session_bootstrap.rs
     ssh.rs
+    ssh_common.rs
     ssh_config.rs
     storage.rs
     sync.rs
     telnet.rs
     totp.rs
+    vnc.rs
 
 experiments/
   internal-rdp-client/
@@ -547,6 +550,20 @@ Hosts `RDP` também ficam fora desse escopo.
 
 Arquivo principal: [ssh.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/ssh.rs)
 
+### Módulo compartilhado SSH/SFTP
+
+[ssh_common.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/ssh_common.rs) centraliza o código compartilhado entre `ssh.rs` e `sftp.rs`:
+
+- constantes de algoritmos legados (`LEGACY_KEX`, `LEGACY_CIPHER`, `LEGACY_MAC`, `LEGACY_KEY`, `LEGACY_COMPRESSION`)
+- `build_ssh_config` — constrói a configuração `russh` por preset
+- `KnownHostsHandler` — handler TOFU unificado para SSH e SFTP
+- `load_known_hosts` / `save_known_hosts` — persistência do inventário de fingerprints
+- utilitários: `trim_owned`, `trim_optional_owned`, `format_host_key`
+
+### Rate limiting
+
+[rate_limit.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/rate_limit.rs) implementa um rate limiter de janela deslizante por chave dinâmica. A chave aceita qualquer `&str`, permitindo granularidade por operação e alvo — por exemplo, `"ssh_connect:192.168.1.1"` limita tentativas por host individualmente.
+
 ## 11. Fluxos importantes
 
 ### Quick Connect
@@ -721,7 +738,7 @@ Arquivos principais:
 
 Estado atual:
 
-- versão de referência atual do app: `0.3.6`
+- versão de referência atual do app: `0.3.7`
 - `package.json` é a fonte principal da versão do app
 - `tauri.conf.json` lê a versão a partir de `../package.json`
 - o frontend lê a versão a partir de `package.json` via `appInfo.ts`

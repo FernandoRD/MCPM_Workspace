@@ -6,7 +6,17 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 
 ## Versão atual
 
-`0.3.6`
+`0.3.7`
+
+## Novidades da 0.3.7
+
+- Rate limiter de conexões SSH agora opera por host individual em vez de global, evitando que um único alvo sobrecarregue outros
+- Código compartilhado de SSH e SFTP extraído para módulo `ssh_common`, eliminando ~300 linhas de duplicação entre `ssh.rs` e `sftp.rs`
+- Logging estruturado com crate `log`: `eprintln!` substituídos por `log::warn!`/`log::error!`, com `log::info!` em eventos operacionais chave (conexão SSH e operações de sync)
+- Semáforo de sincronização remota: múltiplas chamadas simultâneas de sync são recusadas imediatamente com mensagem clara em vez de ficar enfileiradas
+- Validação de payload de sync: `push` rejeita dados com campos sensíveis em texto claro, exigindo criptografia com senha mestra antes de sincronizar
+- Auto-prune de logs de conexão: a tabela `connection_logs` mantém automaticamente apenas os 1000 registros mais recentes, impedindo crescimento ilimitado
+- Features do tokio reduzidas de `full` para a lista exata usada pelo projeto, diminuindo tamanho do binário e tempo de compilação incremental
 
 ## Novidades da 0.3.6
 

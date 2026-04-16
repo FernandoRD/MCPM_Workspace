@@ -61,6 +61,10 @@ export function Sync() {
   const handlePush = () => {
     if (security?.syncCredentials && security.masterPasswordSet) {
       setMasterPasswordModal({ open: true, action: "push" });
+    } else if (security?.syncCredentials && !security.masterPasswordSet) {
+      // syncCredentials ativo mas sem senha mestra definida: bloqueia o push
+      // para evitar silenciosamente descartar segredos configurados pelo usuário.
+      setError(t("sync.errors.syncCredentialsNoMasterPassword"));
     } else {
       doPush(null);
     }
@@ -69,6 +73,8 @@ export function Sync() {
   const handlePull = () => {
     if (security?.syncCredentials && security.masterPasswordSet) {
       setMasterPasswordModal({ open: true, action: "pull" });
+    } else if (security?.syncCredentials && !security.masterPasswordSet) {
+      setError(t("sync.errors.syncCredentialsNoMasterPassword"));
     } else {
       doPull(null);
     }
@@ -168,6 +174,14 @@ export function Sync() {
               <KeyRound size={16} className="text-[var(--accent)] shrink-0 mt-0.5" />
               <p className="text-sm text-[var(--accent)]">
                 {t("sync.credentialsEncryptedNotice")}
+              </p>
+            </div>
+          )}
+          {security?.syncCredentials && !security.masterPasswordSet && (
+            <div className="flex items-start gap-3 rounded-xl border border-[var(--danger)]/30 bg-[var(--danger)]/5 px-4 py-3">
+              <AlertCircle size={16} className="text-[var(--danger)] shrink-0 mt-0.5" />
+              <p className="text-sm text-[var(--danger)]">
+                {t("sync.errors.syncCredentialsNoMasterPassword")}
               </p>
             </div>
           )}

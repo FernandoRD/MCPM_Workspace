@@ -7,7 +7,9 @@
       "Bash(ls node_modules/.bin/ts*)",
       "Bash(cargo doc:*)",
       "Read(//home/fernando/.cargo/registry/src/**)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(grep -r \"eval \\\\|exec \\\\|\\\\`\\\\|innerHTML\\\\|dangerouslySetInnerHTML\" /home/fernando/Documentos/ssh_vault/src --include=\"*.ts\" --include=\"*.tsx\")",
+      "Bash(grep -n \"tokio::spawn\\\\|thread::spawn\\\\|Arc<Mutex\\\\|Mutex<\" /home/fernando/Documentos/ssh_vault/src-tauri/src/*.rs)"
     ]
   }
 }

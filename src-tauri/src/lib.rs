@@ -6,6 +6,7 @@ mod rdp;
 mod session_bootstrap;
 mod sftp;
 mod ssh;
+mod ssh_common;
 mod ssh_config;
 mod storage;
 mod sync;
@@ -34,6 +35,8 @@ pub struct AppState {
     pub rdp: Arc<tokio::sync::Mutex<RdpManager>>,
     pub vnc: Arc<tokio::sync::Mutex<VncManager>>,
     pub rate_limiter: rate_limit::RateLimiter,
+    /// Impede que múltiplas operações de sincronização remota rodem ao mesmo tempo.
+    pub sync_lock: tokio::sync::Mutex<()>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -57,6 +60,7 @@ pub fn run() {
             rdp: Arc::new(tokio::sync::Mutex::new(RdpManager::new())),
             vnc: Arc::new(tokio::sync::Mutex::new(VncManager::new())),
             rate_limiter: rate_limit::RateLimiter::new(),
+            sync_lock: tokio::sync::Mutex::new(()),
         })
         .invoke_handler(tauri::generate_handler![
             storage::get_app_data_dir,

@@ -28,7 +28,7 @@ impl Database {
             Ok(db) => Ok(db),
             Err(e) if e.contains("file is not a database") || e.contains("not a database") => {
                 // Arquivo incompatível (plain SQLite ou chave diferente) — apaga e recria
-                eprintln!("[mpcm-workspace] vault.db incompatível, recriando: {e}");
+                log::warn!("[mpcm-workspace] vault.db incompatível, recriando: {e}");
                 let _ = std::fs::remove_file(&db_path);
                 // Remove também o WAL e SHM se existirem
                 let _ = std::fs::remove_file(db_path.with_extension("db-wal"));
@@ -251,7 +251,7 @@ pub fn db_get_settings(state: State<AppState>) -> Result<Option<Value>, String> 
         Ok(data) => {
             let settings = serde_json::from_str(&data).map_err(|e| e.to_string())?;
             if let Err(error) = mirror_internal_rdp_settings(&state, &settings) {
-                eprintln!("[mpcm-workspace] failed to mirror internal RDP settings: {error}");
+                log::error!("[mpcm-workspace] failed to mirror internal RDP settings: {error}");
             }
             Ok(Some(settings))
         }
@@ -431,6 +431,16 @@ pub fn db_add_connection_log(state: State<AppState>, log: Value) -> Result<(), S
                 connected_at, disconnected_at, duration_secs, status],
     )
     .map_err(|e| e.to_string())?;
+
+    // Mantém apenas os 1000 registros mais recentes para evitar crescimento ilimitado.
+    conn.execute(
+        "DELETE FROM connection_logs WHERE id NOT IN (
+             SELECT id FROM connection_logs ORDER BY connected_at DESC LIMIT 1000
+         )",
+        [],
+    )
+    .map_err(|e| e.to_string())?;
+
     Ok(())
 }
 
