@@ -6,7 +6,15 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 
 ## Versão atual
 
-`0.3.7`
+`0.3.8`
+
+## Novidades da 0.3.8
+
+- Suporte a múltiplos monitores no viewer RDP interno experimental: o servidor renderiza um único desktop cobrindo todos os monitores e o viewer fatia por tela
+- Modo janela com multimon usa uma única janela escalada para o tamanho configurado, sem necessidade de clicar para o mouse aparecer
+- Modo fullscreen com multimon abre uma janela por monitor; no Windows as janelas são posicionadas automaticamente, no Linux/Wayland o posicionamento manual é necessário (limitação do protocolo xdg_toplevel)
+- Estado de mouse isolado por janela, eliminando oscilação de cursor entre janelas sobrepostas
+- Redirecionamento de stderr do viewer para `/tmp/ssh_vault_viewer.log` facilitando diagnóstico de falhas de inicialização
 
 ## Novidades da 0.3.7
 

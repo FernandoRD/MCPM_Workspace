@@ -11,11 +11,18 @@ pub struct MouseInputState {
     right_down: bool,
 }
 
+/// `display_w` / `display_h` — tamanho da janela minifb (coordenadas do mouse vindas da janela).
+/// `buf_w`     / `buf_h`     — tamanho do buffer RDP (usado para mapear coordenadas globais).
+/// Quando display == buffer não há escala.
 pub fn collect_window_input(
     window: &Window,
-    width: usize,
-    height: usize,
+    display_w: usize,
+    display_h: usize,
+    buf_w: usize,
+    buf_h: usize,
     mouse_state: &mut MouseInputState,
+    offset_x: i32,
+    offset_y: i32,
 ) -> Vec<FastPathInputEvent> {
     let mut events = Vec::new();
 
@@ -31,24 +38,28 @@ pub fn collect_window_input(
         }
     }
 
-    collect_mouse_input(window, width, height, mouse_state, &mut events);
+    collect_mouse_input(window, display_w, display_h, buf_w, buf_h, mouse_state, &mut events, offset_x, offset_y);
 
     events
 }
 
 fn collect_mouse_input(
     window: &Window,
-    width: usize,
-    height: usize,
+    display_w: usize,
+    display_h: usize,
+    buf_w: usize,
+    buf_h: usize,
     mouse_state: &mut MouseInputState,
     events: &mut Vec<FastPathInputEvent>,
+    offset_x: i32,
+    offset_y: i32,
 ) {
     let left_down = window.get_mouse_down(MouseButton::Left);
     let middle_down = window.get_mouse_down(MouseButton::Middle);
     let right_down = window.get_mouse_down(MouseButton::Right);
     let current_position = window
         .get_mouse_pos(MouseMode::Discard)
-        .map(|(x, y)| normalize_mouse_position(x, y, width, height));
+        .map(|(x, y)| normalize_mouse_position(x, y, display_w, display_h, buf_w, buf_h, offset_x, offset_y));
 
     if let Some(position) = current_position {
         if mouse_state.last_position != Some(position) {
@@ -61,7 +72,7 @@ fn collect_mouse_input(
         .or_else(|| {
             window
                 .get_mouse_pos(MouseMode::Clamp)
-                .map(|(x, y)| normalize_mouse_position(x, y, width, height))
+                .map(|(x, y)| normalize_mouse_position(x, y, display_w, display_h, buf_w, buf_h, offset_x, offset_y))
         })
         .or(mouse_state.last_position)
         .unwrap_or((0, 0));
@@ -192,8 +203,33 @@ fn current_move_flags(left_down: bool, middle_down: bool, right_down: bool) -> P
     flags
 }
 
-fn normalize_mouse_position(x: f32, y: f32, width: usize, height: usize) -> (u16, u16) {
-    (clamp_mouse_coordinate(x, width), clamp_mouse_coordinate(y, height))
+fn normalize_mouse_position(
+    x: f32,
+    y: f32,
+    display_w: usize,
+    display_h: usize,
+    buf_w: usize,
+    buf_h: usize,
+    offset_x: i32,
+    offset_y: i32,
+) -> (u16, u16) {
+    // Clamp to display dimensions first
+    let disp_x = clamp_mouse_coordinate(x, display_w);
+    let disp_y = clamp_mouse_coordinate(y, display_h);
+    // Scale to buffer dimensions (no-op when display == buffer)
+    let buf_x = if display_w == buf_w {
+        disp_x as i32
+    } else {
+        (disp_x as f64 * buf_w as f64 / display_w as f64).round() as i32
+    };
+    let buf_y = if display_h == buf_h {
+        disp_y as i32
+    } else {
+        (disp_y as f64 * buf_h as f64 / display_h as f64).round() as i32
+    };
+    let global_x = (buf_x + offset_x).max(0) as u16;
+    let global_y = (buf_y + offset_y).max(0) as u16;
+    (global_x, global_y)
 }
 
 fn clamp_mouse_coordinate(value: f32, limit: usize) -> u16 {

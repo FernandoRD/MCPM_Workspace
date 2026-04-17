@@ -8,6 +8,15 @@ export interface InternalRdpViewerLaunchResult {
   settingsSource?: string | null;
 }
 
+export interface RdpMonitorLayout {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  isPrimary: boolean;
+  scaleFactor?: number;
+}
+
 interface LaunchInternalRdpViewerParams {
   sessionId: string;
   host: string;
@@ -24,6 +33,7 @@ interface LaunchInternalRdpViewerParams {
     audioMode?: string;
     certificateMode?: string;
     preferredLinuxClient?: string;
+    monitors?: RdpMonitorLayout[];
   };
 }
 

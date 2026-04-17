@@ -53,6 +53,17 @@ pub struct InternalRdpViewerLaunchResult {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct RdpMonitorLayout {
+    pub left: u32,
+    pub top: u32,
+    pub width: u32,
+    pub height: u32,
+    pub is_primary: bool,
+    pub scale_factor: Option<u32>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RdpConnectOptions {
     preferred_linux_client: Option<String>,
     fullscreen: Option<bool>,
@@ -64,6 +75,7 @@ pub struct RdpConnectOptions {
     audio_mode: Option<String>,
     certificate_mode: Option<String>,
     internal_client_performance: Option<RdpPerformanceOptions>,
+    monitors: Option<Vec<RdpMonitorLayout>>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -91,6 +103,7 @@ impl Default for RdpConnectOptions {
             audio_mode: Some("redirect".to_string()),
             certificate_mode: Some("ignore".to_string()),
             internal_client_performance: Some(RdpPerformanceOptions::default()),
+            monitors: None,
         }
     }
 }
@@ -302,11 +315,21 @@ fn spawn_with_args(command: &str, args: &[String]) -> io::Result<Child> {
 
 fn spawn_path_with_args(command: &Path, args: &[String], current_dir: Option<&Path>) -> io::Result<Child> {
     let mut process = Command::new(command);
+
+    let stderr = std::env::temp_dir()
+        .join("ssh_vault_viewer.log");
+    let stderr_stdio = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&stderr)
+        .map(Stdio::from)
+        .unwrap_or_else(|_| Stdio::null());
+
     process
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
-        .stderr(Stdio::null());
+        .stderr(stderr_stdio);
 
     if let Some(dir) = current_dir {
         process.current_dir(dir);
@@ -468,6 +491,19 @@ fn launch_internal_rdp_viewer(
         "--height".to_string(),
         options.height().to_string(),
     ];
+
+    if let Some(monitors) = options.monitors.as_deref() {
+        for m in monitors {
+            let scale = m.scale_factor.unwrap_or(100);
+            viewer_args.push("--monitor".to_string());
+            viewer_args.push(format!(
+                "{},{},{},{},{},{}",
+                m.left, m.top, m.width, m.height,
+                if m.is_primary { "true" } else { "false" },
+                scale,
+            ));
+        }
+    }
 
     if let Some(settings_path) = settings_source.as_ref() {
         viewer_args.splice(
@@ -1112,6 +1148,7 @@ mod tests {
                 font_smoothing: Some(true),
                 desktop_composition: Some(false),
             }),
+            monitors: None,
         }
     }
 

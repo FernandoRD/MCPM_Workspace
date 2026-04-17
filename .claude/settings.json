@@ -9,7 +9,40 @@
       "Read(//home/fernando/.cargo/registry/src/**)",
       "Bash(npm install:*)",
       "Bash(grep -r \"eval \\\\|exec \\\\|\\\\`\\\\|innerHTML\\\\|dangerouslySetInnerHTML\" /home/fernando/Documentos/ssh_vault/src --include=\"*.ts\" --include=\"*.tsx\")",
-      "Bash(grep -n \"tokio::spawn\\\\|thread::spawn\\\\|Arc<Mutex\\\\|Mutex<\" /home/fernando/Documentos/ssh_vault/src-tauri/src/*.rs)"
+      "Bash(grep -n \"tokio::spawn\\\\|thread::spawn\\\\|Arc<Mutex\\\\|Mutex<\" /home/fernando/Documentos/ssh_vault/src-tauri/src/*.rs)",
+      "Bash(cargo test *)",
+      "Bash(cargo run *)",
+      "Bash(pkill -f viewer_mvp)",
+      "Bash(pkill -f \"viewer_mvp --host\")",
+      "Bash(npm run *)",
+      "Read(//tmp/**)",
+      "Read(//home/fernando/.local/share/mpcm-workspace/**)",
+      "Bash(jobs)",
+      "Bash(python3 -c ' *)",
+      "Bash(xrandr)",
+      "Bash(wlr-randr)",
+      "Bash(grep -v \"^$\")",
+      "Bash(grep -c \"primaryMonitor\\\\|availableMonitors\" /home/fernando/Documentos/ssh_vault/node_modules/@tauri-apps/api/dist/window.d.ts node -e \"const {primaryMonitor, availableMonitors} = require\\('./node_modules/@tauri-apps/api/dist/window.cjs'\\); console.log\\(typeof primaryMonitor, typeof availableMonitors\\);\")",
+      "Bash(pkill -f \"viewer_mvp\\\\|ssh-vault\")",
+      "Bash(pkill -f \"vite\")",
+      "Bash(pkill -f \"viewer_mvp\")",
+      "Bash(./target/debug/viewer_mvp --settings-file /home/fernando/.local/share/mpcm-workspace/internal-rdp-client-settings.json --host 192.168.0.218 --port 3389 --username fernando --password Senh@N0v@ --windowed --width 1600 --height 900 --monitor 0,280,1920,1080,false,100 --monitor 1920,0,2560,1080,true,100)",
+      "Bash(echo \"PID: $!\")",
+      "Bash(echo \"exit: $?\")",
+      "Bash(echo \"Exit: $?\")",
+      "Bash(pgrep -a \"ssh-vault$\")",
+      "Bash(DISPLAY=:0 xdotool search --name \"mpcm\\\\|ssh.vault\\\\|ssh_vault\\\\|SSH Vault\")",
+      "Bash(awk '{print $NF}')",
+      "Bash(curl -s http://localhost:1420/)",
+      "Bash(npx vite *)",
+      "Bash(/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/target/debug/viewer_mvp --settings-file /home/fernando/.local/share/mpcm-workspace/internal-rdp-client-settings.json --host 192.168.0.218 --port 3389 --username fernando --password Senh@N0v@ --windowed --width 1600 --height 900 --monitor 0,280,1920,1080,false,100 --monitor 1920,0,2560,1080,true,100)",
+      "Bash(ls -la /home/fernando/Documentos/ssh_vault/src-tauri/target/debug/*.app/internal-rdp-client/)",
+      "Bash(/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/target/debug/viewer_mvp --help)",
+      "Read(//home/fernando/.local/**)",
+      "Bash(truncate -s 0 /tmp/ssh_vault_viewer.log)"
+    ],
+    "additionalDirectories": [
+      "/tmp"
     ]
   }
 }

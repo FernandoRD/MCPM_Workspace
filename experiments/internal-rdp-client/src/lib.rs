@@ -10,7 +10,7 @@ pub mod viewer_renderer;
 
 pub use config::{DesktopSize, RdpClientConfig, RdpEndpoint, SecurityProtocol};
 pub use framebuffer::Framebuffer;
-pub use mvp_runtime::{SessionPerformanceConfig, SessionProfile};
+pub use mvp_runtime::{MonitorLayout, SessionPerformanceConfig, SessionProfile};
 pub use protocol::x224::{
     decode_connection_confirm, encode_connection_request, ConnectionConfirm, NegotiationFailure,
 };

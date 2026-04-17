@@ -1,12 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { availableMonitors, getCurrentWindow, primaryMonitor } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { ExternalLink, Loader2, Monitor, RefreshCw, Wifi, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { APP_NAME } from "@/lib/appInfo";
-import { launchInternalRdpViewer } from "@/lib/internalRdpViewer";
+import { launchInternalRdpViewer, RdpMonitorLayout } from "@/lib/internalRdpViewer";
 import { notify } from "@/lib/notifications";
 import { readSessionBootstrap, withStandaloneQuery } from "@/lib/windowMode";
 import { useConnectionLogsStore } from "@/store/connectionLogs";
@@ -34,6 +34,26 @@ interface RdpPageLaunchInfo {
   passwordHandled?: boolean;
   credentialMode?: string;
   settingsSource?: string | null;
+}
+
+async function getMonitorLayouts(): Promise<RdpMonitorLayout[]> {
+  const [monitors, primary] = await Promise.all([availableMonitors(), primaryMonitor()]);
+  if (monitors.length === 0) return [];
+
+  const minX = Math.min(...monitors.map((m) => m.position.x));
+  const minY = Math.min(...monitors.map((m) => m.position.y));
+
+  return monitors.map((m) => ({
+    left: m.position.x - minX,
+    top: m.position.y - minY,
+    width: m.size.width,
+    height: m.size.height,
+    isPrimary:
+      primary !== null &&
+      m.position.x === primary.position.x &&
+      m.position.y === primary.position.y,
+    scaleFactor: Math.round(m.scaleFactor * 100),
+  }));
 }
 
 export function RdpPage() {
@@ -176,6 +196,9 @@ export function RdpPage() {
     try {
       let result: RdpPageLaunchInfo;
       if (rdpSettings.launchMode === "internalExperimental") {
+        const monitors =
+          rdpSettings.multimon ? await getMonitorLayouts().catch(() => []) : undefined;
+
         const internalResult = await launchInternalRdpViewer({
           sessionId: tabId,
           host: targetHost,
@@ -192,6 +215,7 @@ export function RdpPage() {
             clipboard: rdpSettings.clipboard,
             audioMode: rdpSettings.audioMode,
             certificateMode: rdpSettings.certificateMode,
+            monitors: monitors && monitors.length > 0 ? monitors : undefined,
           },
         });
         result = {

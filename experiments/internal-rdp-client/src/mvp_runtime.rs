@@ -18,13 +18,44 @@ use tokio_rustls::rustls;
 pub type UpgradedFramed =
     ironrdp_blocking::Framed<rustls::StreamOwned<rustls::ClientConnection, TcpStream>>;
 
-#[derive(Debug, Clone, Copy)]
+/// Layout de um monitor físico no espaço virtual do desktop remoto.
+/// As coordenadas são normalizadas para que a origem seja (0, 0) —
+/// o viewer_mvp é responsável por normalizar antes de construir o SessionProfile.
+#[derive(Debug, Clone)]
+pub struct MonitorLayout {
+    pub left: u32,
+    pub top: u32,
+    pub width: u32,
+    pub height: u32,
+    pub is_primary: bool,
+    pub scale_factor: u32,
+}
+
+impl MonitorLayout {
+    /// Calcula o bounding box (largura, altura) que cobre todos os monitores.
+    /// Retorna a resolução do desktop virtual a ser negociada com o servidor.
+    pub fn desktop_size(monitors: &[MonitorLayout]) -> (u16, u16) {
+        let right = monitors.iter()
+            .map(|m| m.left + m.width)
+            .max()
+            .unwrap_or(1280);
+        let bottom = monitors.iter()
+            .map(|m| m.top + m.height)
+            .max()
+            .unwrap_or(720);
+        (right.min(u16::MAX as u32) as u16, bottom.min(u16::MAX as u32) as u16)
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct SessionProfile {
     pub desktop_width: u16,
     pub desktop_height: u16,
     pub color_depth: u32,
     pub lossy_compression: bool,
     pub performance: SessionPerformanceConfig,
+    /// Lista de monitores. Vazia = single monitor com desktop_width × desktop_height.
+    pub monitors: Vec<MonitorLayout>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -87,6 +118,7 @@ impl Default for SessionProfile {
             color_depth: 16,
             lossy_compression: true,
             performance: SessionPerformanceConfig::default(),
+            monitors: Vec::new(),
         }
     }
 }

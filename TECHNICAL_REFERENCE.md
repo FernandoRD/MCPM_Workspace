@@ -711,17 +711,45 @@ Estado atual desse laboratório:
 - ponteiro remoto visível no viewer
 - redraw parcial e tuning de fluidez no loop de render
 - parâmetros de resolução, profundidade de cor e compressão no CLI
+- suporte a múltiplos monitores (multimon)
+
+### Suporte a múltiplos monitores
+
+O servidor recebe o layout de monitores via `--monitor left:top:width:height[:primary]` e renderiza um único desktop em bounding box cobrindo todos os monitores. O viewer fatia esse buffer por monitor, usando `ViewerBuffer::slice` para extrair as linhas de cada tela.
+
+#### Modo janela com multimon
+
+O viewer cria uma única janela no tamanho configurado pelo app (ou no tamanho do bounding box se não houver override). O mouse funciona imediatamente ao passar por cima, sem necessidade de clicar. A janela mostra o desktop completo; as coordenadas de mouse são mapeadas de volta para o espaço global do bounding box usando `normalize_mouse_position` com o offset de cada monitor.
+
+#### Modo fullscreen com multimon
+
+O viewer cria uma janela por monitor, cada uma no tamanho exato do respectivo monitor. As janelas recebem títulos com número do monitor e resolução para facilitar identificação.
+
+- **Windows**: `set_position()` e `topmost()` são chamados após a criação de cada janela, posicionando-as automaticamente sobre os monitores físicos correspondentes.
+- **Linux/Wayland**: o protocolo `xdg_toplevel` não suporta posicionamento explícito de janela; o compositor posiciona as janelas à sua escolha. O usuário precisa arrastar cada janela para o monitor correto manualmente.
+
+#### Estado de mouse por janela
+
+Cada janela mantém seu próprio `MouseInputState`, eliminando o problema de oscilação de cursor entre janelas sobrepostas que ocorria com estado compartilhado. No modo fullscreen, as janelas estão em monitores físicos separados, então não há sobreposição e o input de cada janela é processado independentemente.
+
+#### Diagnóstico
+
+O stderr do viewer é redirecionado para `/tmp/ssh_vault_viewer.log` em modo append. O viewer imprime no stderr:
+
+- tamanho do desktop e número de monitores
+- layout de cada monitor (posição, dimensões, primary)
+- confirmação de criação de cada janela
 
 Separação interna atual do protótipo:
 
 - `mvp_runtime`
   conexão, handshake, perfil de sessão, loop ativo e resumo de regiões alteradas
 - `viewer_input`
-  tradução de input local para eventos FastPath
+  tradução de input local para eventos FastPath; `normalize_mouse_position` escala coordenadas de display para buffer e aplica offset global de monitor
 - `viewer_renderer`
-  buffer local e atualização parcial do frame
+  buffer local e atualização parcial do frame; `ViewerBuffer::slice` extrai sub-região por monitor para o modo multimon
 - `bin/viewer_mvp`
-  composição do viewer
+  composição do viewer; `run_single_window` para janela única, `run_multi_window` para fullscreen multimon
 - `bin/screenshot_mvp`
   composição do fluxo de captura
 
@@ -738,7 +766,7 @@ Arquivos principais:
 
 Estado atual:
 
-- versão de referência atual do app: `0.3.7`
+- versão de referência atual do app: `0.3.8`
 - `package.json` é a fonte principal da versão do app
 - `tauri.conf.json` lê a versão a partir de `../package.json`
 - o frontend lê a versão a partir de `package.json` via `appInfo.ts`

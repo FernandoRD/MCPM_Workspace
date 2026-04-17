@@ -203,6 +203,7 @@ fn run(
         color_depth,
         lossy_compression,
         performance,
+        monitors: Vec::new(),
     };
 
     let (connection_result, mut framed) = connect_with_password(
