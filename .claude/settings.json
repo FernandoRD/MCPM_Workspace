@@ -39,7 +39,9 @@
       "Bash(ls -la /home/fernando/Documentos/ssh_vault/src-tauri/target/debug/*.app/internal-rdp-client/)",
       "Bash(/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/target/debug/viewer_mvp --help)",
       "Read(//home/fernando/.local/**)",
-      "Bash(truncate -s 0 /tmp/ssh_vault_viewer.log)"
+      "Bash(truncate -s 0 /tmp/ssh_vault_viewer.log)",
+      "WebFetch(domain:schema.tauri.app)",
+      "WebFetch(domain:v2.tauri.app)"
     ],
     "additionalDirectories": [
       "/tmp"
