@@ -12,7 +12,7 @@ node_modules
 dist
 dist-ssr
 *.local
-experiments
+experiments/internal-rdp-client/target/debug
 
 # Editor directories and files
 .vscode*
