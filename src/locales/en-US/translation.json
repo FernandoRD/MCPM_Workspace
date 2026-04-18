@@ -257,7 +257,7 @@
       "authenticationHint": "RDP hosts use username/password credentials. In this MVP, the app launches the system native RDP client and it may ask for the password again depending on the operating system."
     },
     "vnc": {
-      "authenticationHint": "VNC hosts use the system native launcher. You can still attach a password credential to preserve context in the app, but the external client may ask for authentication again."
+      "authenticationHint": "VNC hosts use an external launcher. You can still attach a password credential to preserve context in the app, but most clients will still ask for authentication on their own."
     },
     "sshCompat": {
       "section": "SSH Compatibility",
@@ -535,12 +535,21 @@
       }
     },
     "vnc": {
-      "description": "Global VNC launcher preferences, including the preferred Linux client and how sessions should open.",
+      "description": "Global VNC launcher preferences, including the preferred Linux client and how the app hands sessions off to external clients.",
       "linuxClient": "Preferred Linux client",
       "linuxClientHint": "In 'Automatic', the app tries supported clients in sequence. If you choose a specific client, it uses only that one.",
+      "lifecycleHint": "On Windows, on macOS, and when using 'System default app', the app may launch the VNC client but cannot reliably detect when it closes or terminate it for you.",
       "displayMode": "Display mode",
       "viewOnly": "Open in view-only mode when the client supports it",
       "optionsHint": "TigerVNC usually honors fullscreen and view-only more reliably. External clients like Remmina, KRDC, and Vinagre may ignore part of these preferences.",
+      "clientNotes": {
+        "auto": "Automatic tries TigerVNC, Remmina, KRDC, Vinagre, and finally the system default app. The app only tracks lifecycle when it can launch a process directly.",
+        "tigervnc": "TigerVNC usually provides the best fullscreen and view-only support. When launched directly, the app can monitor the process and try to close it.",
+        "remmina": "Remmina usually runs as a process managed by the app, but visual preference support still depends on Remmina itself.",
+        "krdc": "KRDC usually runs as a process managed by the app, but some preferences may still be ignored by the client.",
+        "vinagre": "Vinagre usually runs as a process managed by the app, but some preferences may be ignored and behavior can vary by environment.",
+        "system": "Uses the application associated with the vnc:// scheme. In this mode, the app cannot reliably monitor when the client closes or terminate it for you."
+      },
       "clients": {
         "auto": "Automatic",
         "tigervnc": "TigerVNC Viewer",
@@ -919,9 +928,9 @@
     "directConnectHint": "Connects without saving the host and lets you choose password, private key or SSH agent.",
     "directConnectTelnetHint": "Opens a Telnet session without saving the host. Authentication, when required, happens inside the remote session itself.",
     "directConnectRdpHint": "Opens an RDP session without saving the host. If you provide a password, the launcher will try to reuse it when the client supports it.",
-    "directConnectVncHint": "Opens a VNC session without saving the host. The password can remain in the app, but the external client may still ask for it again.",
+    "directConnectVncHint": "Opens a VNC session without saving the host. The password can remain in the app as local context, but the external client will usually still ask for authentication.",
     "directConnectRdpPasswordPlaceholder": "Optional: leave empty to let the client ask for it",
-    "directConnectVncPasswordPlaceholder": "Optional: some VNC clients will still prompt for the password",
+    "directConnectVncPasswordPlaceholder": "Optional: the external VNC client will usually still prompt for the password",
     "directConnectPasswordRequired": "Enter a password to use this method in Quick Connect.",
     "directConnectKeyRequired": "Paste the private key to use this method in Quick Connect.",
     "directConnectAction": "Connect",
@@ -1015,18 +1024,38 @@
     "sessionNotFound": "VNC session not found",
     "reconnect": "Reconnect",
     "disconnect": "Disconnect",
-    "externalClientHint": "This session is opened in the system native or associated VNC client.",
+    "disconnectClient": "Close client",
+    "closeSession": "Close session",
+    "externalClientHint": "This session was handed off to an external or system-associated VNC client. The app cannot reliably confirm when that client is closed.",
+    "managedClientHint": "This VNC client was launched directly by the app. The app can monitor the process and try to close it from this screen.",
     "launchDetails": "Launcher details",
     "launcher": "Client used",
     "executable": "Executable",
     "authentication": "Authentication",
     "credentialMode": "Credential flow",
+    "sessionMode": "Session control",
+    "lifecycle": "Lifecycle tracking",
+    "fullscreenSupport": "Fullscreen support",
+    "viewOnlySupport": "View-only support",
     "address": "Address",
     "transport": "Protocol",
     "display": "Display",
     "accessMode": "Access",
     "passwordHandled": "Password passed automatically",
-    "passwordPromptExpected": "The external client may prompt for the password",
+    "passwordPromptExpected": "The password remains only in the app; the external client will usually prompt again",
+    "sessionModes": {
+      "managedProcess": "Process managed by the app",
+      "externalLauncher": "External launcher or associated app"
+    },
+    "lifecycleModes": {
+      "tracked": "Process tracked by the app",
+      "untracked": "External client not trackable"
+    },
+    "supportModes": {
+      "preferred": "Best support",
+      "bestEffort": "Best effort",
+      "delegated": "Depends on external client"
+    },
     "viewOnlyEnabled": "View only",
     "viewOnlyDisabled": "Interactive control",
     "errorTitle": "Failed to launch the VNC session",
@@ -1039,6 +1068,9 @@
     "status": {
       "connecting": "Starting VNC client...",
       "connected": "VNC client started",
+      "connectedManaged": "VNC client running",
+      "connectedExternal": "VNC client opened externally",
+      "dismissedExternal": "Session removed from the app",
       "disconnected": "Session closed",
       "error": "Launch error"
     }

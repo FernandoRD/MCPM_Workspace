@@ -77,13 +77,13 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 
 ## O que o app faz hoje
 
-- Cadastro de hosts com protocolo `SSH`, `Telnet` ou `RDP`, além de `grupos`, `tags`, `notas`, `cores`, `jump host` e presets de compatibilidade SSH
+- Cadastro de hosts com protocolo `SSH`, `Telnet`, `RDP` ou `VNC`, além de `grupos`, `tags`, `notas`, `cores`, `jump host` e presets de compatibilidade SSH
 - Credenciais reutilizáveis separadas dos hosts
 - Chaves SSH próprias, com geração de fingerprint e vínculo por credencial
 - Terminal integrado com `xterm.js`, múltiplas abas com reorganização por drag and drop, split pane e reanexação de sessão por aba
-- Página dedicada para sessões `RDP`, com monitoramento da sessão lançada no launcher nativo do sistema ou no viewer interno
+- Página dedicada para sessões `RDP` e `VNC`, com monitoramento completo para clientes gerenciados pelo app e comportamento explícito quando a sessão é repassada para um launcher externo
 - SFTP integrado para hosts `SSH`, com navegação remota, upload, download, rename, delete e mkdir
-- `Quick Connect` na command palette para conexões temporárias `SSH`, `Telnet` e `RDP` sem salvar host
+- `Quick Connect` na command palette para conexões temporárias `SSH`, `Telnet`, `RDP` e `VNC` sem salvar host
 - Opção para abrir sessões na `mesma janela` ou no `terminal do sistema` (SSH/Telnet) e em `janelas dedicadas` (RDP/VNC)
 - Dashboard com filtros por grupo/tag, ordenação e edição em massa de `credencial`, `grupo` e `tags`
 - Importação em massa de hosts via `.csv`, com template/export de exemplo, preview e merge controlado
@@ -96,7 +96,7 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 - MFA/TOTP por host `SSH`
 - Interface traduzida para `pt-BR` e `en-US`
 
-Hoje o app já opera como `Multi-Protocol Connection Manager`, com `SSH` e `Telnet` compartilhando a infraestrutura de terminal e `RDP` usando uma rota própria para abrir o launcher nativo da plataforma ou o viewer interno empacotado com o app.
+Hoje o app já opera como `Multi-Protocol Connection Manager`, com `SSH` e `Telnet` compartilhando a infraestrutura de terminal, `RDP` usando uma rota própria para abrir o launcher nativo da plataforma ou o viewer interno empacotado com o app, e `VNC` usando um fluxo dedicado para acionar clientes externos com transparência sobre o que o app consegue ou não monitorar.
 
 O cliente RDP interno está em [clients/internal-rdp-client/README.md](/home/fernando/Documentos/ssh_vault/clients/internal-rdp-client/README.md). Esse cliente já consegue conectar, autenticar, renderizar a sessão remota, enviar input e capturar screenshots, e pode ser acionado pelo app principal quando o modo de abertura interno está ativo.
 
@@ -108,6 +108,8 @@ O cliente RDP interno está em [clients/internal-rdp-client/README.md](/home/fer
   Terminal interativo com múltiplas abas, quick connect, workspaces, preservação de sessão entre trocas de aba e suporte ao cadastro/import em massa via `.csv`.
 - `RDP`
   Sessão gráfica via launcher nativo ou viewer interno experimental, quick connect, abertura em aba ou janela dedicada, escolha de cliente no Linux para o modo nativo, opções globais de resolução, fullscreen, multimonitor, clipboard, áudio e certificado, além de suporte ao cadastro/import em massa via `.csv`.
+- `VNC`
+  Sessão gráfica via launcher externo, quick connect, abertura em aba ou janela dedicada, escolha de cliente preferido no Linux, opções globais de fullscreen e view-only, além de indicação explícita quando o cliente foi apenas delegado ao sistema e não pode ser monitorado pelo app.
 - `SFTP`
   Continua sendo um recurso derivado de `SSH`, então não aparece para hosts `Telnet`.
 

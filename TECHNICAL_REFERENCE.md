@@ -649,6 +649,46 @@ Regras práticas:
 - [x] Consolidar documentação final para usuário e manutenção
   A matriz de compatibilidade e a política do viewer interno foram consolidadas nesta referência técnica, no README e na UI de configurações.
 
+### Sessões VNC nativas
+
+- Página: [VncPage.tsx](/home/fernando/Documentos/ssh_vault/src/pages/VncPage.tsx)
+- Backend: [vnc.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/vnc.rs)
+- Linux:
+  `auto`, `TigerVNC`, `Remmina`, `KRDC`, `Vinagre` e `system`
+- Windows:
+  abertura via associação do esquema `vnc://`
+- macOS:
+  abertura via `open vnc://...`
+
+#### Matriz de preferências visuais VNC
+
+- `fullscreen`
+  Melhor com `TigerVNC`; nos demais clientes o app trata como melhor esforço ou apenas delega para o launcher externo.
+- `viewOnly`
+  Melhor com `TigerVNC`; nos demais clientes o comportamento depende do suporte do aplicativo externo.
+
+Regras práticas atuais:
+
+- `TigerVNC`, `Remmina`, `KRDC` e `Vinagre`
+  Quando iniciados diretamente como processo filho do app, permitem monitoramento de ciclo de vida e tentativa de encerramento a partir da UI.
+- `system` no Linux, associação no Windows e `open` no macOS
+  Funcionam como launcher externo. O app consegue disparar o cliente, mas não consegue confirmar com segurança quando ele foi fechado nem encerrá-lo por você.
+- `password`
+  No estado atual, a senha VNC permanece como contexto local no app. Ela não é injetada automaticamente na maioria dos clientes externos, então o prompt de autenticação ainda pode reaparecer.
+- `fullscreen` e `view-only`
+  Têm melhor aderência no `TigerVNC`. Nos demais clientes, dependem do suporte e do comportamento do aplicativo externo.
+
+#### Checklist de fechamento do VNC
+
+- [x] Diferenciar processo gerenciado de launcher externo
+  O contrato de sessão agora informa explicitamente quando o app consegue monitorar ou encerrar o cliente.
+- [x] Expor a aderência das preferências visuais na UI
+  A página VNC agora mostra o nível de suporte esperado para `fullscreen` e `view-only` conforme o cliente efetivamente usado.
+- [x] Ampliar cobertura de testes do backend VNC
+  O backend agora tem builders testáveis para argumentos e URIs de cada cliente, além de testes unitários cobrindo suporte por cliente e preview de comando.
+- [ ] Validar a matriz em clientes reais
+  Ainda falta confirmar em ambiente real o comportamento prático de `TigerVNC`, `Remmina`, `KRDC`, `Vinagre` e launchers associados do sistema.
+
 ### Health check e fingerprints
 
 - Página: [Health.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Health.tsx)

@@ -127,68 +127,6 @@ export function Settings() {
             </div>
           </Section>
 
-          {/* VNC */}
-          <Section title={t("settings.sections.vnc")}>
-            <div className="flex flex-col gap-4">
-              <p className="text-sm text-[var(--text-secondary)]">
-                {t("settings.vnc.description")}
-              </p>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="max-w-sm">
-                  <Select
-                    id="linuxVncClient"
-                    label={t("settings.vnc.linuxClient")}
-                    value={settings.vnc.linuxClient}
-                    onChange={(e) => updateVnc({ linuxClient: e.target.value as LinuxVncClient })}
-                  >
-                    <option value="auto">{t("settings.vnc.clients.auto")}</option>
-                    <option value="tigervnc">{t("settings.vnc.clients.tigervnc")}</option>
-                    <option value="remmina">{t("settings.vnc.clients.remmina")}</option>
-                    <option value="krdc">{t("settings.vnc.clients.krdc")}</option>
-                    <option value="vinagre">{t("settings.vnc.clients.vinagre")}</option>
-                    <option value="system">{t("settings.vnc.clients.system")}</option>
-                  </Select>
-                  <p className="mt-1 text-xs text-[var(--text-muted)]">
-                    {t("settings.vnc.linuxClientHint")}
-                  </p>
-                </div>
-
-                <label className="flex flex-col gap-1">
-                  <span className="text-sm font-medium text-[var(--text-primary)]">
-                    {t("settings.vnc.displayMode")}
-                  </span>
-                  <Select
-                    id="vncDisplayMode"
-                    value={settings.vnc.fullscreen ? "fullscreen" : "windowed"}
-                    onChange={(e) => updateVnc({ fullscreen: e.target.value === "fullscreen" })}
-                  >
-                    <option value="windowed">{t("settings.vnc.displayModes.windowed")}</option>
-                    <option value="fullscreen">{t("settings.vnc.displayModes.fullscreen")}</option>
-                  </Select>
-                </label>
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={settings.vnc.viewOnly}
-                    onChange={(e) => updateVnc({ viewOnly: e.target.checked })}
-                    className="accent-[var(--accent)] w-4 h-4"
-                  />
-                  <span className="text-sm text-[var(--text-primary)]">
-                    {t("settings.vnc.viewOnly")}
-                  </span>
-                </label>
-              </div>
-
-              <p className="text-xs text-[var(--text-muted)]">
-                {t("settings.vnc.optionsHint")}
-              </p>
-            </div>
-          </Section>
-
           {/* Language */}
           <Section title={t("settings.sections.language")}>
             <div className="max-w-xs">
@@ -210,9 +148,7 @@ export function Settings() {
           {/* Terminal */}
           <Section title={t("settings.sections.terminal")}>
             <div className="flex flex-col gap-5">
-
-              {/* Fonte */}
-              <div>
+              <SettingPanel>
                 <label className="text-sm font-medium text-[var(--text-primary)] block mb-2">
                   {t("settings.terminal.fontFamily")}
                 </label>
@@ -227,7 +163,7 @@ export function Settings() {
                           "relative flex flex-col items-start gap-1 rounded-lg border-2 px-3 py-2.5 text-left transition-all",
                           selected
                             ? "border-[var(--accent)] bg-[var(--accent-subtle)]"
-                            : "border-[var(--border)] bg-[var(--bg-secondary)] hover:border-[var(--text-muted)]"
+                            : "border-[var(--border)] bg-[var(--bg-primary)] hover:border-[var(--text-muted)]"
                         )}
                       >
                         {selected && (
@@ -246,90 +182,96 @@ export function Settings() {
                     );
                   })}
                 </div>
-              </div>
+              </SettingPanel>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-[var(--text-primary)] block mb-1">
-                    {t("settings.terminal.fontSize")}
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="range"
-                      min={10}
-                      max={24}
-                      value={settings.terminal.fontSize}
-                      onChange={(e) => updateTerminal({ fontSize: parseInt(e.target.value) })}
-                      className="flex-1 accent-[var(--accent)]"
-                    />
-                    <span className="text-sm font-mono text-[var(--text-secondary)] w-8">
-                      {settings.terminal.fontSize}
-                    </span>
+              <div className="grid gap-4 xl:grid-cols-2">
+                <SettingPanel>
+                  <div className="grid gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-[var(--text-primary)] block mb-1">
+                        {t("settings.terminal.fontSize")}
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="range"
+                          min={10}
+                          max={24}
+                          value={settings.terminal.fontSize}
+                          onChange={(e) => updateTerminal({ fontSize: parseInt(e.target.value) })}
+                          className="flex-1 accent-[var(--accent)]"
+                        />
+                        <span className="text-sm font-mono text-[var(--text-secondary)] w-8">
+                          {settings.terminal.fontSize}
+                        </span>
+                      </div>
+                    </div>
+
+                    <Select
+                      id="cursorStyle"
+                      label={t("settings.terminal.cursorStyle")}
+                      value={settings.terminal.cursorStyle}
+                      onChange={(e) =>
+                        updateTerminal({ cursorStyle: e.target.value as "block" | "underline" | "bar" })
+                      }
+                    >
+                      <option value="block">{t("settings.terminal.cursorStyles.block")}</option>
+                      <option value="underline">{t("settings.terminal.cursorStyles.underline")}</option>
+                      <option value="bar">{t("settings.terminal.cursorStyles.bar")}</option>
+                    </Select>
+
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={settings.terminal.cursorBlink}
+                        onChange={(e) => updateTerminal({ cursorBlink: e.target.checked })}
+                        className="accent-[var(--accent)] w-4 h-4"
+                      />
+                      <span className="text-sm text-[var(--text-primary)]">
+                        {t("settings.terminal.cursorBlink")}
+                      </span>
+                    </label>
                   </div>
-                </div>
+                </SettingPanel>
 
-                <Select
-                  id="cursorStyle"
-                  label={t("settings.terminal.cursorStyle")}
-                  value={settings.terminal.cursorStyle}
-                  onChange={(e) =>
-                    updateTerminal({ cursorStyle: e.target.value as "block" | "underline" | "bar" })
-                  }
-                >
-                  <option value="block">{t("settings.terminal.cursorStyles.block")}</option>
-                  <option value="underline">{t("settings.terminal.cursorStyles.underline")}</option>
-                  <option value="bar">{t("settings.terminal.cursorStyles.bar")}</option>
-                </Select>
+                <SettingPanel>
+                  <div className="grid gap-4">
+                    <div>
+                      <label className="text-sm font-medium text-[var(--text-primary)] block mb-1">
+                        {t("settings.terminal.scrollback")}
+                      </label>
+                      <input
+                        type="number"
+                        min={500}
+                        max={50000}
+                        step={500}
+                        value={settings.terminal.scrollback}
+                        onChange={(e) =>
+                          updateTerminal({ scrollback: parseInt(e.target.value) || 5000 })
+                        }
+                        className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-focus)]"
+                      />
+                    </div>
 
-                <div className="col-span-2">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={settings.terminal.cursorBlink}
-                      onChange={(e) => updateTerminal({ cursorBlink: e.target.checked })}
-                      className="accent-[var(--accent)] w-4 h-4"
-                    />
-                    <span className="text-sm text-[var(--text-primary)]">
-                      {t("settings.terminal.cursorBlink")}
-                    </span>
-                  </label>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium text-[var(--text-primary)] block mb-1">
-                    {t("settings.terminal.scrollback")}
-                  </label>
-                  <input
-                    type="number"
-                    min={500}
-                    max={50000}
-                    step={500}
-                    value={settings.terminal.scrollback}
-                    onChange={(e) =>
-                      updateTerminal({ scrollback: parseInt(e.target.value) || 5000 })
-                    }
-                    className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-focus)]"
-                  />
-                </div>
-
-                <div className="col-span-2">
-                  <Select
-                    id="sessionOpenMode"
-                    label={t("settings.terminal.sessionOpenMode")}
-                    value={settings.terminal.sessionOpenMode}
-                    onChange={(e) =>
-                      updateTerminal({
-                        sessionOpenMode: e.target.value as "tab" | "window",
-                      })
-                    }
-                  >
-                    <option value="tab">{t("settings.terminal.sessionOpenModes.tab")}</option>
-                    <option value="window">{t("settings.terminal.sessionOpenModes.window")}</option>
-                  </Select>
-                  <p className="mt-1 text-xs text-[var(--text-muted)]">
-                    {t("settings.terminal.sessionOpenModeHint")}
-                  </p>
-                </div>
+                    <div>
+                      <Select
+                        id="sessionOpenMode"
+                        label={t("settings.terminal.sessionOpenMode")}
+                        value={settings.terminal.sessionOpenMode}
+                        onChange={(e) =>
+                          updateTerminal({
+                            sessionOpenMode: e.target.value as "tab" | "window",
+                          })
+                        }
+                      >
+                        <option value="tab">{t("settings.terminal.sessionOpenModes.tab")}</option>
+                        <option value="window">{t("settings.terminal.sessionOpenModes.window")}</option>
+                      </Select>
+                      <p className="mt-1 text-xs text-[var(--text-muted)]">
+                        {t("settings.terminal.sessionOpenModeHint")}
+                      </p>
+                    </div>
+                  </div>
+                </SettingPanel>
               </div>
             </div>
           </Section>
@@ -340,53 +282,60 @@ export function Settings() {
               <p className="text-sm text-[var(--text-secondary)]">
                 {t("settings.ssh.description")}
               </p>
-              <div className="flex flex-col gap-3 rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] p-4">
-                <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium text-[var(--text-primary)]">
-                      {t("settings.ssh.importConfigTitle")}
-                    </p>
-                    <p className="text-xs text-[var(--text-muted)]">
-                      {t("settings.ssh.importConfigHint")}
-                    </p>
+              <div className="grid gap-4 xl:grid-cols-2">
+                <SettingPanel>
+                  <div className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-[var(--text-primary)]">
+                          {t("settings.ssh.importConfigTitle")}
+                        </p>
+                        <p className="text-xs text-[var(--text-muted)]">
+                          {t("settings.ssh.importConfigHint")}
+                        </p>
+                      </div>
+                      <Button variant="secondary" size="sm" onClick={() => setShowSshConfigImport(true)}>
+                        <FileCode2 size={14} />
+                        {t("settings.ssh.importConfigAction")}
+                      </Button>
+                    </div>
                   </div>
-                  <Button variant="secondary" size="sm" onClick={() => setShowSshConfigImport(true)}>
-                    <FileCode2 size={14} />
-                    {t("settings.ssh.importConfigAction")}
-                  </Button>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1">
-                  <label className="text-sm font-medium text-[var(--text-primary)]">
-                    {t("settings.ssh.keepAliveInterval")}
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={settings.ssh?.keepAliveInterval ?? 60}
-                    onChange={(e) => updateSsh({ keepAliveInterval: Math.max(0, parseInt(e.target.value) || 0) })}
-                    className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-focus)]"
-                  />
-                  <p className="text-xs text-[var(--text-muted)]">
-                    {t("settings.ssh.keepAliveHint")}
-                  </p>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-sm font-medium text-[var(--text-primary)]">
-                    {t("settings.ssh.inactivityTimeout")}
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={settings.ssh?.inactivityTimeout ?? 0}
-                    onChange={(e) => updateSsh({ inactivityTimeout: Math.max(0, parseInt(e.target.value) || 0) })}
-                    className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-focus)]"
-                  />
-                  <p className="text-xs text-[var(--text-muted)]">
-                    {t("settings.ssh.inactivityTimeoutHint")}
-                  </p>
-                </div>
+                </SettingPanel>
+
+                <SettingPanel>
+                  <div className="grid gap-4">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-sm font-medium text-[var(--text-primary)]">
+                        {t("settings.ssh.keepAliveInterval")}
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={settings.ssh?.keepAliveInterval ?? 60}
+                        onChange={(e) => updateSsh({ keepAliveInterval: Math.max(0, parseInt(e.target.value) || 0) })}
+                        className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-focus)]"
+                      />
+                      <p className="text-xs text-[var(--text-muted)]">
+                        {t("settings.ssh.keepAliveHint")}
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-sm font-medium text-[var(--text-primary)]">
+                        {t("settings.ssh.inactivityTimeout")}
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={settings.ssh?.inactivityTimeout ?? 0}
+                        onChange={(e) => updateSsh({ inactivityTimeout: Math.max(0, parseInt(e.target.value) || 0) })}
+                        className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)] focus:outline-none focus:border-[var(--border-focus)]"
+                      />
+                      <p className="text-xs text-[var(--text-muted)]">
+                        {t("settings.ssh.inactivityTimeoutHint")}
+                      </p>
+                    </div>
+                  </div>
+                </SettingPanel>
               </div>
             </div>
           </Section>
@@ -397,161 +346,175 @@ export function Settings() {
               <p className="text-sm text-[var(--text-secondary)]">
                 {t("settings.rdp.description")}
               </p>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="max-w-sm">
-                  <Select
-                    id="rdpLaunchMode"
-                    label={t("settings.rdp.launchMode")}
-                    value={settings.rdp.launchMode}
-                    onChange={(e) => updateRdp({ launchMode: e.target.value as RdpLaunchMode })}
-                  >
-                    <option value="native">{t("settings.rdp.launchModes.native")}</option>
-                    <option value="internalExperimental">{t("settings.rdp.launchModes.internalExperimental")}</option>
-                  </Select>
-                  <p className="mt-1 text-xs text-[var(--text-muted)]">
-                    {t("settings.rdp.launchModeHint")}
-                  </p>
-                  {settings.rdp.launchMode === "internalExperimental" && (
-                    <p className="mt-2 text-xs text-[var(--warning)]">
-                      {t("settings.rdp.internalExperimentalWorkspaceHint")}
+              <div className="grid gap-4 xl:grid-cols-2">
+                <SettingPanel>
+                  <div className="grid gap-4">
+                    <div className="max-w-sm">
+                      <Select
+                        id="rdpLaunchMode"
+                        label={t("settings.rdp.launchMode")}
+                        value={settings.rdp.launchMode}
+                        onChange={(e) => updateRdp({ launchMode: e.target.value as RdpLaunchMode })}
+                      >
+                        <option value="native">{t("settings.rdp.launchModes.native")}</option>
+                        <option value="internalExperimental">{t("settings.rdp.launchModes.internalExperimental")}</option>
+                      </Select>
+                      <p className="mt-1 text-xs text-[var(--text-muted)]">
+                        {t("settings.rdp.launchModeHint")}
+                      </p>
+                      {settings.rdp.launchMode === "internalExperimental" && (
+                        <p className="mt-2 text-xs text-[var(--warning)]">
+                          {t("settings.rdp.internalExperimentalWorkspaceHint")}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="max-w-sm">
+                      <Select
+                        id="linuxRdpClient"
+                        label={t("settings.rdp.linuxClient")}
+                        value={settings.rdp.linuxClient}
+                        onChange={(e) => updateRdp({ linuxClient: e.target.value as LinuxRdpClient })}
+                        disabled={settings.rdp.launchMode === "internalExperimental"}
+                      >
+                        <option value="auto">{t("settings.rdp.clients.auto")}</option>
+                        <option value="xfreerdp">{t("settings.rdp.clients.xfreerdp")}</option>
+                        <option value="wlfreerdp">{t("settings.rdp.clients.wlfreerdp")}</option>
+                        <option value="remmina">{t("settings.rdp.clients.remmina")}</option>
+                        <option value="krdc">{t("settings.rdp.clients.krdc")}</option>
+                      </Select>
+                      <p className="mt-1 text-xs text-[var(--text-muted)]">
+                        {settings.rdp.launchMode === "internalExperimental"
+                          ? t("settings.rdp.linuxClientDisabledHint")
+                          : t("settings.rdp.linuxClientHint")}
+                      </p>
+                    </div>
+                  </div>
+                </SettingPanel>
+
+                <SettingPanel>
+                  <div className="grid gap-4">
+                    <label className="flex flex-col gap-1">
+                      <span className="text-sm font-medium text-[var(--text-primary)]">
+                        {t("settings.rdp.displayMode")}
+                      </span>
+                      <Select
+                        id="rdpDisplayMode"
+                        value={settings.rdp.fullscreen ? "fullscreen" : "windowed"}
+                        onChange={(e) => updateRdp({ fullscreen: e.target.value === "fullscreen" })}
+                      >
+                        <option value="windowed">{t("settings.rdp.displayModes.windowed")}</option>
+                        <option value="fullscreen">{t("settings.rdp.displayModes.fullscreen")}</option>
+                      </Select>
+                    </label>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <label className="flex flex-col gap-1">
+                        <span className="text-sm font-medium text-[var(--text-primary)]">
+                          {t("settings.rdp.width")}
+                        </span>
+                        <Input
+                          type="number"
+                          min={640}
+                          max={7680}
+                          value={settings.rdp.width}
+                          onChange={(e) => updateRdp({ width: Math.max(640, parseInt(e.target.value, 10) || 1600) })}
+                          disabled={settings.rdp.fullscreen}
+                        />
+                      </label>
+
+                      <label className="flex flex-col gap-1">
+                        <span className="text-sm font-medium text-[var(--text-primary)]">
+                          {t("settings.rdp.height")}
+                        </span>
+                        <Input
+                          type="number"
+                          min={480}
+                          max={4320}
+                          value={settings.rdp.height}
+                          onChange={(e) => updateRdp({ height: Math.max(480, parseInt(e.target.value, 10) || 900) })}
+                          disabled={settings.rdp.fullscreen}
+                        />
+                      </label>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={settings.rdp.dynamicResolution}
+                          onChange={(e) => updateRdp({ dynamicResolution: e.target.checked })}
+                          className="accent-[var(--accent)] w-4 h-4"
+                        />
+                        <span className="text-sm text-[var(--text-primary)]">
+                          {t("settings.rdp.dynamicResolution")}
+                        </span>
+                      </label>
+
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={settings.rdp.multimon}
+                          onChange={(e) => updateRdp({ multimon: e.target.checked })}
+                          className="accent-[var(--accent)] w-4 h-4"
+                        />
+                        <span className="text-sm text-[var(--text-primary)]">
+                          {t("settings.rdp.multimon")}
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                </SettingPanel>
+
+                <SettingPanel className="xl:col-span-2">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <label className="flex flex-col gap-1">
+                      <span className="text-sm font-medium text-[var(--text-primary)]">
+                        {t("settings.rdp.certificateMode")}
+                      </span>
+                      <Select
+                        id="rdpCertificateMode"
+                        value={settings.rdp.certificateMode}
+                        onChange={(e) => updateRdp({ certificateMode: e.target.value as AppSettings["rdp"]["certificateMode"] })}
+                      >
+                        <option value="ignore">{t("settings.rdp.certificateModes.ignore")}</option>
+                        <option value="strict">{t("settings.rdp.certificateModes.strict")}</option>
+                      </Select>
+                    </label>
+
+                    <label className="flex flex-col gap-1">
+                      <span className="text-sm font-medium text-[var(--text-primary)]">
+                        {t("settings.rdp.audioMode")}
+                      </span>
+                      <Select
+                        id="rdpAudioMode"
+                        value={settings.rdp.audioMode}
+                        onChange={(e) => updateRdp({ audioMode: e.target.value as AppSettings["rdp"]["audioMode"] })}
+                      >
+                        <option value="redirect">{t("settings.rdp.audioModes.redirect")}</option>
+                        <option value="remote">{t("settings.rdp.audioModes.remote")}</option>
+                        <option value="disabled">{t("settings.rdp.audioModes.disabled")}</option>
+                      </Select>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={settings.rdp.clipboard}
+                        onChange={(e) => updateRdp({ clipboard: e.target.checked })}
+                        className="accent-[var(--accent)] w-4 h-4"
+                      />
+                      <span className="text-sm text-[var(--text-primary)]">
+                        {t("settings.rdp.clipboard")}
+                      </span>
+                    </label>
+
+                    <p className="text-xs text-[var(--text-muted)] md:self-center">
+                      {t("settings.rdp.optionsHint")}
                     </p>
-                  )}
-                </div>
-
-                <div className="max-w-sm">
-                  <Select
-                    id="linuxRdpClient"
-                    label={t("settings.rdp.linuxClient")}
-                    value={settings.rdp.linuxClient}
-                    onChange={(e) => updateRdp({ linuxClient: e.target.value as LinuxRdpClient })}
-                    disabled={settings.rdp.launchMode === "internalExperimental"}
-                  >
-                    <option value="auto">{t("settings.rdp.clients.auto")}</option>
-                    <option value="xfreerdp">{t("settings.rdp.clients.xfreerdp")}</option>
-                    <option value="wlfreerdp">{t("settings.rdp.clients.wlfreerdp")}</option>
-                    <option value="remmina">{t("settings.rdp.clients.remmina")}</option>
-                    <option value="krdc">{t("settings.rdp.clients.krdc")}</option>
-                  </Select>
-                  <p className="mt-1 text-xs text-[var(--text-muted)]">
-                    {settings.rdp.launchMode === "internalExperimental"
-                      ? t("settings.rdp.linuxClientDisabledHint")
-                      : t("settings.rdp.linuxClientHint")}
-                  </p>
-                </div>
-
-                <label className="flex flex-col gap-1">
-                  <span className="text-sm font-medium text-[var(--text-primary)]">
-                    {t("settings.rdp.displayMode")}
-                  </span>
-                  <Select
-                    id="rdpDisplayMode"
-                    value={settings.rdp.fullscreen ? "fullscreen" : "windowed"}
-                    onChange={(e) => updateRdp({ fullscreen: e.target.value === "fullscreen" })}
-                  >
-                    <option value="windowed">{t("settings.rdp.displayModes.windowed")}</option>
-                    <option value="fullscreen">{t("settings.rdp.displayModes.fullscreen")}</option>
-                  </Select>
-                </label>
-
-                <label className="flex flex-col gap-1">
-                  <span className="text-sm font-medium text-[var(--text-primary)]">
-                    {t("settings.rdp.certificateMode")}
-                  </span>
-                  <Select
-                    id="rdpCertificateMode"
-                    value={settings.rdp.certificateMode}
-                    onChange={(e) => updateRdp({ certificateMode: e.target.value as AppSettings["rdp"]["certificateMode"] })}
-                  >
-                    <option value="ignore">{t("settings.rdp.certificateModes.ignore")}</option>
-                    <option value="strict">{t("settings.rdp.certificateModes.strict")}</option>
-                  </Select>
-                </label>
-
-                <label className="flex flex-col gap-1">
-                  <span className="text-sm font-medium text-[var(--text-primary)]">
-                    {t("settings.rdp.width")}
-                  </span>
-                  <Input
-                    type="number"
-                    min={640}
-                    max={7680}
-                    value={settings.rdp.width}
-                    onChange={(e) => updateRdp({ width: Math.max(640, parseInt(e.target.value, 10) || 1600) })}
-                    disabled={settings.rdp.fullscreen}
-                  />
-                </label>
-
-                <label className="flex flex-col gap-1">
-                  <span className="text-sm font-medium text-[var(--text-primary)]">
-                    {t("settings.rdp.height")}
-                  </span>
-                  <Input
-                    type="number"
-                    min={480}
-                    max={4320}
-                    value={settings.rdp.height}
-                    onChange={(e) => updateRdp({ height: Math.max(480, parseInt(e.target.value, 10) || 900) })}
-                    disabled={settings.rdp.fullscreen}
-                  />
-                </label>
-
-                <label className="flex flex-col gap-1 md:col-span-2">
-                  <span className="text-sm font-medium text-[var(--text-primary)]">
-                    {t("settings.rdp.audioMode")}
-                  </span>
-                  <Select
-                    id="rdpAudioMode"
-                    value={settings.rdp.audioMode}
-                    onChange={(e) => updateRdp({ audioMode: e.target.value as AppSettings["rdp"]["audioMode"] })}
-                  >
-                    <option value="redirect">{t("settings.rdp.audioModes.redirect")}</option>
-                    <option value="remote">{t("settings.rdp.audioModes.remote")}</option>
-                    <option value="disabled">{t("settings.rdp.audioModes.disabled")}</option>
-                  </Select>
-                </label>
+                  </div>
+                </SettingPanel>
               </div>
-
-              <div className="grid gap-3 md:grid-cols-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={settings.rdp.dynamicResolution}
-                    onChange={(e) => updateRdp({ dynamicResolution: e.target.checked })}
-                    className="accent-[var(--accent)] w-4 h-4"
-                  />
-                  <span className="text-sm text-[var(--text-primary)]">
-                    {t("settings.rdp.dynamicResolution")}
-                  </span>
-                </label>
-
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={settings.rdp.multimon}
-                    onChange={(e) => updateRdp({ multimon: e.target.checked })}
-                    className="accent-[var(--accent)] w-4 h-4"
-                  />
-                  <span className="text-sm text-[var(--text-primary)]">
-                    {t("settings.rdp.multimon")}
-                  </span>
-                </label>
-
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={settings.rdp.clipboard}
-                    onChange={(e) => updateRdp({ clipboard: e.target.checked })}
-                    className="accent-[var(--accent)] w-4 h-4"
-                  />
-                  <span className="text-sm text-[var(--text-primary)]">
-                    {t("settings.rdp.clipboard")}
-                  </span>
-                </label>
-              </div>
-
-              <p className="text-xs text-[var(--text-muted)]">
-                {t("settings.rdp.optionsHint")}
-              </p>
 
               <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] p-4">
                 <div className="space-y-1">
@@ -607,6 +570,80 @@ export function Settings() {
                     </label>
                   ))}
                 </div>
+              </div>
+            </div>
+          </Section>
+
+          {/* VNC */}
+          <Section title={t("settings.sections.vnc")}>
+            <div className="flex flex-col gap-4">
+              <p className="text-sm text-[var(--text-secondary)]">
+                {t("settings.vnc.description")}
+              </p>
+
+              <div className="grid gap-4 xl:grid-cols-2">
+                <SettingPanel>
+                  <div className="max-w-sm">
+                    <Select
+                      id="linuxVncClient"
+                      label={t("settings.vnc.linuxClient")}
+                      value={settings.vnc.linuxClient}
+                      onChange={(e) => updateVnc({ linuxClient: e.target.value as LinuxVncClient })}
+                    >
+                      <option value="auto">{t("settings.vnc.clients.auto")}</option>
+                      <option value="tigervnc">{t("settings.vnc.clients.tigervnc")}</option>
+                      <option value="remmina">{t("settings.vnc.clients.remmina")}</option>
+                      <option value="krdc">{t("settings.vnc.clients.krdc")}</option>
+                      <option value="vinagre">{t("settings.vnc.clients.vinagre")}</option>
+                      <option value="system">{t("settings.vnc.clients.system")}</option>
+                    </Select>
+                    <p className="mt-1 text-xs text-[var(--text-muted)]">
+                      {t("settings.vnc.linuxClientHint")}
+                    </p>
+                    <p className="mt-2 text-xs text-[var(--text-muted)]">
+                      {t(`settings.vnc.clientNotes.${settings.vnc.linuxClient}`)}
+                    </p>
+                  </div>
+                </SettingPanel>
+
+                <SettingPanel>
+                  <div className="grid gap-4">
+                    <label className="flex flex-col gap-1">
+                      <span className="text-sm font-medium text-[var(--text-primary)]">
+                        {t("settings.vnc.displayMode")}
+                      </span>
+                      <Select
+                        id="vncDisplayMode"
+                        value={settings.vnc.fullscreen ? "fullscreen" : "windowed"}
+                        onChange={(e) => updateVnc({ fullscreen: e.target.value === "fullscreen" })}
+                      >
+                        <option value="windowed">{t("settings.vnc.displayModes.windowed")}</option>
+                        <option value="fullscreen">{t("settings.vnc.displayModes.fullscreen")}</option>
+                      </Select>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={settings.vnc.viewOnly}
+                        onChange={(e) => updateVnc({ viewOnly: e.target.checked })}
+                        className="accent-[var(--accent)] w-4 h-4"
+                      />
+                      <span className="text-sm text-[var(--text-primary)]">
+                        {t("settings.vnc.viewOnly")}
+                      </span>
+                    </label>
+
+                    <div className="flex flex-col gap-2">
+                      <p className="text-xs text-[var(--text-muted)]">
+                        {t("settings.vnc.optionsHint")}
+                      </p>
+                      <p className="text-xs text-[var(--text-muted)]">
+                        {t("settings.vnc.lifecycleHint")}
+                      </p>
+                    </div>
+                  </div>
+                </SettingPanel>
               </div>
             </div>
           </Section>
@@ -888,6 +925,20 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <h2 className="text-base font-semibold text-[var(--text-primary)] mb-4 pb-2 border-b border-[var(--border)]">
         {title}
       </h2>
+      {children}
+    </div>
+  );
+}
+
+function SettingPanel({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] p-4", className)}>
       {children}
     </div>
   );

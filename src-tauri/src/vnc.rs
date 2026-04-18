@@ -10,6 +10,7 @@ use crate::AppState;
 
 struct VncSession {
     child: Option<Child>,
+    can_monitor_lifecycle: bool,
 }
 
 pub struct VncManager {
@@ -33,6 +34,47 @@ pub struct VncLaunchResult {
     password_handled: bool,
     credential_mode: String,
     message: String,
+    client_key: VncClientKey,
+    session_mode: VncSessionMode,
+    can_monitor_lifecycle: bool,
+    can_disconnect_client: bool,
+    fullscreen_support: VncPreferenceSupport,
+    view_only_support: VncPreferenceSupport,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum VncSessionMode {
+    ManagedProcess,
+    ExternalLauncher,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum VncClientKey {
+    TigerVnc,
+    Remmina,
+    Krdc,
+    Vinagre,
+    System,
+    WindowsAssociated,
+    MacOsOpen,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum VncPreferenceSupport {
+    Preferred,
+    BestEffort,
+    Delegated,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VncSessionExistsResult {
+    exists: bool,
+    can_monitor_lifecycle: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -75,6 +117,12 @@ struct LaunchOutcome {
     password_handled: bool,
     credential_mode: String,
     message: String,
+    client_key: VncClientKey,
+    session_mode: VncSessionMode,
+    can_monitor_lifecycle: bool,
+    can_disconnect_client: bool,
+    fullscreen_support: VncPreferenceSupport,
+    view_only_support: VncPreferenceSupport,
 }
 
 fn spawn_with_args(command: &str, args: &[String]) -> io::Result<Child> {
@@ -114,7 +162,7 @@ fn build_vncviewer_target(host: &str, port: u16) -> String {
     format!("{host}::{port}")
 }
 
-fn build_vncviewer_args(host: &str, port: u16, options: &VncConnectOptions) -> Vec<String> {
+fn build_tigervnc_args(host: &str, port: u16, options: &VncConnectOptions) -> Vec<String> {
     let mut args = vec![build_vncviewer_target(host, port)];
 
     if options.fullscreen() {
@@ -126,6 +174,39 @@ fn build_vncviewer_args(host: &str, port: u16, options: &VncConnectOptions) -> V
     }
 
     args
+}
+
+fn build_remmina_args(host: &str, port: u16) -> Vec<String> {
+    vec!["-c".to_string(), build_vnc_uri(host, port)]
+}
+
+fn build_krdc_args(host: &str, port: u16) -> Vec<String> {
+    vec![build_vnc_uri(host, port)]
+}
+
+fn build_vinagre_args(host: &str, port: u16) -> Vec<String> {
+    vec![build_vnc_uri(host, port)]
+}
+
+fn build_system_open_args(host: &str, port: u16) -> Vec<String> {
+    vec![build_vnc_uri(host, port)]
+}
+
+fn preference_support_for_client(client_key: VncClientKey) -> (VncPreferenceSupport, VncPreferenceSupport) {
+    match client_key {
+        VncClientKey::TigerVnc => (
+            VncPreferenceSupport::Preferred,
+            VncPreferenceSupport::Preferred,
+        ),
+        VncClientKey::Remmina | VncClientKey::Krdc | VncClientKey::Vinagre => (
+            VncPreferenceSupport::BestEffort,
+            VncPreferenceSupport::BestEffort,
+        ),
+        VncClientKey::System | VncClientKey::WindowsAssociated | VncClientKey::MacOsOpen => (
+            VncPreferenceSupport::Delegated,
+            VncPreferenceSupport::Delegated,
+        ),
+    }
 }
 
 fn cleanup_session(session: &mut VncSession) {
@@ -140,6 +221,7 @@ fn spawn_linux_client(
     args: &[String],
     preview_args: &[String],
     message: String,
+    client_key: VncClientKey,
 ) -> Result<LaunchOutcome, String> {
     let child = spawn_with_args(command, args).map_err(|e| {
         if e.kind() == io::ErrorKind::NotFound {
@@ -149,6 +231,8 @@ fn spawn_linux_client(
         }
     })?;
 
+    let (fullscreen_support, view_only_support) = preference_support_for_client(client_key);
+
     Ok(LaunchOutcome {
         child: Some(child),
         launcher_name: command.to_string(),
@@ -157,6 +241,12 @@ fn spawn_linux_client(
         password_handled: false,
         credential_mode: "prompt do cliente".to_string(),
         message,
+        client_key,
+        session_mode: VncSessionMode::ManagedProcess,
+        can_monitor_lifecycle: true,
+        can_disconnect_client: true,
+        fullscreen_support,
+        view_only_support,
     })
 }
 
@@ -165,9 +255,10 @@ fn spawn_linux_client_aliases(
     args: &[String],
     preview_args: &[String],
     success_message: impl Fn(&str) -> String,
+    client_key: VncClientKey,
 ) -> Result<LaunchOutcome, String> {
     for command in commands {
-        match spawn_linux_client(command, args, preview_args, success_message(command)) {
+        match spawn_linux_client(command, args, preview_args, success_message(command), client_key) {
             Ok(result) => return Ok(result),
             Err(err) if err.starts_with("__NOT_FOUND__") => continue,
             Err(err) => return Err(err),
@@ -183,11 +274,11 @@ fn launch_vnc_client(
     password_is_set: bool,
     options: &VncConnectOptions,
 ) -> Result<LaunchOutcome, String> {
-    let uri = build_vnc_uri(host, port);
     let preferred_linux_client = options.preferred_linux_client();
 
     cfg_if! {
         if #[cfg(target_os = "windows")] {
+            let uri = build_vnc_uri(host, port);
             let args = vec![
                 "/C".to_string(),
                 "start".to_string(),
@@ -210,9 +301,15 @@ fn launch_vnc_client(
                 } else {
                     "URI VNC enviada ao cliente associado do sistema.".to_string()
                 },
+                client_key: VncClientKey::WindowsAssociated,
+                session_mode: VncSessionMode::ExternalLauncher,
+                can_monitor_lifecycle: false,
+                can_disconnect_client: false,
+                fullscreen_support: VncPreferenceSupport::Delegated,
+                view_only_support: VncPreferenceSupport::Delegated,
             })
         } else if #[cfg(target_os = "macos")] {
-            let args = vec![uri.clone()];
+            let args = build_system_open_args(host, port);
             let _ = spawn_with_args("open", &args)
                 .map_err(|e| format!("Falha ao abrir o cliente VNC padrão: {e}"))?;
 
@@ -228,13 +325,19 @@ fn launch_vnc_client(
                 } else {
                     "URI VNC aberta no cliente padrão do sistema.".to_string()
                 },
+                client_key: VncClientKey::MacOsOpen,
+                session_mode: VncSessionMode::ExternalLauncher,
+                can_monitor_lifecycle: false,
+                can_disconnect_client: false,
+                fullscreen_support: VncPreferenceSupport::Delegated,
+                view_only_support: VncPreferenceSupport::Delegated,
             })
         } else {
-            let vncviewer_args = build_vncviewer_args(host, port, options);
-            let remmina_args = vec!["-c".to_string(), uri.clone()];
-            let krdc_args = vec![uri.clone()];
-            let vinagre_args = vec![uri.clone()];
-            let xdg_open_args = vec![uri.clone()];
+            let tigervnc_args = build_tigervnc_args(host, port, options);
+            let remmina_args = build_remmina_args(host, port);
+            let krdc_args = build_krdc_args(host, port);
+            let vinagre_args = build_vinagre_args(host, port);
+            let xdg_open_args = build_system_open_args(host, port);
 
             let all_clients = ["tigervnc", "remmina", "krdc", "vinagre", "system"];
             let ordered_clients = if preferred_linux_client != "auto" {
@@ -248,8 +351,8 @@ fn launch_vnc_client(
                 let result = match client {
                     "tigervnc" => spawn_linux_client_aliases(
                         &["xtigervncviewer", "vncviewer"],
-                        &vncviewer_args,
-                        &vncviewer_args,
+                        &tigervnc_args,
+                        &tigervnc_args,
                         |command| {
                             if password_is_set {
                                 format!("Cliente {command} iniciado. A senha salva permanece disponível no app, mas o cliente pode solicitá-la novamente.")
@@ -257,24 +360,28 @@ fn launch_vnc_client(
                                 format!("Cliente {command} iniciado.")
                             }
                         },
+                        VncClientKey::TigerVnc,
                     ),
                     "remmina" => spawn_linux_client(
                         "remmina",
                         &remmina_args,
                         &remmina_args,
                         "Cliente remmina iniciado. O aplicativo externo pode solicitar autenticação adicional.".to_string(),
+                        VncClientKey::Remmina,
                     ),
                     "krdc" => spawn_linux_client(
                         "krdc",
                         &krdc_args,
                         &krdc_args,
                         "Cliente KRDC iniciado. O aplicativo externo pode solicitar autenticação adicional.".to_string(),
+                        VncClientKey::Krdc,
                     ),
                     "vinagre" => spawn_linux_client(
                         "vinagre",
                         &vinagre_args,
                         &vinagre_args,
                         "Cliente Vinagre iniciado. O aplicativo externo pode solicitar autenticação adicional.".to_string(),
+                        VncClientKey::Vinagre,
                     ),
                     "system" => {
                         let _ = spawn_with_args("xdg-open", &xdg_open_args).map_err(|e| {
@@ -293,6 +400,12 @@ fn launch_vnc_client(
                             password_handled: false,
                             credential_mode: "cliente externo".to_string(),
                             message: "URI VNC enviada ao cliente padrão configurado no sistema.".to_string(),
+                            client_key: VncClientKey::System,
+                            session_mode: VncSessionMode::ExternalLauncher,
+                            can_monitor_lifecycle: false,
+                            can_disconnect_client: false,
+                            fullscreen_support: VncPreferenceSupport::Delegated,
+                            view_only_support: VncPreferenceSupport::Delegated,
                         })
                     }
                     _ => continue,
@@ -362,6 +475,7 @@ pub async fn vnc_connect(
         session_id,
         VncSession {
             child: launch.child,
+            can_monitor_lifecycle: launch.can_monitor_lifecycle,
         },
     );
 
@@ -372,6 +486,12 @@ pub async fn vnc_connect(
         password_handled: launch.password_handled,
         credential_mode: launch.credential_mode,
         message: launch.message,
+        client_key: launch.client_key,
+        session_mode: launch.session_mode,
+        can_monitor_lifecycle: launch.can_monitor_lifecycle,
+        can_disconnect_client: launch.can_disconnect_client,
+        fullscreen_support: launch.fullscreen_support,
+        view_only_support: launch.view_only_support,
     })
 }
 
@@ -391,25 +511,44 @@ pub async fn vnc_disconnect(
 pub async fn vnc_session_exists(
     state: State<'_, AppState>,
     session_id: String,
-) -> Result<bool, String> {
+) -> Result<VncSessionExistsResult, String> {
     let mut manager = state.vnc.lock().await;
     if let Some(session) = manager.sessions.get_mut(&session_id) {
+        if !session.can_monitor_lifecycle {
+            return Ok(VncSessionExistsResult {
+                exists: true,
+                can_monitor_lifecycle: false,
+            });
+        }
+
         if let Some(child) = session.child.as_mut() {
             return match child.try_wait() {
                 Ok(Some(_)) => {
                     let mut finished = manager.sessions.remove(&session_id).unwrap();
                     cleanup_session(&mut finished);
-                    Ok(false)
+                    Ok(VncSessionExistsResult {
+                        exists: false,
+                        can_monitor_lifecycle: true,
+                    })
                 }
-                Ok(None) => Ok(true),
+                Ok(None) => Ok(VncSessionExistsResult {
+                    exists: true,
+                    can_monitor_lifecycle: true,
+                }),
                 Err(e) => Err(format!("Falha ao consultar processo VNC: {e}")),
             };
         }
 
-        return Ok(true);
+        return Ok(VncSessionExistsResult {
+            exists: true,
+            can_monitor_lifecycle: session.can_monitor_lifecycle,
+        });
     }
 
-    Ok(false)
+    Ok(VncSessionExistsResult {
+        exists: false,
+        can_monitor_lifecycle: false,
+    })
 }
 
 #[cfg(test)]
@@ -427,17 +566,47 @@ mod tests {
     }
 
     #[test]
-    fn builds_vncviewer_args_with_fullscreen_and_view_only() {
+    fn builds_tigervnc_args_with_fullscreen_and_view_only() {
         let options = VncConnectOptions {
             preferred_linux_client: Some("tigervnc".to_string()),
             fullscreen: Some(true),
             view_only: Some(true),
         };
 
-        let args = build_vncviewer_args("server.internal", 5901, &options);
+        let args = build_tigervnc_args("server.internal", 5901, &options);
 
         assert_eq!(args[0], "server.internal::5901");
         assert!(args.contains(&"-FullScreen".to_string()));
         assert!(args.contains(&"-ViewOnly".to_string()));
+    }
+
+    #[test]
+    fn builds_remmina_args_using_connection_uri() {
+        let args = build_remmina_args("server.internal", 5901);
+
+        assert_eq!(args, vec!["-c".to_string(), "vnc://server.internal:5901".to_string()]);
+    }
+
+    #[test]
+    fn preference_support_marks_tigervnc_as_preferred() {
+        let (fullscreen, view_only) = preference_support_for_client(VncClientKey::TigerVnc);
+
+        assert!(matches!(fullscreen, VncPreferenceSupport::Preferred));
+        assert!(matches!(view_only, VncPreferenceSupport::Preferred));
+    }
+
+    #[test]
+    fn preference_support_marks_system_launcher_as_delegated() {
+        let (fullscreen, view_only) = preference_support_for_client(VncClientKey::System);
+
+        assert!(matches!(fullscreen, VncPreferenceSupport::Delegated));
+        assert!(matches!(view_only, VncPreferenceSupport::Delegated));
+    }
+
+    #[test]
+    fn preview_command_quotes_arguments_with_spaces() {
+        let preview = preview_command("open", &["vnc://host name:5900".to_string()]);
+
+        assert_eq!(preview, "open \"vnc://host name:5900\"");
     }
 }

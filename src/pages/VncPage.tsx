@@ -22,6 +22,12 @@ interface VncLaunchResult {
   passwordHandled: boolean;
   credentialMode: string;
   message: string;
+  clientKey: "tigerVnc" | "remmina" | "krdc" | "vinagre" | "system" | "windowsAssociated" | "macOsOpen";
+  sessionMode: "managedProcess" | "externalLauncher";
+  canMonitorLifecycle: boolean;
+  canDisconnectClient: boolean;
+  fullscreenSupport: "preferred" | "bestEffort" | "delegated";
+  viewOnlySupport: "preferred" | "bestEffort" | "delegated";
 }
 
 interface VncPageLaunchInfo {
@@ -31,6 +37,17 @@ interface VncPageLaunchInfo {
   message: string;
   passwordHandled: boolean;
   credentialMode: string;
+  clientKey: "tigerVnc" | "remmina" | "krdc" | "vinagre" | "system" | "windowsAssociated" | "macOsOpen";
+  sessionMode: "managedProcess" | "externalLauncher";
+  canMonitorLifecycle: boolean;
+  canDisconnectClient: boolean;
+  fullscreenSupport: "preferred" | "bestEffort" | "delegated";
+  viewOnlySupport: "preferred" | "bestEffort" | "delegated";
+}
+
+interface VncSessionExistsResult {
+  exists: boolean;
+  canMonitorLifecycle: boolean;
 }
 
 export function VncPage() {
@@ -65,6 +82,9 @@ export function VncPage() {
   const targetHost = sessionConnection?.host ?? host?.host ?? "";
   const targetPort = sessionConnection?.port ?? host?.port ?? 5900;
   const password = sessionConnection?.password ?? credential?.password ?? null;
+  const canMonitorLifecycle = launchInfo?.canMonitorLifecycle ?? false;
+  const canDisconnectClient = launchInfo?.canDisconnectClient ?? false;
+  const sessionMode = launchInfo?.sessionMode ?? "externalLauncher";
 
   useEffect(() => {
     if (!tabId || tab || !bootstrap.standalone) return;
@@ -144,6 +164,7 @@ export function VncPage() {
 
     setLaunching(true);
     setError(null);
+    setLaunchInfo(null);
     updateTabStatus(tabId, "connecting");
 
     try {
@@ -201,6 +222,27 @@ export function VncPage() {
     }
   }, [closeLog, tabId, updateTabStatus]);
 
+  const closeCurrentSessionView = useCallback(async () => {
+    if (!tab) return;
+
+    closeSession(tab.id);
+    if (bootstrap.standalone) {
+      await getCurrentWindow().close().catch(() => navigate(withStandaloneQuery("/", true)));
+      return;
+    }
+
+    navigate(withStandaloneQuery("/", false));
+  }, [bootstrap.standalone, closeSession, navigate, tab]);
+
+  const handleEndSession = useCallback(async () => {
+    if (!tab) return;
+
+    await disconnect("disconnected");
+    if (!canDisconnectClient) {
+      await closeCurrentSessionView();
+    }
+  }, [canDisconnectClient, closeCurrentSessionView, disconnect, tab]);
+
   useEffect(() => {
     if (!tabId || (!host && !sessionConnection) || tab?.status === "connected" || launching) return;
     if (autoConnectRef.current) return;
@@ -209,12 +251,12 @@ export function VncPage() {
   }, [connect, host, launching, sessionConnection, tab?.status, tabId]);
 
   useEffect(() => {
-    if (!tabId || tab?.status !== "connected") return;
+    if (!tabId || tab?.status !== "connected" || !canMonitorLifecycle) return;
 
     const timer = window.setInterval(() => {
-      void invoke<boolean>("vnc_session_exists", { sessionId: tabId })
-        .then((exists) => {
-          if (!exists) {
+      void invoke<VncSessionExistsResult>("vnc_session_exists", { sessionId: tabId })
+        .then((result) => {
+          if (result.canMonitorLifecycle && !result.exists) {
             void disconnect("disconnected");
           }
         })
@@ -222,7 +264,7 @@ export function VncPage() {
     }, 2000);
 
     return () => window.clearInterval(timer);
-  }, [disconnect, tab?.status, tabId]);
+  }, [canMonitorLifecycle, disconnect, tab?.status, tabId]);
 
   useEffect(() => () => {
     if (logIdRef.current) {
@@ -235,6 +277,44 @@ export function VncPage() {
     if (!launchInfo) return null;
     return launchInfo.passwordHandled ? t("vnc.passwordHandled") : t("vnc.passwordPromptExpected");
   }, [launchInfo, t]);
+
+  const sessionModeLabel = useMemo(() => {
+    if (!launchInfo) return "—";
+    return t(`vnc.sessionModes.${launchInfo.sessionMode}`);
+  }, [launchInfo, t]);
+
+  const lifecycleLabel = useMemo(() => {
+    if (!launchInfo) return "—";
+    return t(`vnc.lifecycleModes.${launchInfo.canMonitorLifecycle ? "tracked" : "untracked"}`);
+  }, [launchInfo, t]);
+
+  const fullscreenSupportLabel = useMemo(() => {
+    if (!launchInfo) return "—";
+    return t(`vnc.supportModes.${launchInfo.fullscreenSupport}`);
+  }, [launchInfo, t]);
+
+  const viewOnlySupportLabel = useMemo(() => {
+    if (!launchInfo) return "—";
+    return t(`vnc.supportModes.${launchInfo.viewOnlySupport}`);
+  }, [launchInfo, t]);
+
+  const controlHint = useMemo(() => {
+    if (!launchInfo) return t("vnc.externalClientHint");
+    return launchInfo.canMonitorLifecycle ? t("vnc.managedClientHint") : t("vnc.externalClientHint");
+  }, [launchInfo, t]);
+
+  const statusLabel = useMemo(() => {
+    if (!tab) return "";
+    if (tab.status === "connected") {
+      return t(`vnc.status.${sessionMode === "managedProcess" ? "connectedManaged" : "connectedExternal"}`);
+    }
+    if (tab.status === "disconnected" && sessionMode === "externalLauncher") {
+      return t("vnc.status.dismissedExternal");
+    }
+    return t(`vnc.status.${tab.status}`);
+  }, [sessionMode, t, tab]);
+
+  const endSessionLabel = canDisconnectClient ? t("vnc.disconnectClient") : t("vnc.closeSession");
 
   if (
     !tab &&
@@ -276,9 +356,9 @@ export function VncPage() {
               {launching ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
               {t("vnc.reconnect")}
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => void disconnect()}>
+            <Button variant="ghost" size="sm" onClick={() => void handleEndSession()}>
               <WifiOff size={14} />
-              {t("vnc.disconnect")}
+              {endSessionLabel}
             </Button>
           </div>
         </div>
@@ -295,8 +375,8 @@ export function VncPage() {
               <WifiOff size={18} className="text-[var(--text-muted)]" />
             )}
             <div>
-              <p className="text-sm font-medium text-[var(--text-primary)]">{t(`vnc.status.${tab.status}`)}</p>
-              <p className="text-xs text-[var(--text-muted)]">{t("vnc.externalClientHint")}</p>
+              <p className="text-sm font-medium text-[var(--text-primary)]">{statusLabel}</p>
+              <p className="text-xs text-[var(--text-muted)]">{controlHint}</p>
             </div>
           </div>
         </section>
@@ -312,6 +392,10 @@ export function VncPage() {
               <InfoCard label={t("vnc.executable")} value={launchInfo.executable} />
               <InfoCard label={t("vnc.authentication")} value={securityHint ?? "—"} />
               <InfoCard label={t("vnc.credentialMode")} value={launchInfo.credentialMode} />
+              <InfoCard label={t("vnc.sessionMode")} value={sessionModeLabel} />
+              <InfoCard label={t("vnc.lifecycle")} value={lifecycleLabel} />
+              <InfoCard label={t("vnc.fullscreenSupport")} value={fullscreenSupportLabel} />
+              <InfoCard label={t("vnc.viewOnlySupport")} value={viewOnlySupportLabel} />
               <InfoCard label={t("vnc.address")} value={`${targetHost}:${targetPort}`} />
               <InfoCard label={t("vnc.transport")} value={t("protocols.vnc")} />
               <InfoCard label={t("vnc.display")} value={t(`settings.vnc.displayModes.${vncSettings.fullscreen ? "fullscreen" : "windowed"}`)} />
@@ -345,9 +429,10 @@ export function VncPage() {
               variant="ghost"
               size="sm"
               onClick={() => {
-                void disconnect();
-                closeSession(tab.id);
-                void getCurrentWindow().close().catch(() => navigate(withStandaloneQuery("/", true)));
+                void (async () => {
+                  await disconnect();
+                  await closeCurrentSessionView();
+                })();
               }}
             >
               {t("common.close")}
