@@ -12,7 +12,11 @@ node_modules
 dist
 dist-ssr
 *.local
-experiments/internal-rdp-client/target/debug
+
+# Rust build artifacts
+target/
+src-tauri/target/
+experiments/internal-rdp-client/target/
 
 # Editor directories and files
 .vscode*
