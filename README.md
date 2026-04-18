@@ -6,7 +6,14 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 
 ## Versão atual
 
-`0.3.8`
+`0.3.9`
+
+## Novidades da 0.3.9
+
+- Modo "janela separada" para `SSH` e `Telnet` migrado de WebviewWindow para terminal do sistema: ao abrir em janela separada, o app detecta e lança o emulador de terminal instalado (`gnome-terminal`, `konsole`, `xfce4-terminal`, `alacritty`, `wezterm`, `kitty`, `xterm` no Linux; `Terminal.app` no macOS; `wt` ou `cmd` no Windows) com o comando `ssh` ou `telnet` correto
+- Chaves privadas exportadas para o terminal do sistema são convertidas automaticamente para o formato nativo OpenSSH (`-----BEGIN OPENSSH PRIVATE KEY-----`), resolvendo o erro `error in libcrypto: unsupported` que ocorria com chaves geradas no formato PKCS#8
+- Arquivos de chave temporários são escritos com permissão `0600` e limpos automaticamente na próxima inicialização do app
+- Diretório `experiments/` renomeado para `clients/` em todo o projeto (código, configs e documentação)
 
 ## Novidades da 0.3.8
 
@@ -56,8 +63,8 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 - Novo fluxo de criação com `split button` em `+ Nova Conexão`, mantendo o cadastro individual rápido e adicionando atalhos para importações
 - Tela dedicada para importação em massa por CSV, com modos `Adicionar novos` e `Atualizar existentes`
 - Centralização prática do versionamento: `package.json` passou a ser a fonte principal e o projeto agora inclui um script de sincronização para `Cargo.toml`, `Cargo.lock` e `package-lock.json`
-- Laboratório isolado para cliente RDP interno em `experiments/internal-rdp-client`, com viewer local, screenshot, input básico e tuning de fluidez sem impacto no app principal
-- Decisão atual de produto para RDP: o launcher nativo continua sendo o caminho oficial recomendado; o viewer interno segue experimental, mas agora pode ser empacotado junto com o app compilado
+- Cliente RDP interno em `clients/internal-rdp-client`, com viewer local, screenshot, input básico e tuning de fluidez sem impacto no app principal
+- Decisão atual de produto para RDP: o launcher nativo continua sendo o caminho oficial recomendado; o viewer interno também pode ser empacotado junto com o app compilado
 
 ## Novidades da 0.3.0
 
@@ -74,10 +81,10 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 - Credenciais reutilizáveis separadas dos hosts
 - Chaves SSH próprias, com geração de fingerprint e vínculo por credencial
 - Terminal integrado com `xterm.js`, múltiplas abas com reorganização por drag and drop, split pane e reanexação de sessão por aba
-- Página dedicada para sessões `RDP`, com monitoramento da sessão lançada no launcher nativo do sistema ou no viewer interno experimental
+- Página dedicada para sessões `RDP`, com monitoramento da sessão lançada no launcher nativo do sistema ou no viewer interno
 - SFTP integrado para hosts `SSH`, com navegação remota, upload, download, rename, delete e mkdir
 - `Quick Connect` na command palette para conexões temporárias `SSH`, `Telnet` e `RDP` sem salvar host
-- Opção para abrir sessões na `mesma janela` ou em `janelas dedicadas`
+- Opção para abrir sessões na `mesma janela` ou no `terminal do sistema` (SSH/Telnet) e em `janelas dedicadas` (RDP/VNC)
 - Dashboard com filtros por grupo/tag, ordenação e edição em massa de `credencial`, `grupo` e `tags`
 - Importação em massa de hosts via `.csv`, com template/export de exemplo, preview e merge controlado
 - Acesso às importações direto pelo `+ Nova Conexão`, sem atrapalhar o fluxo principal de cadastro individual
@@ -89,9 +96,9 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 - MFA/TOTP por host `SSH`
 - Interface traduzida para `pt-BR` e `en-US`
 
-Hoje o app já opera como `Multi-Protocol Connection Manager`, com `SSH` e `Telnet` compartilhando a infraestrutura de terminal e `RDP` usando uma rota própria para abrir o launcher nativo da plataforma ou, em modo experimental, o viewer interno empacotado com o app.
+Hoje o app já opera como `Multi-Protocol Connection Manager`, com `SSH` e `Telnet` compartilhando a infraestrutura de terminal e `RDP` usando uma rota própria para abrir o launcher nativo da plataforma ou o viewer interno empacotado com o app.
 
-Em paralelo, o repositório mantém um laboratório isolado para a evolução do cliente RDP interno em [experiments/internal-rdp-client/README.md](/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/README.md). Esse protótipo já consegue conectar, autenticar, renderizar a sessão remota, enviar input e capturar screenshots, continua experimental, e agora também pode ser acionado pelo app principal quando o modo de abertura interno está ativo.
+O cliente RDP interno está em [clients/internal-rdp-client/README.md](/home/fernando/Documentos/ssh_vault/clients/internal-rdp-client/README.md). Esse cliente já consegue conectar, autenticar, renderizar a sessão remota, enviar input e capturar screenshots, e pode ser acionado pelo app principal quando o modo de abertura interno está ativo.
 
 ## Escopo por protocolo
 
@@ -169,7 +176,7 @@ src-tauri/
     totp.rs
 scripts/
   sync-version.mjs
-experiments/
+clients/
   internal-rdp-client/
     README.md
     src/
@@ -241,7 +248,7 @@ Fluxo recomendado para atualizar a versão:
 
 - [README.md](/home/fernando/Documentos/ssh_vault/README.md)
 - [TECHNICAL_REFERENCE.md](/home/fernando/Documentos/ssh_vault/TECHNICAL_REFERENCE.md)
-- [experiments/internal-rdp-client/README.md](/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/README.md)
+- [clients/internal-rdp-client/README.md](/home/fernando/Documentos/ssh_vault/clients/internal-rdp-client/README.md)
 - [melhorias.txt](/home/fernando/Documentos/ssh_vault/melhorias.txt)
 
 ## Situação atual

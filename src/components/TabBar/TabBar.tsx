@@ -109,9 +109,7 @@ export function TabBar() {
     closeSession(tab.id);
     if (remaining.length === 0) {
       if (standalone) {
-        await getCurrentWindow().close().catch(() => {
-          navigate(withStandaloneQuery("/", true));
-        });
+        void getCurrentWindow().close();
         return;
       }
       navigate("/");

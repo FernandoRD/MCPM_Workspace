@@ -508,6 +508,7 @@ export function Operations() {
       const hostAddress = formatHostAddress(host, credential);
 
       if (item.type === "terminal") {
+        const sshKey = credential?.keyId ? getSshKey(credential.keyId) : undefined;
         const route = await launchTerminalSession({
           hostId: host.id,
           hostLabel: host.label,
@@ -515,6 +516,15 @@ export function Operations() {
           openMode: sessionOpenMode,
           openSession,
           standaloneWindow,
+          systemTerminalConnection: {
+            protocol: host.protocol === "telnet" ? "telnet" : "ssh",
+            host: host.host,
+            port: host.port,
+            username: credential?.username ?? host.username ?? "",
+            authMethod: credential?.authMethod ?? host.authMethod ?? "agent",
+            privateKeyContent: sshKey?.privateKeyContent ?? null,
+            privateKeyPassphrase: sshKey?.passphrase ?? null,
+          },
         });
         if (route) createdRoutes.push(route);
         continue;

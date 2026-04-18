@@ -162,7 +162,7 @@ src-tauri/
     totp.rs
     vnc.rs
 
-experiments/
+clients/
   internal-rdp-client/
     README.md
     src/
@@ -326,23 +326,23 @@ Rotas atuais:
 - [Settings.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Settings.tsx)
   Expõe preferências globais de `launchMode`, cliente Linux, resolução, fullscreen, multimonitor, clipboard, áudio, certificado e preferências visuais da sessão com indicação de compatibilidade.
 - [internalRdpViewer.ts](/home/fernando/Documentos/ssh_vault/src/lib/internalRdpViewer.ts)
-  Ponte do frontend para o comando Tauri que abre o viewer interno experimental.
+  Ponte do frontend para o comando Tauri que abre o viewer interno.
 
 ### Base técnica do viewer RDP interno
 
-- [experiments/internal-rdp-client/README.md](/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/README.md)
-  Documento-base do laboratório isolado que continua servindo como base técnica do viewer experimental usado pelo app principal.
-- [experiments/internal-rdp-client/src/mvp_runtime.rs](/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/src/mvp_runtime.rs)
+- [clients/internal-rdp-client/README.md](/home/fernando/Documentos/ssh_vault/clients/internal-rdp-client/README.md)
+  Documento-base do cliente RDP interno, que serve como base técnica do viewer usado pelo app principal.
+- [clients/internal-rdp-client/src/mvp_runtime.rs](/home/fernando/Documentos/ssh_vault/clients/internal-rdp-client/src/mvp_runtime.rs)
   Contrato atual de conexão, perfil de sessão, loop ativo e coleta de regiões alteradas.
-- [experiments/internal-rdp-client/src/viewer_input.rs](/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/src/viewer_input.rs)
+- [clients/internal-rdp-client/src/viewer_input.rs](/home/fernando/Documentos/ssh_vault/clients/internal-rdp-client/src/viewer_input.rs)
   Tradutor de input local do `minifb` para eventos FastPath do RDP.
-- [experiments/internal-rdp-client/src/viewer_renderer.rs](/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/src/viewer_renderer.rs)
+- [clients/internal-rdp-client/src/viewer_renderer.rs](/home/fernando/Documentos/ssh_vault/clients/internal-rdp-client/src/viewer_renderer.rs)
   Buffer local e redraw parcial do viewer.
-- [experiments/internal-rdp-client/src/settings_bridge.rs](/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/src/settings_bridge.rs)
-  Ponte entre o payload vindo do app principal e as configurações efetivamente consumidas pelo viewer experimental.
-- [experiments/internal-rdp-client/src/bin/viewer_mvp.rs](/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/src/bin/viewer_mvp.rs)
+- [clients/internal-rdp-client/src/settings_bridge.rs](/home/fernando/Documentos/ssh_vault/clients/internal-rdp-client/src/settings_bridge.rs)
+  Ponte entre o payload vindo do app principal e as configurações efetivamente consumidas pelo viewer interno.
+- [clients/internal-rdp-client/src/bin/viewer_mvp.rs](/home/fernando/Documentos/ssh_vault/clients/internal-rdp-client/src/bin/viewer_mvp.rs)
   Viewer MVP para conexão real.
-- [experiments/internal-rdp-client/src/bin/screenshot_mvp.rs](/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/src/bin/screenshot_mvp.rs)
+- [clients/internal-rdp-client/src/bin/screenshot_mvp.rs](/home/fernando/Documentos/ssh_vault/clients/internal-rdp-client/src/bin/screenshot_mvp.rs)
   Captura de screenshot remoto.
 
 ### Sync / backup / estado portátil
@@ -574,7 +574,25 @@ Arquivo principal: [ssh.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/ss
 
 Para `RDP`, o formato suportado é `rdp://usuario@host:porta` e a sessão usa o mesmo fluxo dos hosts persistidos, respeitando o `launchMode` ativo entre launcher nativo e viewer interno experimental.
 
-### Sessões em janela dedicada
+### Sessões em janela separada / terminal do sistema
+
+A configuração `sessionOpenMode` aceita `"tab"` ou `"window"`. O comportamento de `"window"` difere por protocolo:
+
+**SSH e Telnet**
+
+Ao invés de abrir uma `WebviewWindow` com a aplicação React completa, o app detecta o emulador de terminal instalado e lança um processo externo com o comando `ssh` ou `telnet` correto. Isso elimina os problemas anteriores de rota dupla (Dashboard aparecendo no logout) e de sessão reiniciada ao digitar `exit`.
+
+- Módulo Rust: [system_terminal.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/system_terminal.rs)
+- Comando Tauri: `ssh_launch_system_terminal`
+- Emuladores detectados (Linux): `$TERMINAL` env, `gnome-terminal`, `konsole`, `xfce4-terminal`, `alacritty`, `wezterm`, `kitty`, `xterm`
+- Emuladores detectados (macOS): `Terminal.app` via AppleScript
+- Emuladores detectados (Windows): `wt` (Windows Terminal) ou `cmd`
+- Chaves privadas: decodificadas via `russh_keys`, re-serializadas para o formato nativo OpenSSH (`-----BEGIN OPENSSH PRIVATE KEY-----`) antes de gravar o arquivo temporário — resolve o erro `error in libcrypto: unsupported` de versões mais antigas do cliente OpenSSH
+- Arquivos temporários de chave: `$TMPDIR/ssh_vault_keys/key_<uuid>`, permissão `0600`, limpos na próxima inicialização do app via `cleanup_old_temp_keys()`
+
+**RDP e VNC**
+
+Continuam usando `WebviewWindow` com a rota dedicada da sessão e o mecanismo de bootstrap por `quickConnectBootstrapId`.
 
 - Configuração em [Settings.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Settings.tsx)
 - Lançamento e bootstrap em [sessionLauncher.ts](/home/fernando/Documentos/ssh_vault/src/lib/sessionLauncher.ts) e [windowMode.ts](/home/fernando/Documentos/ssh_vault/src/lib/windowMode.ts)
@@ -689,14 +707,14 @@ Regras da importação CSV:
 - Hook: [useAutoSync.ts](/home/fernando/Documentos/ssh_vault/src/hooks/useAutoSync.ts)
 - Dispara push periódico com base nas settings atuais
 
-## 12. Laboratório RDP interno
+## 12. Cliente RDP interno
 
-O cliente RDP interno já pode ser acionado pelo app principal em modo experimental. Ainda assim, o repositório mantém um laboratório isolado em [experiments/internal-rdp-client/README.md](/home/fernando/Documentos/ssh_vault/experiments/internal-rdp-client/README.md) para permitir evolução técnica contínua sem acoplar toda a experimentação diretamente ao restante da aplicação.
+O cliente RDP interno pode ser acionado pelo app principal como alternativa ao launcher nativo. O código fica em [clients/internal-rdp-client/README.md](/home/fernando/Documentos/ssh_vault/clients/internal-rdp-client/README.md) como projeto Rust separado, permitindo evolução técnica contínua sem impacto no restante da aplicação.
 
 Decisão atual de produto:
 
 - o launcher RDP nativo continua sendo o caminho oficial recomendado
-- o viewer interno permanece experimental
+- o viewer interno é uma alternativa suportada, empacotável junto com o app
 - o binário do protótipo pode ser incluído no app compilado por meio do empacotamento de recursos do Tauri
 - o app principal pode abrir esse viewer quando `launchMode = internalExperimental`
 
@@ -766,7 +784,7 @@ Arquivos principais:
 
 Estado atual:
 
-- versão de referência atual do app: `0.3.8`
+- versão de referência atual do app: `0.3.9`
 - `package.json` é a fonte principal da versão do app
 - `tauri.conf.json` lê a versão a partir de `../package.json`
 - o frontend lê a versão a partir de `package.json` via `appInfo.ts`

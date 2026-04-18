@@ -7,6 +7,16 @@ import { notify } from "@/lib/notifications";
 import { APP_NAME } from "@/lib/appInfo";
 import { sanitizeSessionConnection } from "@/lib/inputSanitizers";
 
+interface SystemTerminalConnection {
+  protocol: "ssh" | "telnet";
+  host: string;
+  port: number;
+  username: string;
+  authMethod: string;
+  privateKeyContent?: string | null;
+  privateKeyPassphrase?: string | null;
+}
+
 interface LaunchTerminalSessionParams {
   hostId: string;
   hostLabel: string;
@@ -14,6 +24,8 @@ interface LaunchTerminalSessionParams {
   openMode: AppSettings["terminal"]["sessionOpenMode"];
   openSession: (hostId: string, hostLabel: string, hostAddress: string) => string;
   standaloneWindow?: boolean;
+  /** Obrigatório quando openMode === "system-terminal" */
+  systemTerminalConnection?: SystemTerminalConnection;
 }
 
 interface LaunchQuickConnectSessionParams {
@@ -108,22 +120,27 @@ export async function launchTerminalSession({
   openMode,
   openSession,
   standaloneWindow = false,
+  systemTerminalConnection,
 }: LaunchTerminalSessionParams): Promise<string | null> {
   if (openMode === "window") {
-    const sessionId = uuidv4();
-    const route = buildSessionRoute("terminal", sessionId, {
-      standalone: true,
-      hostId,
-      hostLabel,
-      hostAddress,
-    });
-
-    const opened = await createStandaloneSessionWindow(route, hostLabel, sessionId, "terminal");
-    if (opened) return null;
-
-    // Fallback: janela não pôde ser criada (ex: restrição do Wayland ou permissão ausente).
-    // Abre a sessão em aba no lugar.
-    notify(APP_NAME, `Não foi possível abrir janela separada para ${hostLabel}. Abrindo em aba.`);
+    if (!systemTerminalConnection) {
+      notify(APP_NAME, `Não foi possível abrir terminal externo para ${hostLabel}: dados de conexão ausentes.`);
+      return null;
+    }
+    try {
+      await invoke("ssh_launch_system_terminal", {
+        protocol: systemTerminalConnection.protocol,
+        host: systemTerminalConnection.host,
+        port: systemTerminalConnection.port,
+        username: systemTerminalConnection.username,
+        authMethod: systemTerminalConnection.authMethod,
+        privateKeyContent: systemTerminalConnection.privateKeyContent ?? null,
+        privateKeyPassphrase: systemTerminalConnection.privateKeyPassphrase ?? null,
+      });
+    } catch (err) {
+      notify(APP_NAME, `Erro ao abrir terminal externo para ${hostLabel}: ${err}`);
+    }
+    return null;
   }
 
   const sessionId = openSession(hostId, hostLabel, hostAddress);
@@ -145,6 +162,26 @@ export async function launchQuickConnectSession({
   standaloneWindow = false,
 }: LaunchQuickConnectSessionParams): Promise<string | null> {
   const sanitizedConnection = sanitizeSessionConnection(connection);
+
+  // Para sessões de terminal em modo janela separada: usa o terminal do sistema
+  // em vez de abrir uma WebviewWindow com a app completa.
+  if (openMode === "window" && sessionType === "terminal") {
+    try {
+      await invoke("ssh_launch_system_terminal", {
+        protocol: sanitizedConnection.protocol === "telnet" ? "telnet" : "ssh",
+        host: sanitizedConnection.host,
+        port: sanitizedConnection.port,
+        username: sanitizedConnection.username,
+        authMethod: sanitizedConnection.authMethod,
+        privateKeyContent: sanitizedConnection.privateKeyContent ?? null,
+        privateKeyPassphrase: sanitizedConnection.passphrase ?? null,
+      });
+    } catch (err) {
+      notify(APP_NAME, `Erro ao abrir terminal externo: ${err}`);
+    }
+    return null;
+  }
+
   const needsBootstrap = openMode === "window" || standaloneWindow;
   const bootstrapId = needsBootstrap ? uuidv4() : undefined;
 

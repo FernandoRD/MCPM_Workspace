@@ -569,10 +569,10 @@
       "cursorBlink": "Blinking cursor",
       "scrollback": "Scrollback lines",
       "sessionOpenMode": "Open SSH sessions in",
-      "sessionOpenModeHint": "Choose whether new terminal sessions open as tabs in the current window or in a dedicated window.",
+      "sessionOpenModeHint": "Choose whether new terminal sessions open as tabs in the current window or in the system terminal.",
       "sessionOpenModes": {
         "tab": "Current window",
-        "window": "Separate windows"
+        "window": "System terminal"
       },
       "cursorStyles": {
         "block": "Block",

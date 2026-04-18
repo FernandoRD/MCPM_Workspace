@@ -140,13 +140,11 @@ export function TerminalPage() {
     if (status === "error") {
       notify(APP_NAME, t("notifications.terminalDropped", { host: hostLabelRef.current }));
     }
-    if (tabId) closeSession(tabId);
     if (bootstrap.standalone) {
-      void getCurrentWindow().close().catch(() => {
-        navigate(withStandaloneQuery("/", true));
-      });
+      void getCurrentWindow().close();
       return;
     }
+    if (tabId) closeSession(tabId);
     navigate("/");
   }, [bootstrap.standalone, tabId, closeSession, navigate, closeLog, t]);
 

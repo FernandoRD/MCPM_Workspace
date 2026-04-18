@@ -569,10 +569,10 @@
       "cursorBlink": "Cursor piscante",
       "scrollback": "Linhas de histórico",
       "sessionOpenMode": "Abrir sessões SSH em",
-      "sessionOpenModeHint": "Escolha se novas sessões de terminal devem abrir como aba na janela atual ou em uma janela dedicada.",
+      "sessionOpenModeHint": "Escolha se novas sessões de terminal devem abrir como aba na janela atual ou no terminal do sistema.",
       "sessionOpenModes": {
         "tab": "Mesma janela",
-        "window": "Janelas separadas"
+        "window": "Terminal do sistema"
       },
       "cursorStyles": {
         "block": "Bloco",

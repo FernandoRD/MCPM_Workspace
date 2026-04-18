@@ -44,7 +44,8 @@
       "WebFetch(domain:v2.tauri.app)"
     ],
     "additionalDirectories": [
-      "/tmp"
+      "/tmp",
+      "/home/fernando/Documentos/ssh_vault/experiments"
     ]
   }
 }

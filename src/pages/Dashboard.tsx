@@ -28,6 +28,7 @@ import { useHostsStore } from "@/store/hosts";
 import { useUIStore, DashboardSortBy } from "@/store/uiStore";
 import { useSessionsStore } from "@/store/sessions";
 import { useCredentialsStore } from "@/store/credentials";
+import { useSshKeysStore } from "@/store/sshKeys";
 import { useSettingsStore } from "@/store/settings";
 import { Credential, HostEntry } from "@/types";
 import { Button } from "@/components/ui/Button";
@@ -67,6 +68,7 @@ export function Dashboard() {
   const openVncTab = useSessionsStore((s) => s.openVncTab);
   const credentials = useCredentialsStore((s) => s.credentials);
   const getCredential = useCredentialsStore((s) => s.getCredential);
+  const getSshKey = useSshKeysStore((s) => s.getSshKey);
   const locale = useSettingsStore((s) => s.settings.locale);
   const sessionOpenMode = useSettingsStore((s) => s.settings.terminal.sessionOpenMode);
   const savedGroups = useSettingsStore((s) => s.settings.groups);
@@ -177,6 +179,7 @@ export function Dashboard() {
       if (route) navigate(route);
       return;
     }
+    const sshKey = credential?.keyId ? getSshKey(credential.keyId) : undefined;
     const route = await launchTerminalSession({
       hostId: host.id,
       hostLabel: host.label,
@@ -184,6 +187,15 @@ export function Dashboard() {
       openMode: sessionOpenMode,
       openSession,
       standaloneWindow,
+      systemTerminalConnection: {
+        protocol: host.protocol === "telnet" ? "telnet" : "ssh",
+        host: host.host,
+        port: host.port,
+        username: credential?.username ?? host.username ?? "",
+        authMethod: credential?.authMethod ?? host.authMethod ?? "agent",
+        privateKeyContent: sshKey?.privateKeyContent ?? null,
+        privateKeyPassphrase: sshKey?.passphrase ?? null,
+      },
     });
     if (route) navigate(route);
   };

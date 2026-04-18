@@ -45,17 +45,17 @@ Binário atual:
 Execução:
 
 ```bash
-cargo run --manifest-path experiments/internal-rdp-client/Cargo.toml --bin screenshot_mvp -- \
+cargo run --manifest-path clients/internal-rdp-client/Cargo.toml --bin screenshot_mvp -- \
   --host <HOST> \
   --username <USERNAME> \
   --password <PASSWORD> \
-  --output experiments/internal-rdp-client/out/screenshot.png
+  --output clients/internal-rdp-client/out/screenshot.png
 ```
 
 Viewer local:
 
 ```bash
-cargo run --manifest-path experiments/internal-rdp-client/Cargo.toml --bin viewer_mvp -- \
+cargo run --manifest-path clients/internal-rdp-client/Cargo.toml --bin viewer_mvp -- \
   --host <HOST> \
   --username <USERNAME> \
   --password <PASSWORD> \
@@ -159,7 +159,7 @@ O viewer oculta o cursor local e passa a renderizar o ponteiro remoto na própri
 ## Estrutura
 
 ```text
-experiments/internal-rdp-client/
+clients/internal-rdp-client/
   Cargo.toml
   README.md
   src/
@@ -183,19 +183,19 @@ experiments/internal-rdp-client/
 ## Como validar
 
 ```bash
-cargo test --manifest-path experiments/internal-rdp-client/Cargo.toml
+cargo test --manifest-path clients/internal-rdp-client/Cargo.toml
 ```
 
 ## Como gerar um screenshot real
 
 ```bash
-mkdir -p experiments/internal-rdp-client/out
+mkdir -p clients/internal-rdp-client/out
 
-cargo run --manifest-path experiments/internal-rdp-client/Cargo.toml --bin screenshot_mvp -- \
+cargo run --manifest-path clients/internal-rdp-client/Cargo.toml --bin screenshot_mvp -- \
   --host <HOST> \
   --username <USERNAME> \
   --password <PASSWORD> \
-  --output experiments/internal-rdp-client/out/screenshot.png
+  --output clients/internal-rdp-client/out/screenshot.png
 ```
 
 Atalho via `package.json` na raiz do projeto:
@@ -205,13 +205,13 @@ npm run rdp:screenshot -- \
   --host <HOST> \
   --username <USERNAME> \
   --password <PASSWORD> \
-  --output experiments/internal-rdp-client/out/screenshot.png
+  --output clients/internal-rdp-client/out/screenshot.png
 ```
 
 ## Como abrir o viewer local
 
 ```bash
-cargo run --manifest-path experiments/internal-rdp-client/Cargo.toml --bin viewer_mvp -- \
+cargo run --manifest-path clients/internal-rdp-client/Cargo.toml --bin viewer_mvp -- \
   --host <HOST> \
   --username <USERNAME> \
   --password <PASSWORD>

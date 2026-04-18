@@ -23,7 +23,7 @@ const IDLE_PUMP_INTERVAL_MS: u64 = 125;
 
 const HELP: &str = "\
 USAGE:
-  cargo run --manifest-path experiments/internal-rdp-client/Cargo.toml --bin viewer_mvp -- \\
+  cargo run --manifest-path clients/internal-rdp-client/Cargo.toml --bin viewer_mvp -- \\
     --host <HOST> --username <USERNAME> --password <PASSWORD> [--port <PORT>] [--domain <DOMAIN>] [--settings-file <JSON|SSHVAULT>] [--fullscreen|--windowed] [--width <PX>] [--height <PX>] [--color-depth <15|16|24|32>] [--no-lossy] [--monitor <SPEC>...]
 
 MONITOR (multimon mode):

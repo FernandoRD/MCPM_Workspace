@@ -14,7 +14,7 @@ use ironrdp::session::ActiveStage;
 
 const HELP: &str = "\
 USAGE:
-  cargo run --manifest-path experiments/internal-rdp-client/Cargo.toml --bin screenshot_mvp -- \\
+  cargo run --manifest-path clients/internal-rdp-client/Cargo.toml --bin screenshot_mvp -- \\
     --host <HOST> --username <USERNAME> --password <PASSWORD> [--port <PORT>] [--output <PNG>] [--domain <DOMAIN>] [--settings-file <JSON|SSHVAULT>] [--width <PX>] [--height <PX>] [--color-depth <15|16|24|32>] [--no-lossy]
 
 SETTINGS FILE:

@@ -416,7 +416,7 @@ fn workspace_root() -> Option<PathBuf> {
 }
 
 fn internal_viewer_manifest_path() -> Option<PathBuf> {
-    workspace_root().map(|root| root.join("experiments/internal-rdp-client/Cargo.toml"))
+    workspace_root().map(|root| root.join("clients/internal-rdp-client/Cargo.toml"))
 }
 
 fn internal_viewer_binary_candidates() -> Vec<PathBuf> {
@@ -430,8 +430,8 @@ fn internal_viewer_binary_candidates() -> Vec<PathBuf> {
     };
 
     vec![
-        root.join("experiments/internal-rdp-client/target/debug").join(bin_name),
-        root.join("experiments/internal-rdp-client/target/release").join(bin_name),
+        root.join("clients/internal-rdp-client/target/debug").join(bin_name),
+        root.join("clients/internal-rdp-client/target/release").join(bin_name),
     ]
 }
 

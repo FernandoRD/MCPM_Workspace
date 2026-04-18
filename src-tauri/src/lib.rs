@@ -10,6 +10,7 @@ mod ssh_common;
 mod ssh_config;
 mod storage;
 mod sync;
+mod system_terminal;
 mod telnet;
 mod totp;
 mod vnc;
@@ -44,6 +45,8 @@ pub fn run() {
     let storage = Storage::new().expect("Falha ao inicializar storage");
     let database =
         Database::open(&storage.data_dir).expect("Falha ao inicializar banco de dados");
+
+    system_terminal::cleanup_old_temp_keys();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -95,6 +98,7 @@ pub fn run() {
             telnet::telnet_resize,
             telnet::telnet_disconnect,
             telnet::telnet_session_exists,
+            system_terminal::ssh_launch_system_terminal,
             rdp::rdp_connect,
             rdp::rdp_launch_internal_viewer,
             rdp::rdp_disconnect,

@@ -3,12 +3,12 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 const projectRoot = process.cwd();
-const manifestPath = path.join(projectRoot, "experiments", "internal-rdp-client", "Cargo.toml");
+const manifestPath = path.join(projectRoot, "clients", "internal-rdp-client", "Cargo.toml");
 const targetDir = path.join(projectRoot, "src-tauri", "resources", "internal-rdp-client");
 const executableName = process.platform === "win32" ? "viewer_mvp.exe" : "viewer_mvp";
 const sourceBinary = path.join(
   projectRoot,
-  "experiments",
+  "clients",
   "internal-rdp-client",
   "target",
   "release",
