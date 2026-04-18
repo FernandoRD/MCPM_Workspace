@@ -318,7 +318,11 @@ fn poll_active_stage_once(
 ) -> anyhow::Result<ActiveStageDrainSummary> {
     let (action, payload) = match framed.read_pdu() {
         Ok((action, payload)) => (action, payload),
-        Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+        // On Linux, SO_RCVTIMEO fires as WouldBlock (EAGAIN); on Windows it fires as
+        // TimedOut (WSAETIMEDOUT = 10060). Both mean "no data yet" — treat identically.
+        Err(error) if error.kind() == std::io::ErrorKind::WouldBlock
+            || error.kind() == std::io::ErrorKind::TimedOut =>
+        {
             return Ok(ActiveStageDrainSummary::default())
         }
         Err(error) => return Err(anyhow::Error::new(error).context("read frame")),
