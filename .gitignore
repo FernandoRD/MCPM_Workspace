@@ -16,7 +16,8 @@ dist-ssr
 # Rust build artifacts
 target/
 src-tauri/target/
-experiments/internal-rdp-client/target/
+clients/internal-rdp-client/target/
+clients/internal-rdp-client/out/
 
 # Editor directories and files
 .vscode*
@@ -30,5 +31,3 @@ experiments/internal-rdp-client/target/
 *.codex
 *IMPLEMENTATION*
 .claude
-.git
-.gitignore
