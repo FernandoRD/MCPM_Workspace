@@ -6,14 +6,20 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 
 ## Versão atual
 
-`0.3.9`
+`0.4.0`
 
-## Novidades da 0.3.9
+## Novidades da 0.4.0
 
 - Modo "janela separada" para `SSH` e `Telnet` migrado de WebviewWindow para terminal do sistema: ao abrir em janela separada, o app detecta e lança o emulador de terminal instalado (`gnome-terminal`, `konsole`, `xfce4-terminal`, `alacritty`, `wezterm`, `kitty`, `xterm` no Linux; `Terminal.app` no macOS; `wt` ou `cmd` no Windows) com o comando `ssh` ou `telnet` correto
 - Chaves privadas exportadas para o terminal do sistema são convertidas automaticamente para o formato nativo OpenSSH (`-----BEGIN OPENSSH PRIVATE KEY-----`), resolvendo o erro `error in libcrypto: unsupported` que ocorria com chaves geradas no formato PKCS#8
 - Arquivos de chave temporários são escritos com permissão `0600` e limpos automaticamente na próxima inicialização do app
 - Diretório `experiments/` renomeado para `clients/` em todo o projeto (código, configs e documentação)
+- Log persistente do app em `mpcm-workspace/logs/ssh_vault.log`, com rotação simples para `ssh_vault.log.1`
+- Erros globais do frontend e falhas de SFTP agora entram no mesmo arquivo de log com contexto de host, sessão e operação
+- O `Connection Log` passou a armazenar e exibir a mensagem do erro quando uma sessão falha
+- Instrumentação de logs ampliada para `SSH`, `Telnet`, `RDP` e `VNC` nos fluxos principais de conexão, erro e lifecycle
+- Nova tela `Logs` no app, com visualização dos arquivos de log, troca do diretório de saída e reset para o caminho padrão da plataforma
+- O `stderr` do viewer RDP interno também passa a usar o diretório de logs configurado no app
 
 ## Novidades da 0.3.8
 
@@ -130,6 +136,15 @@ O cliente RDP interno está em [clients/internal-rdp-client/README.md](/home/fer
 - A classificação usada na documentação é `Multi-Protocol Connection Manager`
 - O diretório de dados atual é `mpcm-workspace`, com migração automática do legado `ssh-vault`
 - Identificadores internos legados como `name`, `identifier` e alguns marcadores de compatibilidade continuam preservados para evitar quebra de instalações e dados existentes
+
+## Diagnóstico e logs
+
+- O arquivo principal de diagnóstico do app fica dentro do diretório de dados local em `logs/ssh_vault.log`
+- Quando o arquivo principal passa de ~5 MB, ele é rotacionado para `logs/ssh_vault.log.1`
+- Eventos do backend em Rust, erros globais do frontend e falhas de `SSH`, `SFTP`, `Telnet`, `RDP` e `VNC` passam pelo mesmo logger persistente
+- O diretório de logs pode ser alterado pela tela `Logs`; o padrão continua sendo o diretório de dados local do sistema operacional
+- O viewer RDP interno grava em `ssh_vault_viewer.log` dentro do mesmo diretório configurado
+- O `Connection Log` da interface continua mostrando o histórico de sessões, agora com a mensagem do erro quando aplicável
 
 ## Sync e backup
 

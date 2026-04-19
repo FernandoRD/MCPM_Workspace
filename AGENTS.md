@@ -1,13 +1,13 @@
 <claude-mem-context>
 # Memory Context
 
-# [ssh_vault] recent context, 2026-04-18 1:35pm GMT-3
+# [ssh_vault] recent context, 2026-04-18 9:24pm GMT-3
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-Stats: 27 obs (11,575t read) | 458,779t work | 97% savings
+Stats: 49 obs (21,776t read) | 815,966t work | 97% savings
 
 ### Apr 18, 2026
 55 10:04a 🔵 ssh_vault Git Repository Has 697MB Pack — Blocking GitHub Push
@@ -37,6 +37,28 @@ Stats: 27 obs (11,575t read) | 458,779t work | 97% savings
 102 1:32p 🔄 Settings.tsx: Section Order Fixed and SettingPanel Layout Component Introduced
 103 " 🟣 SettingPanel Component Added to Settings.tsx
 105 1:33p ✅ Settings.tsx Reorganization Verified: Build Passes, Final Layout Confirmed
+108 1:36p 🔵 ssh_vault Full Architecture Map: VNC Capability Flags, RDP Dual-Mode, and Type Surface
+115 6:52p ⚖️ Comprehensive Logging Requirement: SFTP and All Error Types
+117 " 🔵 ssh_vault Logging Gap: sftp.rs Has Zero log:: Calls Despite `log` Crate Being Present
+118 6:54p 🔵 Comprehensive Logging Audit Complete: Full Gap Map and Implementation Plan Formed
+121 6:55p 🟣 Persistent File Logger Implemented: src-tauri/src/app_logging.rs
+122 6:57p 🔵 sftp.rs Instrumentation Patch Failed: Duplicate Apply on Already-Modified File
+126 " 🟣 sftp.rs Phase 1 Instrumentation Applied: SftpConnection Context, log_error Helper, get_connection Helper
+127 7:00p 🟣 sftp.rs Full Instrumentation Complete: All 9 Commands Now Emit Structured log:: Entries
+138 8:54p 🔵 Logging Coverage Gap Question: SSH/Telnet, RDP, and VNC Not Explicitly Covered in S26
+140 " 🔵 Logging Coverage Audit: SSH Has Minimal Logging, Telnet/VNC Have Zero Logging, RDP Logs Only to ssh_vault_viewer.log
+141 8:58p 🔵 VNC Settings Excluded from PortableSyncSettings — Not Synced Across Devices
+143 8:59p 🔵 Telnet Backend Silently Swallows TCP Read Errors in Session Loop
+144 9:01p ⚖️ New Logging Enhancement Plan: Configurable Directory, Protocol Instrumentation, and In-App Log Viewer
+148 " 🟣 app_logging.rs Rewritten: Configurable Log Directory, File Listing, and In-App File Reading Commands
+149 9:04p 🟣 SSH and Telnet Backends Fully Instrumented with Structured Logging
+150 " 🟣 RDP Backend Fully Instrumented and Viewer Log Relocated to Configured Log Directory
+156 " 🟣 VNC Backend Logging Instrumentation — Partial: vnc_log_error Helper Added, Session Lifecycle Patch Failed Due to Code Mismatch
+164 9:18p 🔵 LogsPage.tsx: Current Layout Architecture Before Scrollbar Fix
+165 " 🔵 AppLayout main Uses overflow-auto — Root Cause of LogsPage Height Issue
+167 9:19p 🟣 LogsPage.tsx: Fixed Log Viewer Height — Scrollable Panels with Fixed 28rem Height
+169 9:23p 🔄 LogsPage.tsx: Responsive Height Tuning — Asymmetric Panel Sizes with xl Breakpoints
+171 9:24p 🔴 LogsPage.tsx: Scrollable Log Viewer — Final State with Responsive Heights, Build Clean
 
-Access 459k tokens of past work via get_observations([IDs]) or mem-search skill.
+Access 816k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>

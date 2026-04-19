@@ -22,10 +22,10 @@ Documento de referência para desenvolvimento e manutenção do MPCM Workspace n
 
 O MPCM Workspace é uma aplicação desktop Tauri com frontend React e backend Rust para gerenciar:
 
-- hosts `SSH`, `Telnet` e `RDP`
+- hosts `SSH`, `Telnet`, `RDP` e `VNC`
 - credenciais reutilizáveis
 - chaves SSH
-- sessões de terminal multi-protocolo, sessões gráficas `RDP` e SFTP
+- sessões de terminal multi-protocolo, sessões gráficas `RDP`/`VNC`, SFTP e diagnóstico persistente
 - barra de abas de sessão com reorganização manual por drag and drop
 - snippets, túneis e workspaces
 - sincronização remota
@@ -100,6 +100,7 @@ src/
     health.ts
     hostSearch.ts
     i18n.ts
+    logger.ts
     notifications.ts
     portableState.ts
     productivity.ts
@@ -123,6 +124,7 @@ src/
     Groups.tsx
     Health.tsx
     HostEditor.tsx
+    LogsPage.tsx
     Operations.tsx
     RdpPage.tsx
     Settings.tsx
@@ -131,6 +133,7 @@ src/
     SshKeys.tsx
     Sync.tsx
     TerminalPage.tsx
+    VncPage.tsx
   store/
     connectionLogs.ts
     credentials.ts
@@ -145,6 +148,7 @@ src/
 
 src-tauri/
   src/
+    app_logging.rs
     credentials.rs
     crypto.rs
     database.rs
@@ -208,6 +212,8 @@ Arquivo-base: [index.ts](/home/fernando/Documentos/ssh_vault/src/types/index.ts)
   `keepAliveInterval`, `inactivityTimeout`
 - `rdp`
   `launchMode`, `linuxClient`, `fullscreen`, `dynamicResolution`, `width`, `height`, `multimon`, `clipboard`, `audioMode`, `certificateMode`, `internalClientPerformance`
+- `vnc`
+  `linuxClient`, `fullscreen`, `viewOnly`
 - `security`
   `masterPasswordSet`, `verificationPayload?`, `syncCredentials`
 - `sync`
@@ -272,6 +278,7 @@ Rotas atuais:
 - `/hosts/:id`
 - `/terminal/:tabId`
 - `/rdp/:tabId`
+- `/vnc/:tabId`
 - `/sftp/:tabId`
 - `/settings`
 - `/sync`
@@ -286,6 +293,7 @@ Rotas atuais:
 - `/connection-log`
 - `/operations`
 - `/health`
+- `/logs`
 - `/about`
 
 ## 7. Bibliotecas do frontend
@@ -298,6 +306,10 @@ Rotas atuais:
   Helpers para rotas e bootstrap de janelas standalone.
 - [RdpPage.tsx](/home/fernando/Documentos/ssh_vault/src/pages/RdpPage.tsx)
   Orquestra a conexão RDP, exibe diagnósticos de launcher e acompanha o ciclo de vida da sessão.
+- [VncPage.tsx](/home/fernando/Documentos/ssh_vault/src/pages/VncPage.tsx)
+  Orquestra a conexão VNC, exibe o contrato de capacidade da sessão e diferencia cliente gerenciado de launcher externo.
+- [LogsPage.tsx](/home/fernando/Documentos/ssh_vault/src/pages/LogsPage.tsx)
+  Exibe os arquivos de diagnóstico, permite trocar o diretório de saída e facilita leitura sem sair da aplicação.
 
 ### Branding e identidade
 
@@ -316,6 +328,8 @@ Rotas atuais:
   Lança janelas dedicadas de sessão usando fluxo compartilhado para terminal e RDP.
 - [csvHostImport.ts](/home/fernando/Documentos/ssh_vault/src/lib/csvHostImport.ts)
   Centraliza parsing, validação, matching, template e plano de aplicação para importação em massa por `.csv`.
+- [logger.ts](/home/fernando/Documentos/ssh_vault/src/lib/logger.ts)
+  Centraliza logging persistente do frontend, incluindo erros globais de runtime e falhas das stores e páginas principais.
 
 ### RDP no app principal
 
@@ -569,10 +583,12 @@ Arquivo principal: [ssh.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/ss
 ### Quick Connect
 
 - UI: [CommandPalette.tsx](/home/fernando/Documentos/ssh_vault/src/components/CommandPalette.tsx)
-- Abre sessão temporária para `SSH`, `Telnet` e `RDP`
+- Abre sessão temporária para `SSH`, `Telnet`, `RDP` e `VNC`
 - Não cria host salvo
 
 Para `RDP`, o formato suportado é `rdp://usuario@host:porta` e a sessão usa o mesmo fluxo dos hosts persistidos, respeitando o `launchMode` ativo entre launcher nativo e viewer interno experimental.
+
+Para `VNC`, o fluxo reaproveita o bootstrap temporário da sessão gráfica e respeita o cliente preferido configurado no app.
 
 ### Sessões em janela separada / terminal do sistema
 
@@ -792,7 +808,7 @@ Cada janela mantém seu próprio `MouseInputState`, eliminando o problema de osc
 
 #### Diagnóstico
 
-O stderr do viewer é redirecionado para `/tmp/ssh_vault_viewer.log` em modo append. O viewer imprime no stderr:
+O stderr do viewer é redirecionado para `ssh_vault_viewer.log` no diretório de logs configurado pela aplicação, em modo append. O viewer imprime no stderr:
 
 - tamanho do desktop e número de monitores
 - layout de cada monitor (posição, dimensões, primary)
@@ -824,7 +840,7 @@ Arquivos principais:
 
 Estado atual:
 
-- versão de referência atual do app: `0.3.9`
+- versão de referência atual do app: `0.4.0`
 - `package.json` é a fonte principal da versão do app
 - `tauri.conf.json` lê a versão a partir de `../package.json`
 - o frontend lê a versão a partir de `package.json` via `appInfo.ts`

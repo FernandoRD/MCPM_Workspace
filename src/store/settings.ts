@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
 import { AppSettings, RdpInternalClientPerformanceSettings, DEFAULT_RDP_INTERNAL_CLIENT_PERFORMANCE_SETTINGS } from "@/types";
 import { sanitizeSettingsInput } from "@/lib/inputSanitizers";
+import { logFrontendError } from "@/lib/logger";
 import { applyTheme, isThemeId, ThemeId } from "@/themes";
 import i18n from "@/lib/i18n";
 
@@ -125,7 +126,9 @@ function normalizeSettings(settings?: Partial<AppSettings> | null): AppSettings 
 }
 
 function persistSettings(settings: AppSettings) {
-  invoke("db_save_settings", { settings: normalizeSettings(settings) }).catch(console.error);
+  invoke("db_save_settings", { settings: normalizeSettings(settings) }).catch((error) => {
+    logFrontendError("settings.persist", "Falha ao persistir configurações", error);
+  });
 }
 
 export const useSettingsStore = create<SettingsStore>()((set, _get) => ({
@@ -165,7 +168,7 @@ export const useSettingsStore = create<SettingsStore>()((set, _get) => ({
       i18n.changeLanguage(normalized.locale);
       set({ settings: normalized, initialized: true });
     } catch (e) {
-      console.error("Falha ao inicializar settings store:", e);
+      logFrontendError("settings.init", "Falha ao inicializar settings store", e);
       applyTheme(DEFAULT_SETTINGS.themeId as ThemeId);
       i18n.changeLanguage(DEFAULT_SETTINGS.locale);
       set({ initialized: true });

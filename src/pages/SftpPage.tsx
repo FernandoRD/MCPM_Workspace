@@ -31,6 +31,7 @@ import { useSshKeysStore } from "@/store/sshKeys";
 import { useSettingsStore } from "@/store/settings";
 import { useConnectionLogsStore } from "@/store/connectionLogs";
 import { Button } from "@/components/ui/Button";
+import { logFrontendError } from "@/lib/logger";
 import { launchTerminalSession } from "@/lib/sessionLauncher";
 import { readSessionBootstrap, withStandaloneQuery } from "@/lib/windowMode";
 
@@ -147,7 +148,12 @@ export function SftpPage() {
       setCurrentPath(path);
       updateSftpSnapshot(sessionId, { currentPath: path, entries: result });
     } catch (err) {
-      setError(String(err));
+      const message = String(err);
+      setError(message);
+      logFrontendError("sftp.loadDir", "Falha ao listar diretório SFTP", err, {
+        sessionId,
+        path,
+      });
     } finally {
       setLoading(false);
     }
@@ -162,17 +168,10 @@ export function SftpPage() {
       updatePaneStatus(sessionId, "error");
       return;
     }
-    const sessionExists = await invoke<boolean>("sftp_session_exists", { sessionId });
-    if (sessionExists) {
-      setStatus("connected");
-      setError(null);
-      updatePaneStatus(sessionId, "connected");
-      await loadDir(sftpSnapshot?.currentPath ?? currentPath ?? "/");
-      return;
-    }
 
     setStatus("connecting");
     setError(null);
+    const connectedAt = new Date().toISOString();
 
     const credential = host.credentialId ? getCredential(host.credentialId) : undefined;
     const authMethod = credential?.authMethod ?? host.authMethod ?? "password";
@@ -190,6 +189,15 @@ export function SftpPage() {
     const jumpSshKey = jumpCredential?.keyId ? getSshKey(jumpCredential.keyId) : undefined;
 
     try {
+      const sessionExists = await invoke<boolean>("sftp_session_exists", { sessionId });
+      if (sessionExists) {
+        setStatus("connected");
+        setError(null);
+        updatePaneStatus(sessionId, "connected");
+        await loadDir(sftpSnapshot?.currentPath ?? currentPath ?? "/");
+        return;
+      }
+
       await invoke("sftp_connect", {
         sessionId,
         host: host.host,
@@ -219,14 +227,30 @@ export function SftpPage() {
         hostLabel: host.label,
         hostAddress: tab!.hostAddress,
         sessionType: "sftp",
-        connectedAt: new Date().toISOString(),
+        connectedAt,
         status: "connected",
       });
       await loadDir("/");
     } catch (err) {
+      const message = String(err);
       setStatus("error");
-      setError(String(err));
+      setError(message);
       updatePaneStatus(sessionId, "error");
+      openLog({
+        hostId: host.id,
+        hostLabel: host.label,
+        hostAddress: tab!.hostAddress,
+        sessionType: "sftp",
+        connectedAt,
+        status: "error",
+        message,
+      });
+      logFrontendError("sftp.connect", "Falha ao conectar sessão SFTP", err, {
+        sessionId,
+        hostId: host.id,
+        host: host.host,
+        port: host.port,
+      });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPath, loadDir, sessionId, host, sftpSnapshot?.currentPath, updatePaneStatus]);
@@ -297,7 +321,13 @@ export function SftpPage() {
         localPath: savePath,
       });
     } catch (err) {
-      setError(String(err));
+      const message = String(err);
+      setError(message);
+      logFrontendError("sftp.download", "Falha ao baixar arquivo via SFTP", err, {
+        sessionId,
+        remotePath: entry.path,
+        localPath: savePath,
+      });
     } finally {
       setTransferProgress(null);
     }
@@ -320,7 +350,13 @@ export function SftpPage() {
       await invoke("sftp_upload", { sessionId, localPath: filePath, remotePath });
       await loadDir(currentPath);
     } catch (err) {
-      setError(String(err));
+      const message = String(err);
+      setError(message);
+      logFrontendError("sftp.upload", "Falha ao enviar arquivo via SFTP", err, {
+        sessionId,
+        localPath: filePath,
+        remotePath,
+      });
     } finally {
       setTransferProgress(null);
     }
@@ -337,7 +373,12 @@ export function SftpPage() {
       setNewFolderName("");
       await loadDir(currentPath);
     } catch (err) {
-      setError(String(err));
+      const message = String(err);
+      setError(message);
+      logFrontendError("sftp.mkdir", "Falha ao criar diretório via SFTP", err, {
+        sessionId,
+        path,
+      });
     }
   };
 
@@ -347,7 +388,13 @@ export function SftpPage() {
       setDeletingEntry(null);
       await loadDir(currentPath);
     } catch (err) {
-      setError(String(err));
+      const message = String(err);
+      setError(message);
+      logFrontendError("sftp.delete", "Falha ao remover item via SFTP", err, {
+        sessionId,
+        path: entry.path,
+        isDir: entry.is_dir,
+      });
     }
   };
 
@@ -356,7 +403,9 @@ export function SftpPage() {
     try {
       await invoke("sftp_disconnect", { sessionId });
     } catch (err) {
-      console.error("Erro ao desconectar sessão SFTP:", err);
+      logFrontendError("sftp.disconnect", "Falha ao desconectar sessão SFTP", err, {
+        sessionId,
+      });
     } finally {
       if (logIdRef.current) {
         closeLog(logIdRef.current, "disconnected");
@@ -380,7 +429,13 @@ export function SftpPage() {
       setRenameValue("");
       await loadDir(currentPath);
     } catch (err) {
-      setError(String(err));
+      const message = String(err);
+      setError(message);
+      logFrontendError("sftp.rename", "Falha ao renomear item via SFTP", err, {
+        sessionId,
+        oldPath: entry.path,
+        newPath,
+      });
     }
   };
 

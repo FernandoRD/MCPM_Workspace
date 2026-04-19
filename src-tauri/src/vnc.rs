@@ -216,6 +216,12 @@ fn cleanup_session(session: &mut VncSession) {
     }
 }
 
+fn vnc_log_error(context: String, error: impl std::fmt::Display) -> String {
+    let message = format!("{context}: {error}");
+    log::error!("{message}");
+    message
+}
+
 fn spawn_linux_client(
     command: &str,
     args: &[String],
@@ -452,13 +458,35 @@ pub async fn vnc_connect(
 ) -> Result<VncLaunchResult, String> {
     state
         .rate_limiter
-        .check("vnc_connect", 10, std::time::Duration::from_secs(60))?;
+        .check("vnc_connect", 10, std::time::Duration::from_secs(60))
+        .map_err(|error| {
+            log::warn!(
+                "vnc: conexão bloqueada por rate limit session={} host={} port={}: {}",
+                session_id,
+                host,
+                port,
+                error
+            );
+            error
+        })?;
+    log::info!(
+        "vnc: connect iniciado session={} host={} port={} password_set={} preferred_client={}",
+        session_id,
+        host,
+        port,
+        password.as_deref().is_some_and(|value| !value.trim().is_empty()),
+        options
+            .as_ref()
+            .map(|opts| opts.preferred_linux_client().to_string())
+            .unwrap_or_else(|| "auto".to_string())
+    );
 
     let options = options.unwrap_or_default();
 
     {
         let mut manager = state.vnc.lock().await;
         if let Some(mut existing) = manager.sessions.remove(&session_id) {
+            log::info!("vnc: limpando sessão anterior session={}", session_id);
             cleanup_session(&mut existing);
         }
     }
@@ -468,7 +496,13 @@ pub async fn vnc_connect(
         port,
         password.as_deref().is_some_and(|value| !value.trim().is_empty()),
         &options,
-    )?;
+    )
+    .map_err(|error| {
+        vnc_log_error(
+            format!("vnc: falha ao iniciar cliente session={} host={} port={}", session_id, host, port),
+            error,
+        )
+    })?;
 
     let mut manager = state.vnc.lock().await;
     manager.sessions.insert(
@@ -477,6 +511,12 @@ pub async fn vnc_connect(
             child: launch.child,
             can_monitor_lifecycle: launch.can_monitor_lifecycle,
         },
+    );
+    log::info!(
+        "vnc: cliente iniciado launcher={} executable={} mode={:?}",
+        launch.launcher_name,
+        launch.executable,
+        launch.session_mode
     );
 
     Ok(VncLaunchResult {
@@ -500,9 +540,12 @@ pub async fn vnc_disconnect(
     state: State<'_, AppState>,
     session_id: String,
 ) -> Result<(), String> {
+    log::info!("vnc: disconnect solicitado session={}", session_id);
     let mut manager = state.vnc.lock().await;
     if let Some(mut session) = manager.sessions.remove(&session_id) {
         cleanup_session(&mut session);
+    } else {
+        log::warn!("vnc: disconnect para sessão inexistente session={}", session_id);
     }
     Ok(())
 }
@@ -515,6 +558,10 @@ pub async fn vnc_session_exists(
     let mut manager = state.vnc.lock().await;
     if let Some(session) = manager.sessions.get_mut(&session_id) {
         if !session.can_monitor_lifecycle {
+            log::debug!(
+                "vnc: session_exists session={} exists=true monitorable=false",
+                session_id
+            );
             return Ok(VncSessionExistsResult {
                 exists: true,
                 can_monitor_lifecycle: false,
@@ -524,6 +571,7 @@ pub async fn vnc_session_exists(
         if let Some(child) = session.child.as_mut() {
             return match child.try_wait() {
                 Ok(Some(_)) => {
+                    log::info!("vnc: processo encerrado session={}", session_id);
                     let mut finished = manager.sessions.remove(&session_id).unwrap();
                     cleanup_session(&mut finished);
                     Ok(VncSessionExistsResult {
@@ -531,20 +579,36 @@ pub async fn vnc_session_exists(
                         can_monitor_lifecycle: true,
                     })
                 }
-                Ok(None) => Ok(VncSessionExistsResult {
-                    exists: true,
-                    can_monitor_lifecycle: true,
-                }),
-                Err(e) => Err(format!("Falha ao consultar processo VNC: {e}")),
+                Ok(None) => {
+                    log::debug!(
+                        "vnc: session_exists session={} exists=true monitorable=true",
+                        session_id
+                    );
+                    Ok(VncSessionExistsResult {
+                        exists: true,
+                        can_monitor_lifecycle: true,
+                    })
+                }
+                Err(e) => {
+                    let message = format!("Falha ao consultar processo VNC: {e}");
+                    log::error!("vnc: session_exists session={} {}", session_id, message);
+                    Err(message)
+                }
             };
         }
 
+        log::debug!(
+            "vnc: session_exists session={} exists=true monitorable={}",
+            session_id,
+            session.can_monitor_lifecycle
+        );
         return Ok(VncSessionExistsResult {
             exists: true,
             can_monitor_lifecycle: session.can_monitor_lifecycle,
         });
     }
 
+    log::debug!("vnc: session_exists session={} exists=false", session_id);
     Ok(VncSessionExistsResult {
         exists: false,
         can_monitor_lifecycle: false,

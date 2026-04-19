@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
 import { Credential } from "@/types";
 import { sanitizeCredentialInput, sanitizeCredentials } from "@/lib/inputSanitizers";
+import { logFrontendError } from "@/lib/logger";
 import { v4 as uuidv4 } from "uuid";
 
 interface CredentialsStore {
@@ -47,7 +48,7 @@ export const useCredentialsStore = create<CredentialsStore>()((set, get) => ({
 
       set({ credentials, initialized: true });
     } catch (e) {
-      console.error("Falha ao inicializar credentials store:", e);
+      logFrontendError("credentials.init", "Falha ao inicializar credentials store", e);
       set({ initialized: true });
     }
   },
@@ -57,7 +58,9 @@ export const useCredentialsStore = create<CredentialsStore>()((set, get) => ({
     const now = new Date().toISOString();
     const credential = sanitizeCredentialInput<Credential>({ ...data, id, createdAt: now, updatedAt: now });
     set((s) => ({ credentials: [...s.credentials, credential] }));
-    invoke("db_save_credential", { credential }).catch(console.error);
+    invoke("db_save_credential", { credential }).catch((error) => {
+      logFrontendError("credentials.add", "Falha ao salvar credencial", error, { id });
+    });
     return id;
   },
 
@@ -69,13 +72,19 @@ export const useCredentialsStore = create<CredentialsStore>()((set, get) => ({
           : c
       );
       const updated = credentials.find((c) => c.id === id);
-      if (updated) invoke("db_save_credential", { credential: updated }).catch(console.error);
+      if (updated) {
+        invoke("db_save_credential", { credential: updated }).catch((error) => {
+          logFrontendError("credentials.update", "Falha ao atualizar credencial", error, { id });
+        });
+      }
       return { credentials };
     }),
 
   deleteCredential: (id) => {
     set((s) => ({ credentials: s.credentials.filter((c) => c.id !== id) }));
-    invoke("db_delete_credential", { id }).catch(console.error);
+    invoke("db_delete_credential", { id }).catch((error) => {
+      logFrontendError("credentials.delete", "Falha ao remover credencial", error, { id });
+    });
   },
 
   getCredential: (id) => get().credentials.find((c) => c.id === id),
@@ -86,6 +95,10 @@ export const useCredentialsStore = create<CredentialsStore>()((set, get) => ({
     set({ credentials: sanitizedCredentials });
     invoke("db_clear_credentials")
       .then(() => Promise.all(sanitizedCredentials.map((credential) => invoke("db_save_credential", { credential }))))
-      .catch(console.error);
+      .catch((error) => {
+        logFrontendError("credentials.replace", "Falha ao substituir credenciais", error, {
+          count: sanitizedCredentials.length,
+        });
+      });
   },
 }));

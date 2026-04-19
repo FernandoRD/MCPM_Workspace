@@ -7,6 +7,7 @@ import { ExternalLink, Loader2, Monitor, RefreshCw, Wifi, WifiOff } from "lucide
 import { Button } from "@/components/ui/Button";
 import { APP_NAME } from "@/lib/appInfo";
 import { launchInternalRdpViewer, RdpMonitorLayout } from "@/lib/internalRdpViewer";
+import { logFrontendError } from "@/lib/logger";
 import { notify } from "@/lib/notifications";
 import { readSessionBootstrap, withStandaloneQuery } from "@/lib/windowMode";
 import { useConnectionLogsStore } from "@/store/connectionLogs";
@@ -192,6 +193,7 @@ export function RdpPage() {
     setLaunching(true);
     setError(null);
     updateTabStatus(tabId, "connecting");
+    const connectedAt = new Date().toISOString();
 
     try {
       let result: RdpPageLaunchInfo;
@@ -267,7 +269,7 @@ export function RdpPage() {
         hostLabel: tab.hostLabel,
         hostAddress: username ? `${username}@${targetHost}` : targetHost,
         sessionType: "rdp",
-        connectedAt: new Date().toISOString(),
+        connectedAt,
         status: "connected",
       });
 
@@ -290,6 +292,21 @@ export function RdpPage() {
       setError(message);
       setLaunchInfo(null);
       updateTabStatus(tabId, "error");
+      openLog({
+        hostId: tab.hostId,
+        hostLabel: tab.hostLabel,
+        hostAddress: username ? `${username}@${targetHost}` : targetHost,
+        sessionType: "rdp",
+        connectedAt,
+        status: "error",
+        message,
+      });
+      logFrontendError("rdp.connect", "Falha ao iniciar sessão RDP", err, {
+        sessionId: tabId,
+        host: targetHost,
+        port: targetPort,
+        launchMode: rdpSettings.launchMode,
+      });
       notify(
         APP_NAME,
         t(

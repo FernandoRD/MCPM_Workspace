@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
 import { HostEntry } from "@/types";
 import { sanitizeHostInput, sanitizeHosts } from "@/lib/inputSanitizers";
+import { logFrontendError } from "@/lib/logger";
 import { v4 as uuidv4 } from "uuid";
 
 interface HostsStore {
@@ -50,7 +51,7 @@ export const useHostsStore = create<HostsStore>()((set, get) => ({
 
       set({ hosts, initialized: true });
     } catch (e) {
-      console.error("Falha ao inicializar hosts store:", e);
+      logFrontendError("hosts.init", "Falha ao inicializar hosts store", e);
       set({ initialized: true });
     }
   },
@@ -65,7 +66,9 @@ export const useHostsStore = create<HostsStore>()((set, get) => ({
       updatedAt: now,
     });
     set((s) => ({ hosts: [...s.hosts, newHost] }));
-    invoke("db_save_host", { host: newHost }).catch(console.error);
+    invoke("db_save_host", { host: newHost }).catch((error) => {
+      logFrontendError("hosts.add", "Falha ao salvar host", error, { id: newHost.id });
+    });
     return newHost;
   },
 
@@ -77,13 +80,19 @@ export const useHostsStore = create<HostsStore>()((set, get) => ({
           : h
       );
       const updated = hosts.find((h) => h.id === id);
-      if (updated) invoke("db_save_host", { host: updated }).catch(console.error);
+      if (updated) {
+        invoke("db_save_host", { host: updated }).catch((error) => {
+          logFrontendError("hosts.update", "Falha ao atualizar host", error, { id });
+        });
+      }
       return { hosts };
     }),
 
   deleteHost: (id) => {
     set((s) => ({ hosts: s.hosts.filter((h) => h.id !== id) }));
-    invoke("db_delete_host", { id }).catch(console.error);
+    invoke("db_delete_host", { id }).catch((error) => {
+      logFrontendError("hosts.delete", "Falha ao remover host", error, { id });
+    });
   },
 
   duplicateHost: (id) => {
@@ -99,7 +108,9 @@ export const useHostsStore = create<HostsStore>()((set, get) => ({
       lastConnectedAt: undefined,
     });
     set((s) => ({ hosts: [...s.hosts, copy] }));
-    invoke("db_save_host", { host: copy }).catch(console.error);
+    invoke("db_save_host", { host: copy }).catch((error) => {
+      logFrontendError("hosts.duplicate", "Falha ao duplicar host", error, { id: copy.id });
+    });
   },
 
   setLastConnected: (id) =>
@@ -108,7 +119,11 @@ export const useHostsStore = create<HostsStore>()((set, get) => ({
         h.id === id ? { ...h, lastConnectedAt: new Date().toISOString() } : h
       );
       const updated = hosts.find((h) => h.id === id);
-      if (updated) invoke("db_save_host", { host: updated }).catch(console.error);
+      if (updated) {
+        invoke("db_save_host", { host: updated }).catch((error) => {
+          logFrontendError("hosts.setLastConnected", "Falha ao atualizar último acesso do host", error, { id });
+        });
+      }
       return { hosts };
     }),
 
@@ -126,6 +141,10 @@ export const useHostsStore = create<HostsStore>()((set, get) => ({
     set({ hosts: sanitizedHosts });
     invoke("db_clear_hosts")
       .then(() => Promise.all(sanitizedHosts.map((host) => invoke("db_save_host", { host }))))
-      .catch(console.error);
+      .catch((error) => {
+        logFrontendError("hosts.replace", "Falha ao substituir hosts", error, {
+          count: sanitizedHosts.length,
+        });
+      });
   },
 }));

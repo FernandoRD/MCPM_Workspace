@@ -17,6 +17,7 @@
     "backup": "Backup",
     "quickConnect": "Quick Connect",
     "health": "Health",
+    "logs": "Logs",
     "about": "About"
   },
   "newConnectionMenu": {
@@ -896,6 +897,26 @@
       "disconnected": "Closed",
       "error": "Error"
     }
+  },
+  "logs": {
+    "title": "Application Logs",
+    "description": "View the app log files and choose where they are stored.",
+    "chooseDirectory": "Choose folder",
+    "chooseDirectoryTitle": "Choose the folder where logs should be stored",
+    "resetDirectory": "Use default",
+    "refresh": "Refresh",
+    "currentDirectory": "Current directory",
+    "defaultDirectory": "Default directory",
+    "directoryMode": "Mode",
+    "directoryModeDefault": "System default",
+    "directoryModeCustom": "Custom",
+    "files": "Files",
+    "viewerTitle": "Viewer",
+    "loadingFile": "Reading log file...",
+    "noFiles": "No log files were found in the current directory.",
+    "noFileSelected": "Select a file on the left to view its contents.",
+    "truncated": "Only the final part of the file is shown to keep the UI responsive.",
+    "emptyFile": "Empty file"
   },
   "sshConfigImport": {
     "title": "Import ~/.ssh/config",

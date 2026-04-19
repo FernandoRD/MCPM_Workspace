@@ -342,6 +342,12 @@ where
     Ok(false)
 }
 
+fn ssh_log_error(context: String, error: impl std::fmt::Display) -> String {
+    let message = format!("{context}: {error}");
+    log::error!("{message}");
+    message
+}
+
 // ─── Comandos Tauri ───────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -364,8 +370,28 @@ pub async fn ssh_connect(
 ) -> Result<(), String> {
     let host = trim_owned(host);
     let username = trim_owned(username);
+    let connect_context = format!(
+        "tab={} target={}@{}:{} auth={} preset={} keepalive={} timeout={} cols={} rows={}",
+        tab_id,
+        username,
+        host,
+        port,
+        auth_method,
+        ssh_compat_preset.as_deref().unwrap_or("modern"),
+        keepalive_interval.unwrap_or(0),
+        connection_timeout.unwrap_or(30),
+        cols,
+        rows
+    );
     // Rate limit por host: evita flood de tentativas de conexão a um único alvo.
-    state.rate_limiter.check(&format!("ssh_connect:{host}"), 5, std::time::Duration::from_secs(60))?;
+    state
+        .rate_limiter
+        .check(&format!("ssh_connect:{host}"), 5, std::time::Duration::from_secs(60))
+        .map_err(|error| {
+            log::warn!("ssh: conexão bloqueada por rate limit {connect_context}: {error}");
+            error
+        })?;
+    log::info!("ssh: connect iniciado {connect_context}");
     let _ = app.emit(
         "terminal-status",
         TerminalStatusEvent {
@@ -391,7 +417,11 @@ pub async fn ssh_connect(
         let timeout_dur = Duration::from_secs(10);
         let fingerprint = fetch_server_fingerprint(&host, port, ssh_compat_preset.as_deref(), timeout_dur)
             .await
-            .map_err(|e| e)?;
+            .map_err(|e| {
+                log::error!("ssh: falha ao obter fingerprint {connect_context}: {e}");
+                e
+            })?;
+        log::warn!("ssh: host desconhecido requer confirmação {connect_context}");
         return Err(format!("HOST_KEY_UNKNOWN:{fingerprint}"));
     }
 
@@ -404,7 +434,7 @@ pub async fn ssh_connect(
         KnownHostsHandler::new(&host, port, known_hosts.clone()),
     )
     .await
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| ssh_log_error(format!("ssh: erro ao conectar ({connect_context})"), e))?;
 
     // Zeroiza credenciais sensíveis ao sair de escopo
     let password = password.map(Zeroizing::new);
@@ -413,26 +443,39 @@ pub async fn ssh_connect(
 
     let ok = match auth_method.as_str() {
         "password" => {
+            log::info!("ssh: autenticando com senha {connect_context}");
             let pwd = password.ok_or("Senha não informada")?;
             session
                 .authenticate_password(&username, pwd.as_str())
                 .await
-                .map_err(|e| e.to_string())?
+                .map_err(|e| ssh_log_error(format!("ssh: erro ao autenticar com senha ({connect_context})"), e))?
         }
 
         "privateKey" => {
+            log::info!("ssh: autenticando com chave privada {connect_context}");
             let content = private_key_content.ok_or("Conteúdo da chave privada não informado")?;
             let passphrase = private_key_passphrase.as_ref().map(|z| z.as_str());
             let key =
                 russh_keys::decode_secret_key(content.as_str(), passphrase)
-                    .map_err(|e| format!("Falha ao decodificar a chave privada: {e}"))?;
+                    .map_err(|e| {
+                        ssh_log_error(
+                            format!("ssh: falha ao decodificar a chave privada ({connect_context})"),
+                            e,
+                        )
+                    })?;
             session
                 .authenticate_publickey(&username, Arc::new(key))
                 .await
-                .map_err(|e| e.to_string())?
+                .map_err(|e| {
+                    ssh_log_error(
+                        format!("ssh: erro ao autenticar com chave privada ({connect_context})"),
+                        e,
+                    )
+                })?
         }
 
         "agent" => {
+            log::info!("ssh: autenticando com SSH agent {connect_context}");
             cfg_if! {
                 if #[cfg(unix)] {
                     // Linux / macOS — conecta via SSH_AUTH_SOCK (Unix socket)
@@ -443,7 +486,9 @@ pub async fn ssh_connect(
                              Verifique se o ssh-agent está rodando e SSH_AUTH_SOCK está definido.\n\
                              Dica: eval $(ssh-agent) && ssh-add ~/.ssh/id_rsa".to_string()
                         })?;
-                    try_agent_auth(&mut session, &username, agent).await?
+                    try_agent_auth(&mut session, &username, agent)
+                        .await
+                        .map_err(|error| ssh_log_error(format!("ssh: erro no SSH agent ({connect_context})"), error))?
                 } else if #[cfg(windows)] {
                     // Windows 10+ — OpenSSH Agent via named pipe
                     use tokio::net::windows::named_pipe::ClientOptions;
@@ -455,7 +500,9 @@ pub async fn ssh_connect(
                              Serviços → OpenSSH Authentication Agent → Tipo de inicialização: Automático → Iniciar".to_string()
                         })?;
                     let agent = AgentClient::connect(stream);
-                    try_agent_auth(&mut session, &username, agent).await?
+                    try_agent_auth(&mut session, &username, agent)
+                        .await
+                        .map_err(|error| ssh_log_error(format!("ssh: erro no SSH agent ({connect_context})"), error))?
                 } else {
                     return Err("Agente SSH não suportado nesta plataforma.".into());
                 }
@@ -466,6 +513,7 @@ pub async fn ssh_connect(
     };
 
     if !ok {
+        log::error!("ssh: autenticação falhou {connect_context}");
         let _ = app.emit(
             "terminal-status",
             TerminalStatusEvent {
@@ -482,11 +530,12 @@ pub async fn ssh_connect(
         &data_dir,
         &*known_hosts.lock().map_err(|e| e.to_string())?,
     );
+    log::info!("ssh: known_hosts persistido {connect_context}");
 
     let mut channel = session
         .channel_open_session()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| ssh_log_error(format!("ssh: erro ao abrir canal ({connect_context})"), e))?;
 
     channel
         .request_pty(
@@ -499,16 +548,16 @@ pub async fn ssh_connect(
             &[],
         )
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| ssh_log_error(format!("ssh: erro ao solicitar PTY ({connect_context})"), e))?;
 
     channel
         .request_shell(false)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| ssh_log_error(format!("ssh: erro ao solicitar shell ({connect_context})"), e))?;
 
     let (tx, mut rx) = mpsc::channel::<SshCommand>(64);
 
-    log::info!("SSH conectado: {}@{}:{} tab={}", username, host, port, tab_id);
+    log::info!("ssh: conectado {connect_context}");
     let _ = app.emit(
         "terminal-status",
         TerminalStatusEvent {
@@ -558,7 +607,7 @@ pub async fn ssh_connect(
         }
 
         ssh_arc.lock().await.sessions.remove(&tab_id_task);
-        log::info!("SSH desconectado: tab={}", tab_id_task);
+        log::info!("ssh: desconectado tab={}", tab_id_task);
         let _ = app_task.emit(
             "terminal-status",
             TerminalStatusEvent {
@@ -595,7 +644,9 @@ pub async fn ssh_send_input(
             .tx
             .send(SshCommand::Data(data.into_bytes()))
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| ssh_log_error(format!("ssh: falha ao enviar input tab={tab_id}"), e))?;
+    } else {
+        log::warn!("ssh: send_input para sessão inexistente tab={}", tab_id);
     }
     Ok(())
 }
@@ -613,7 +664,14 @@ pub async fn ssh_resize(
             .tx
             .send(SshCommand::Resize { cols, rows })
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| {
+                ssh_log_error(
+                    format!("ssh: falha ao redimensionar tab={tab_id} cols={cols} rows={rows}"),
+                    e,
+                )
+            })?;
+    } else {
+        log::warn!("ssh: resize para sessão inexistente tab={}", tab_id);
     }
     Ok(())
 }
@@ -625,12 +683,16 @@ pub async fn ssh_disconnect(
 ) -> Result<(), String> {
     let mgr = state.ssh.lock().await;
     if let Some(session) = mgr.sessions.get(&tab_id) {
+        log::info!("ssh: disconnect solicitado tab={}", tab_id);
         // try_send evita segurar o mutex enquanto aguarda espaço no canal.
         // Se o canal estiver cheio ou o receiver dropado, abort_handle garante
         // que a task seja encerrada de qualquer forma.
         if session.tx.try_send(SshCommand::Disconnect).is_err() {
+            log::warn!("ssh: canal ocupado, abortando task tab={}", tab_id);
             session.abort_handle.abort();
         }
+    } else {
+        log::warn!("ssh: disconnect para sessão inexistente tab={}", tab_id);
     }
     Ok(())
 }
@@ -640,7 +702,9 @@ pub async fn ssh_session_exists(
     state: tauri::State<'_, crate::AppState>,
     tab_id: String,
 ) -> Result<bool, String> {
-    Ok(state.ssh.lock().await.sessions.contains_key(&tab_id))
+    let exists = state.ssh.lock().await.sessions.contains_key(&tab_id);
+    log::debug!("ssh: session_exists tab={} exists={}", tab_id, exists);
+    Ok(exists)
 }
 
 // ─── ssh-copy-id ──────────────────────────────────────────────────────────────

@@ -8,7 +8,7 @@ use cfg_if::cfg_if;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
-use crate::{storage, AppState};
+use crate::{app_logging, storage, AppState};
 
 struct RdpSession {
     temp_file: PathBuf,
@@ -316,8 +316,9 @@ fn spawn_with_args(command: &str, args: &[String]) -> io::Result<Child> {
 fn spawn_path_with_args(command: &Path, args: &[String], current_dir: Option<&Path>) -> io::Result<Child> {
     let mut process = Command::new(command);
 
-    let stderr = std::env::temp_dir()
-        .join("ssh_vault_viewer.log");
+    let stderr = app_logging::viewer_log_path().unwrap_or_else(|| {
+        std::env::temp_dir().join("ssh_vault_viewer.log")
+    });
     let stderr_stdio = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -938,15 +939,28 @@ pub async fn rdp_connect(
     state
         .rate_limiter
         .check("rdp_connect", 10, std::time::Duration::from_secs(60))?;
+    log::info!(
+        "rdp: connect iniciado session={} host={} port={} title={} launcher={}",
+        session_id,
+        host,
+        port,
+        title.as_deref().unwrap_or("rdp"),
+        options
+            .as_ref()
+            .map(|opts| opts.preferred_linux_client().to_string())
+            .unwrap_or_else(|| "auto".to_string())
+    );
 
     let options = options.unwrap_or_default();
 
     {
         let mut manager = state.rdp.lock().await;
         if let Some(mut existing) = manager.sessions.remove(&session_id) {
+            log::info!("rdp: limpando sessão externa anterior session={}", session_id);
             cleanup_session(&mut existing);
         }
         if let Some(mut existing) = manager.internal_viewers.remove(&session_id) {
+            log::info!("rdp: limpando viewer interno anterior session={}", session_id);
             let _ = existing.kill();
             let _ = existing.wait();
         }
@@ -984,6 +998,13 @@ pub async fn rdp_connect(
     ) {
         Ok(result) => result,
         Err(err) => {
+            log::error!(
+                "rdp: falha ao iniciar cliente session={} host={} port={}: {}",
+                session_id,
+                host,
+                port,
+                err
+            );
             let _ = fs::remove_file(&temp_file);
             return Err(err);
         }
@@ -997,6 +1018,11 @@ pub async fn rdp_connect(
             child: launch.child,
             cmdkey_target: launch.cmdkey_target,
         },
+    );
+    log::info!(
+        "rdp: cliente iniciado launcher={} executable={}",
+        launch.launcher_name,
+        launch.executable
     );
 
     Ok(RdpLaunchResult {
@@ -1023,6 +1049,12 @@ pub async fn rdp_launch_internal_viewer(
     state
         .rate_limiter
         .check("rdp_launch_internal_viewer", 20, std::time::Duration::from_secs(60))?;
+    log::info!(
+        "rdp: launch_internal_viewer iniciado session={} host={} port={}",
+        session_id,
+        host,
+        port
+    );
 
     let options = options.unwrap_or_default();
 
@@ -1034,20 +1066,37 @@ pub async fn rdp_launch_internal_viewer(
         username.as_deref().unwrap_or(""),
         password.as_deref().unwrap_or(""),
         &options,
-    )?;
+    )
+    .map_err(|error| {
+        log::error!(
+            "rdp: falha ao iniciar viewer interno session={} host={} port={}: {}",
+            session_id,
+            host,
+            port,
+            error
+        );
+        error
+    })?;
 
     let mut manager = state.rdp.lock().await;
     reap_finished_internal_viewers(&mut manager);
     if let Some(mut existing) = manager.sessions.remove(&session_id) {
+        log::info!("rdp: removendo sessão externa ao iniciar viewer interno session={}", session_id);
         cleanup_session(&mut existing);
     }
     if let Some(mut existing) = manager.internal_viewers.remove(&session_id) {
+        log::info!("rdp: substituindo viewer interno existente session={}", session_id);
         let _ = existing.kill();
         let _ = existing.wait();
     }
     manager
         .internal_viewers
         .insert(session_id, launch.child);
+    log::info!(
+        "rdp: viewer interno iniciado launcher={} executable={}",
+        launch.launcher_name,
+        launch.executable
+    );
 
     Ok(InternalRdpViewerLaunchResult {
         launcher_name: launch.launcher_name,
@@ -1063,6 +1112,7 @@ pub async fn rdp_disconnect(
     state: State<'_, AppState>,
     session_id: String,
 ) -> Result<(), String> {
+    log::info!("rdp: disconnect solicitado session={}", session_id);
     let mut manager = state.rdp.lock().await;
     if let Some(mut session) = manager.sessions.remove(&session_id) {
         cleanup_session(&mut session);
@@ -1087,7 +1137,11 @@ pub async fn rdp_session_exists(
             match child.try_wait() {
                 Ok(Some(_)) => true,  // processo encerrou
                 Ok(None) => return Ok(true),
-                Err(e) => return Err(format!("Falha ao consultar processo RDP: {e}")),
+                Err(e) => {
+                    let message = format!("Falha ao consultar processo RDP: {e}");
+                    log::error!("rdp: session_exists session={} {}", session_id, message);
+                    return Err(message);
+                }
             }
         } else {
             return Ok(true);

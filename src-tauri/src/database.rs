@@ -180,13 +180,34 @@ Remova esse arquivo manualmente antes de continuar.",
                 connected_at TEXT NOT NULL,
                 disconnected_at TEXT,
                 duration_secs   INTEGER,
-                status       TEXT NOT NULL
+                status       TEXT NOT NULL,
+                message      TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_connection_logs_connected_at
                 ON connection_logs (connected_at DESC);
             ",
         )
-        .map_err(|e| format!("Falha na migração do banco: {e}"))
+        .map_err(|e| format!("Falha na migração do banco: {e}"))?;
+
+        add_column_if_missing(conn, "connection_logs", "message", "TEXT")
+    }
+}
+
+fn add_column_if_missing(
+    conn: &Connection,
+    table: &str,
+    column: &str,
+    definition: &str,
+) -> Result<(), String> {
+    match conn.execute(
+        &format!("ALTER TABLE {table} ADD COLUMN {column} {definition}"),
+        [],
+    ) {
+        Ok(_) => Ok(()),
+        Err(err) if err.to_string().contains("duplicate column name") => Ok(()),
+        Err(err) => Err(format!(
+            "Falha ao adicionar coluna {column} em {table}: {err}"
+        )),
     }
 }
 
@@ -421,14 +442,15 @@ pub fn db_add_connection_log(state: State<AppState>, log: Value) -> Result<(), S
     let disconnected_at = log["disconnectedAt"].as_str();
     let duration_secs   = log["durationSecs"].as_i64();
     let status          = log["status"].as_str().unwrap_or("connected");
+    let message         = log["message"].as_str();
 
     let conn = state.database.conn.lock().map_err(|e| e.to_string())?;
     conn.execute(
         "INSERT OR REPLACE INTO connection_logs
-         (id, host_id, host_label, host_address, session_type, connected_at, disconnected_at, duration_secs, status)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)",
+         (id, host_id, host_label, host_address, session_type, connected_at, disconnected_at, duration_secs, status, message)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
         params![id, host_id, host_label, host_address, session_type,
-                connected_at, disconnected_at, duration_secs, status],
+                connected_at, disconnected_at, duration_secs, status, message],
     )
     .map_err(|e| e.to_string())?;
 
@@ -451,7 +473,7 @@ pub fn db_get_connection_logs(state: State<AppState>, limit: Option<i64>) -> Res
     let mut stmt = conn
         .prepare(
             "SELECT id, host_id, host_label, host_address, session_type,
-                    connected_at, disconnected_at, duration_secs, status
+                    connected_at, disconnected_at, duration_secs, status, message
              FROM connection_logs
              ORDER BY connected_at DESC
              LIMIT ?1",
@@ -470,6 +492,7 @@ pub fn db_get_connection_logs(state: State<AppState>, limit: Option<i64>) -> Res
                 "disconnectedAt": row.get::<_, Option<String>>(6)?,
                 "durationSecs":   row.get::<_, Option<i64>>(7)?,
                 "status":         row.get::<_, String>(8)?,
+                "message":        row.get::<_, Option<String>>(9)?,
             }))
         })
         .map_err(|e| e.to_string())?

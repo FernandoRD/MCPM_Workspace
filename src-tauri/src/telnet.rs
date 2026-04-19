@@ -306,6 +306,12 @@ fn trim_owned(value: String) -> String {
     value.trim().to_string()
 }
 
+fn telnet_log_error(context: String, error: impl std::fmt::Display) -> String {
+    let message = format!("{context}: {error}");
+    log::error!("{message}");
+    message
+}
+
 #[tauri::command]
 pub async fn telnet_connect(
     state: tauri::State<'_, crate::AppState>,
@@ -318,9 +324,23 @@ pub async fn telnet_connect(
     rows: u16,
 ) -> Result<(), String> {
     let host = trim_owned(host);
+    let connect_context = format!(
+        "tab={} target={}:{} timeout={} cols={} rows={}",
+        tab_id,
+        host,
+        port,
+        connection_timeout.unwrap_or(15),
+        cols,
+        rows
+    );
     state
         .rate_limiter
-        .check("telnet_connect", 10, Duration::from_secs(60))?;
+        .check("telnet_connect", 10, Duration::from_secs(60))
+        .map_err(|error| {
+            log::warn!("telnet: conexão bloqueada por rate limit {connect_context}: {error}");
+            error
+        })?;
+    log::info!("telnet: connect iniciado {connect_context}");
 
     let _ = app.emit(
         "terminal-status",
@@ -334,8 +354,12 @@ pub async fn telnet_connect(
     let timeout_duration = Duration::from_secs(connection_timeout.unwrap_or(15).max(1) as u64);
     let stream = timeout(timeout_duration, TcpStream::connect((host.as_str(), port)))
         .await
-        .map_err(|_| "Tempo esgotado ao conectar via Telnet".to_string())?
-        .map_err(|e| e.to_string())?;
+        .map_err(|_| {
+            let message = format!("Tempo esgotado ao conectar via Telnet ({connect_context})");
+            log::error!("{message}");
+            message
+        })?
+        .map_err(|e| telnet_log_error(format!("telnet: erro ao conectar ({connect_context})"), e))?;
 
     let (tx, mut rx) = mpsc::channel::<TelnetCommand>(64);
     {
@@ -351,6 +375,7 @@ pub async fn telnet_connect(
             message: None,
         },
     );
+    log::info!("telnet: conectado {connect_context}");
 
     let app_task = app.clone();
     let tab_id_task = tab_id.clone();
@@ -382,17 +407,22 @@ pub async fn telnet_connect(
 
                             for response in parse_result.responses {
                                 if writer.write_all(&response).await.is_err() {
+                                    log::error!("telnet: falha ao responder negociação tab={}", tab_id_task);
                                     break;
                                 }
                             }
                         }
-                        Err(_) => break,
+                        Err(error) => {
+                            log::error!("telnet: erro de leitura tab={}: {}", tab_id_task, error);
+                            break;
+                        }
                     }
                 }
                 cmd = rx.recv() => {
                     match cmd {
                         Some(TelnetCommand::Data(bytes)) => {
                             if writer.write_all(&bytes).await.is_err() {
+                                log::error!("telnet: falha ao enviar dados tab={}", tab_id_task);
                                 break;
                             }
                         }
@@ -410,6 +440,7 @@ pub async fn telnet_connect(
 
                             if let Some(response) = response {
                                 if writer.write_all(&response).await.is_err() {
+                                    log::error!("telnet: falha ao enviar resize tab={}", tab_id_task);
                                     break;
                                 }
                             }
@@ -424,6 +455,7 @@ pub async fn telnet_connect(
         }
 
         telnet_arc.lock().await.sessions.remove(&tab_id_task);
+        log::info!("telnet: desconectado tab={}", tab_id_task);
         let _ = app_task.emit(
             "terminal-status",
             TerminalStatusEvent {
@@ -449,7 +481,9 @@ pub async fn telnet_send_input(
             .tx
             .send(TelnetCommand::Data(normalize_telnet_input(data)))
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| telnet_log_error(format!("telnet: falha ao enviar input tab={tab_id}"), e))?;
+    } else {
+        log::warn!("telnet: send_input para sessão inexistente tab={}", tab_id);
     }
     Ok(())
 }
@@ -467,7 +501,14 @@ pub async fn telnet_resize(
             .tx
             .send(TelnetCommand::Resize { cols, rows })
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| {
+                telnet_log_error(
+                    format!("telnet: falha ao redimensionar tab={tab_id} cols={cols} rows={rows}"),
+                    e,
+                )
+            })?;
+    } else {
+        log::warn!("telnet: resize para sessão inexistente tab={}", tab_id);
     }
     Ok(())
 }
@@ -479,7 +520,10 @@ pub async fn telnet_disconnect(
 ) -> Result<(), String> {
     let manager = state.telnet.lock().await;
     if let Some(session) = manager.sessions.get(&tab_id) {
+        log::info!("telnet: disconnect solicitado tab={}", tab_id);
         let _ = session.tx.send(TelnetCommand::Disconnect).await;
+    } else {
+        log::warn!("telnet: disconnect para sessão inexistente tab={}", tab_id);
     }
     Ok(())
 }
@@ -489,5 +533,7 @@ pub async fn telnet_session_exists(
     state: tauri::State<'_, crate::AppState>,
     tab_id: String,
 ) -> Result<bool, String> {
-    Ok(state.telnet.lock().await.sessions.contains_key(&tab_id))
+    let exists = state.telnet.lock().await.sessions.contains_key(&tab_id);
+    log::debug!("telnet: session_exists tab={} exists={}", tab_id, exists);
+    Ok(exists)
 }

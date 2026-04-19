@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
 import { SshKey } from "@/types";
 import { v4 as uuidv4 } from "uuid";
+import { logFrontendError } from "@/lib/logger";
 
 interface SshKeysStore {
   sshKeys: SshKey[];
@@ -23,7 +24,7 @@ export const useSshKeysStore = create<SshKeysStore>()((set, get) => ({
       const sshKeys = await invoke<SshKey[]>("db_get_ssh_keys");
       set({ sshKeys, initialized: true });
     } catch (e) {
-      console.error("Falha ao inicializar sshKeys store:", e);
+      logFrontendError("sshKeys.init", "Falha ao inicializar sshKeys store", e);
       set({ initialized: true });
     }
   },
@@ -33,7 +34,9 @@ export const useSshKeysStore = create<SshKeysStore>()((set, get) => ({
     const now = new Date().toISOString();
     const sshKey: SshKey = { ...data, id, createdAt: now, updatedAt: now };
     set((s) => ({ sshKeys: [...s.sshKeys, sshKey] }));
-    invoke("db_save_ssh_key", { sshKey }).catch(console.error);
+    invoke("db_save_ssh_key", { sshKey }).catch((error) => {
+      logFrontendError("sshKeys.add", "Falha ao salvar chave SSH", error, { id });
+    });
     return id;
   },
 
@@ -43,13 +46,19 @@ export const useSshKeysStore = create<SshKeysStore>()((set, get) => ({
         k.id === id ? { ...k, ...data, updatedAt: new Date().toISOString() } : k
       );
       const updated = sshKeys.find((k) => k.id === id);
-      if (updated) invoke("db_save_ssh_key", { sshKey: updated }).catch(console.error);
+      if (updated) {
+        invoke("db_save_ssh_key", { sshKey: updated }).catch((error) => {
+          logFrontendError("sshKeys.update", "Falha ao atualizar chave SSH", error, { id });
+        });
+      }
       return { sshKeys };
     }),
 
   deleteSshKey: (id) => {
     set((s) => ({ sshKeys: s.sshKeys.filter((k) => k.id !== id) }));
-    invoke("db_delete_ssh_key", { id }).catch(console.error);
+    invoke("db_delete_ssh_key", { id }).catch((error) => {
+      logFrontendError("sshKeys.delete", "Falha ao remover chave SSH", error, { id });
+    });
   },
 
   getSshKey: (id) => get().sshKeys.find((k) => k.id === id),
@@ -58,6 +67,10 @@ export const useSshKeysStore = create<SshKeysStore>()((set, get) => ({
     set({ sshKeys });
     invoke("db_clear_ssh_keys")
       .then(() => Promise.all(sshKeys.map((sshKey) => invoke("db_save_ssh_key", { sshKey }))))
-      .catch(console.error);
+      .catch((error) => {
+        logFrontendError("sshKeys.replace", "Falha ao substituir chaves SSH", error, {
+          count: sshKeys.length,
+        });
+      });
   },
 }));

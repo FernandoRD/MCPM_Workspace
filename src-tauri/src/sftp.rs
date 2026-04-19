@@ -3,7 +3,7 @@ use std::future::Future;
 use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{Instant, SystemTime};
 
 use cfg_if::cfg_if;
 use russh::client;
@@ -47,11 +47,40 @@ pub struct SftpEntry {
 // ─── Conexão SFTP ─────────────────────────────────────────────────────────────
 
 struct SftpConnection {
+    target_host: String,
+    target_port: u16,
+    username: String,
+    auth_method: String,
+    compat_preset: String,
+    jump_host: Option<String>,
     /// Mantém a sessão SSH do host alvo viva
     _handle: client::Handle<KnownHostsHandler>,
     /// Mantém a sessão SSH do jump host viva (quando usado)
     _jump_handle: Option<client::Handle<KnownHostsHandler>>,
     sftp: SftpSession,
+}
+
+impl SftpConnection {
+    fn context(&self, session_id: &str) -> String {
+        match self.jump_host.as_deref() {
+            Some(jump_host) => format!(
+                "session={session_id} target={}@{}:{} auth={} preset={} jump={jump_host}",
+                self.username,
+                self.target_host,
+                self.target_port,
+                self.auth_method,
+                self.compat_preset
+            ),
+            None => format!(
+                "session={session_id} target={}@{}:{} auth={} preset={}",
+                self.username,
+                self.target_host,
+                self.target_port,
+                self.auth_method,
+                self.compat_preset
+            ),
+        }
+    }
 }
 
 // ─── Gerenciador ──────────────────────────────────────────────────────────────
@@ -77,36 +106,64 @@ async fn authenticate(
     password: Option<String>,
     private_key_content: Option<String>,
     private_key_passphrase: Option<String>,
+    log_context: &str,
 ) -> Result<bool, String> {
     match auth_method {
         "password" => {
+            log::info!("sftp: autenticando com senha {log_context}");
             let pwd = password.ok_or("Senha não informada")?;
             session
                 .authenticate_password(username, pwd)
                 .await
-                .map_err(|e| e.to_string())
+                .map_err(|e| log_error(format!("Erro ao autenticar com senha ({log_context})"), e))
         }
         "privateKey" => {
+            log::info!("sftp: autenticando com chave privada {log_context}");
             let content = private_key_content.ok_or("Conteúdo da chave não informado")?;
             let key =
                 russh_keys::decode_secret_key(&content, private_key_passphrase.as_deref())
-                    .map_err(|e| format!("Falha ao decodificar chave: {e}"))?;
+                    .map_err(|e| {
+                        log_error(
+                            format!("Falha ao decodificar chave privada ({log_context})"),
+                            e,
+                        )
+                    })?;
             session
                 .authenticate_publickey(username, Arc::new(key))
                 .await
-                .map_err(|e| e.to_string())
+                .map_err(|e| {
+                    log_error(
+                        format!("Erro ao autenticar com chave privada ({log_context})"),
+                        e,
+                    )
+                })
         }
         "agent" => {
+            log::info!("sftp: autenticando com SSH agent {log_context}");
             cfg_if! {
                 if #[cfg(unix)] {
                     use russh_keys::agent::client::AgentClient;
                     let mut agent = AgentClient::connect_env()
                         .await
-                        .map_err(|_| "Não foi possível conectar ao agente SSH.".to_string())?;
+                        .map_err(|_| {
+                            let message =
+                                format!("Não foi possível conectar ao agente SSH ({log_context}).");
+                            log::error!("{message}");
+                            message
+                        })?;
                     let ids = agent
                         .request_identities()
                         .await
-                        .map_err(|e| e.to_string())?;
+                        .map_err(|e| {
+                            log_error(
+                                format!("Erro ao listar identidades do agente SSH ({log_context})"),
+                                e,
+                            )
+                        })?;
+                    log::info!(
+                        "sftp: agente SSH retornou {} identidades {log_context}",
+                        ids.len()
+                    );
                     let mut ok = false;
                     for id in ids {
                         let (returned_agent, result) =
@@ -119,12 +176,41 @@ async fn authenticate(
                     }
                     Ok(ok)
                 } else {
-                    Err("Agente SSH não suportado nesta plataforma.".into())
+                    let message =
+                        format!("Agente SSH não suportado nesta plataforma ({log_context}).");
+                    log::error!("{message}");
+                    Err(message)
                 }
             }
         }
-        _ => Err(format!("Método de autenticação desconhecido: {auth_method}")),
+        _ => {
+            let message =
+                format!("Método de autenticação desconhecido: {auth_method} ({log_context})");
+            log::error!("{message}");
+            Err(message)
+        }
     }
+}
+
+fn log_error(context: String, error: impl std::fmt::Display) -> String {
+    let message = format!("{context}: {error}");
+    log::error!("{message}");
+    message
+}
+
+async fn get_connection(
+    state: &State<'_, AppState>,
+    session_id: &str,
+) -> Result<Arc<Mutex<SftpConnection>>, String> {
+    let mgr = state.sftp.lock().await;
+    mgr.sessions
+        .get(session_id)
+        .cloned()
+        .ok_or_else(|| {
+            let message = format!("Sessão SFTP não encontrada: session={session_id}");
+            log::warn!("sftp: {message}");
+            message
+        })
 }
 
 // ─── Delete recursivo ─────────────────────────────────────────────────────────
@@ -137,7 +223,7 @@ fn sftp_remove_recursive<'a>(
         let entries = sftp
             .read_dir(path)
             .await
-            .map_err(|e| format!("Erro ao listar '{path}': {e}"))?;
+            .map_err(|e| log_error(format!("Erro ao listar '{path}' durante delete recursivo"), e))?;
 
         for entry in entries {
             let name = entry.file_name().to_string();
@@ -154,13 +240,13 @@ fn sftp_remove_recursive<'a>(
             } else {
                 sftp.remove_file(&child)
                     .await
-                    .map_err(|e| format!("Erro ao remover '{child}': {e}"))?;
+                    .map_err(|e| log_error(format!("Erro ao remover '{child}' durante delete recursivo"), e))?;
             }
         }
 
         sftp.remove_dir(path)
             .await
-            .map_err(|e| format!("Erro ao remover diretório '{path}': {e}"))
+            .map_err(|e| log_error(format!("Erro ao remover diretório '{path}' durante delete recursivo"), e))
     })
 }
 
@@ -201,6 +287,34 @@ pub async fn sftp_connect(
     let keepalive = keepalive_interval.unwrap_or(0);
     let timeout = connection_timeout.unwrap_or(30);
     let config = build_ssh_config(preset, keepalive, timeout);
+    let connect_context = match jump_host.as_deref() {
+        Some(jump_host) => format!(
+            "session={session_id} target={}@{}:{} auth={} preset={} timeout={} keepalive={} jump={}{}",
+            username,
+            host,
+            port,
+            auth_method,
+            preset,
+            timeout,
+            keepalive,
+            jump_host,
+            jump_port
+                .map(|value| format!(":{value}"))
+                .unwrap_or_else(|| ":22".to_string())
+        ),
+        None => format!(
+            "session={session_id} target={}@{}:{} auth={} preset={} timeout={} keepalive={}",
+            username,
+            host,
+            port,
+            auth_method,
+            preset,
+            timeout,
+            keepalive
+        ),
+    };
+
+    log::info!("sftp: connect iniciado {connect_context}");
 
     // ─── Conecta ao host alvo (direto ou via jump host) ────────────────────────
 
@@ -208,6 +322,12 @@ pub async fn sftp_connect(
         let jport = jump_port.unwrap_or(22);
         let jusername = jump_username.as_deref().unwrap_or(&username);
         let jauth = jump_auth_method.as_deref().unwrap_or("password");
+        let jump_context = format!(
+            "session={session_id} jump_target={}@{}:{} auth={}",
+            jusername, jhost, jport, jauth
+        );
+
+        log::info!("sftp: conectando ao jump host {jump_context}");
 
         let mut jump_session = client::connect(
             config.clone(),
@@ -215,7 +335,12 @@ pub async fn sftp_connect(
             KnownHostsHandler::new(jhost, jport, known_hosts.clone()),
         )
         .await
-        .map_err(|e| format!("Erro ao conectar ao jump host '{jhost}': {e}"))?;
+        .map_err(|e| {
+            log_error(
+                format!("Erro ao conectar ao jump host '{jhost}' ({jump_context})"),
+                e,
+            )
+        })?;
 
         let ok = authenticate(
             &mut jump_session,
@@ -224,17 +349,31 @@ pub async fn sftp_connect(
             jump_password,
             jump_private_key_content,
             jump_private_key_passphrase,
+            &jump_context,
         )
         .await?;
         if !ok {
-            return Err("Autenticação no jump host falhou.".into());
+            let message = format!("Autenticação no jump host falhou ({jump_context}).");
+            log::error!("{message}");
+            return Err(message);
         }
+        log::info!("sftp: jump host autenticado {jump_context}");
 
         // Abre túnel TCP para o host alvo através do jump host
         let channel = jump_session
             .channel_open_direct_tcpip(&host, port as u32, "127.0.0.1", 0)
             .await
-            .map_err(|e| format!("Erro ao abrir túnel para {host}:{port}: {e}"))?;
+            .map_err(|e| {
+                log_error(
+                    format!(
+                        "Erro ao abrir túnel do jump host para {host}:{port} ({jump_context})"
+                    ),
+                    e,
+                )
+            })?;
+        log::info!(
+            "sftp: túnel via jump host estabelecido session={session_id} target={host}:{port}"
+        );
 
         // Conecta o SSH do alvo através do túnel
         let target_session = client::connect_stream(
@@ -243,17 +382,25 @@ pub async fn sftp_connect(
             KnownHostsHandler::new(&host, port, known_hosts.clone()),
         )
         .await
-        .map_err(|e| format!("Erro ao conectar ao host via jump: {e}"))?;
+        .map_err(|e| {
+            log_error(
+                format!("Erro ao conectar ao host via jump ({connect_context})"),
+                e,
+            )
+        })?;
 
         (target_session, Some(jump_session))
     } else {
+        log::info!(
+            "sftp: conectando diretamente ao host session={session_id} target={host}:{port}"
+        );
         let s = client::connect(
             config.clone(),
             format!("{}:{}", host, port),
             KnownHostsHandler::new(&host, port, known_hosts.clone()),
         )
         .await
-        .map_err(|e| format!("Erro ao conectar: {e}"))?;
+        .map_err(|e| log_error(format!("Erro ao conectar ({connect_context})"), e))?;
         (s, None)
     };
 
@@ -266,33 +413,51 @@ pub async fn sftp_connect(
         password,
         private_key_content,
         private_key_passphrase,
+        &connect_context,
     )
     .await?;
     if !ok {
-        return Err("Autenticação falhou. Verifique as credenciais.".into());
+        let message = format!(
+            "Autenticação falhou. Verifique as credenciais ({connect_context})."
+        );
+        log::error!("{message}");
+        return Err(message);
     }
+    log::info!("sftp: autenticação concluída {connect_context}");
 
     // ─── Persiste known_hosts atualizados ─────────────────────────────────────
 
     save_known_hosts(&data_dir, &*known_hosts.lock().map_err(|e| e.to_string())?);
+    log::info!("sftp: known_hosts persistido {connect_context}");
 
     // ─── Abre sessão SFTP ──────────────────────────────────────────────────────
 
     let channel = session
         .channel_open_session()
         .await
-        .map_err(|e| format!("Erro ao abrir canal: {e}"))?;
+        .map_err(|e| log_error(format!("Erro ao abrir canal SFTP ({connect_context})"), e))?;
 
     channel
         .request_subsystem(true, "sftp")
         .await
-        .map_err(|e| format!("Erro ao iniciar subsistema SFTP: {e}"))?;
+        .map_err(|e| {
+            log_error(
+                format!("Erro ao iniciar subsistema SFTP ({connect_context})"),
+                e,
+            )
+        })?;
 
     let sftp = SftpSession::new(channel.into_stream())
         .await
-        .map_err(|e| format!("Erro ao iniciar sessão SFTP: {e}"))?;
+        .map_err(|e| log_error(format!("Erro ao iniciar sessão SFTP ({connect_context})"), e))?;
 
     let conn = Arc::new(Mutex::new(SftpConnection {
+        target_host: host.clone(),
+        target_port: port,
+        username: username.clone(),
+        auth_method: auth_method.clone(),
+        compat_preset: preset.to_string(),
+        jump_host: jump_host.clone(),
         _handle: session,
         _jump_handle: jump_handle,
         sftp,
@@ -305,6 +470,7 @@ pub async fn sftp_connect(
         .sessions
         .insert(session_id, conn);
 
+    log::info!("sftp: sessão conectada com sucesso {connect_context}");
     Ok(())
 }
 
@@ -314,20 +480,22 @@ pub async fn sftp_read_dir(
     session_id: String,
     path: String,
 ) -> Result<Vec<SftpEntry>, String> {
-    let conn_arc = {
-        let mgr = state.sftp.lock().await;
-        mgr.sessions
-            .get(&session_id)
-            .ok_or("Sessão SFTP não encontrada")?
-            .clone()
-    };
+    let started = Instant::now();
+    let conn_arc = get_connection(&state, &session_id).await?;
     let conn = conn_arc.lock().await;
+    let context = conn.context(&session_id);
+    log::info!("sftp: list_dir iniciado {context} path='{path}'");
 
     let entries = conn
         .sftp
         .read_dir(&path)
         .await
-        .map_err(|e| format!("Erro ao listar diretório: {e}"))?;
+        .map_err(|e| {
+            log_error(
+                format!("Erro ao listar diretório ({context}) path='{path}'"),
+                e,
+            )
+        })?;
 
     let mut result: Vec<SftpEntry> = entries
         .into_iter()
@@ -365,6 +533,12 @@ pub async fn sftp_read_dir(
         _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
     });
 
+    log::info!(
+        "sftp: list_dir concluído {context} path='{}' entries={} elapsed_ms={}",
+        path,
+        result.len(),
+        started.elapsed().as_millis()
+    );
     Ok(result)
 }
 
@@ -376,15 +550,22 @@ pub async fn sftp_download(
     remote_path: String,
     local_path: String,
 ) -> Result<(), String> {
-    state.rate_limiter.check("sftp_download", 30, std::time::Duration::from_secs(60))?;
-    let conn_arc = {
-        let mgr = state.sftp.lock().await;
-        mgr.sessions
-            .get(&session_id)
-            .ok_or("Sessão SFTP não encontrada")?
-            .clone()
-    };
+    state
+        .rate_limiter
+        .check("sftp_download", 30, std::time::Duration::from_secs(60))
+        .map_err(|e| {
+            log::warn!(
+                "sftp: download bloqueado por rate limit session={} remote='{}': {}",
+                session_id,
+                remote_path,
+                e
+            );
+            e
+        })?;
+    let started = Instant::now();
+    let conn_arc = get_connection(&state, &session_id).await?;
     let conn = conn_arc.lock().await;
+    let context = conn.context(&session_id);
 
     let file_name = remote_path
         .split('/')
@@ -392,23 +573,46 @@ pub async fn sftp_download(
         .unwrap_or(&remote_path)
         .to_string();
 
+    log::info!(
+        "sftp: download iniciado {context} remote='{}' local='{}'",
+        remote_path,
+        local_path
+    );
+
     // Obtém tamanho do arquivo remoto para barra de progresso
     let bytes_total = conn
         .sftp
         .metadata(&remote_path)
         .await
         .map(|m| m.len())
-        .unwrap_or(0);
+        .unwrap_or_else(|error| {
+            log::warn!(
+                "sftp: não foi possível obter tamanho do arquivo remoto ({context}) remote='{}': {}",
+                remote_path,
+                error
+            );
+            0
+        });
 
     let mut remote_file = conn
         .sftp
         .open(&remote_path)
         .await
-        .map_err(|e| format!("Erro ao abrir arquivo remoto: {e}"))?;
+        .map_err(|e| {
+            log_error(
+                format!("Erro ao abrir arquivo remoto ({context}) remote='{remote_path}'"),
+                e,
+            )
+        })?;
 
     let mut local_file = tokio::fs::File::create(&local_path)
         .await
-        .map_err(|e| format!("Erro ao criar arquivo local: {e}"))?;
+        .map_err(|e| {
+            log_error(
+                format!("Erro ao criar arquivo local ({context}) local='{local_path}'"),
+                e,
+            )
+        })?;
 
     let mut buf = vec![0u8; 65536];
     let mut bytes_done = 0u64;
@@ -417,14 +621,24 @@ pub async fn sftp_download(
         let n = remote_file
             .read(&mut buf)
             .await
-            .map_err(|e| format!("Erro ao ler arquivo remoto: {e}"))?;
+            .map_err(|e| {
+                log_error(
+                    format!("Erro ao ler arquivo remoto ({context}) remote='{remote_path}'"),
+                    e,
+                )
+            })?;
         if n == 0 {
             break;
         }
         local_file
             .write_all(&buf[..n])
             .await
-            .map_err(|e| format!("Erro ao gravar arquivo local: {e}"))?;
+            .map_err(|e| {
+                log_error(
+                    format!("Erro ao gravar arquivo local ({context}) local='{local_path}'"),
+                    e,
+                )
+            })?;
 
         bytes_done += n as u64;
         let _ = app.emit(
@@ -439,6 +653,13 @@ pub async fn sftp_download(
         );
     }
 
+    log::info!(
+        "sftp: download concluído {context} remote='{}' local='{}' bytes={} elapsed_ms={}",
+        remote_path,
+        local_path,
+        bytes_done,
+        started.elapsed().as_millis()
+    );
     Ok(())
 }
 
@@ -450,15 +671,23 @@ pub async fn sftp_upload(
     local_path: String,
     remote_path: String,
 ) -> Result<(), String> {
-    state.rate_limiter.check("sftp_upload", 30, std::time::Duration::from_secs(60))?;
-    let conn_arc = {
-        let mgr = state.sftp.lock().await;
-        mgr.sessions
-            .get(&session_id)
-            .ok_or("Sessão SFTP não encontrada")?
-            .clone()
-    };
+    state
+        .rate_limiter
+        .check("sftp_upload", 30, std::time::Duration::from_secs(60))
+        .map_err(|e| {
+            log::warn!(
+                "sftp: upload bloqueado por rate limit session={} local='{}' remote='{}': {}",
+                session_id,
+                local_path,
+                remote_path,
+                e
+            );
+            e
+        })?;
+    let started = Instant::now();
+    let conn_arc = get_connection(&state, &session_id).await?;
     let conn = conn_arc.lock().await;
+    let context = conn.context(&session_id);
 
     let file_name = Path::new(&local_path)
         .file_name()
@@ -466,22 +695,45 @@ pub async fn sftp_upload(
         .unwrap_or(&local_path)
         .to_string();
 
+    log::info!(
+        "sftp: upload iniciado {context} local='{}' remote='{}'",
+        local_path,
+        remote_path
+    );
+
     let mut local_file = tokio::fs::File::open(&local_path)
         .await
-        .map_err(|e| format!("Erro ao abrir arquivo local: {e}"))?;
+        .map_err(|e| {
+            log_error(
+                format!("Erro ao abrir arquivo local ({context}) local='{local_path}'"),
+                e,
+            )
+        })?;
 
     // Obtém tamanho do arquivo local para barra de progresso
     let bytes_total = local_file
         .metadata()
         .await
         .map(|m| m.len())
-        .unwrap_or(0);
+        .unwrap_or_else(|error| {
+            log::warn!(
+                "sftp: não foi possível obter tamanho do arquivo local ({context}) local='{}': {}",
+                local_path,
+                error
+            );
+            0
+        });
 
     let mut remote_file = conn
         .sftp
         .create(&remote_path)
         .await
-        .map_err(|e| format!("Erro ao criar arquivo remoto: {e}"))?;
+        .map_err(|e| {
+            log_error(
+                format!("Erro ao criar arquivo remoto ({context}) remote='{remote_path}'"),
+                e,
+            )
+        })?;
 
     let mut buf = vec![0u8; 65536];
     let mut bytes_done = 0u64;
@@ -490,14 +742,26 @@ pub async fn sftp_upload(
         let n = local_file
             .read(&mut buf)
             .await
-            .map_err(|e| format!("Erro ao ler arquivo local: {e}"))?;
+            .map_err(|e| {
+                log_error(
+                    format!("Erro ao ler arquivo local ({context}) local='{local_path}'"),
+                    e,
+                )
+            })?;
         if n == 0 {
             break;
         }
         remote_file
             .write_all(&buf[..n])
             .await
-            .map_err(|e| format!("Erro ao enviar dados: {e}"))?;
+            .map_err(|e| {
+                log_error(
+                    format!(
+                        "Erro ao enviar dados para o arquivo remoto ({context}) remote='{remote_path}'"
+                    ),
+                    e,
+                )
+            })?;
 
         bytes_done += n as u64;
         let _ = app.emit(
@@ -512,6 +776,13 @@ pub async fn sftp_upload(
         );
     }
 
+    log::info!(
+        "sftp: upload concluído {context} local='{}' remote='{}' bytes={} elapsed_ms={}",
+        local_path,
+        remote_path,
+        bytes_done,
+        started.elapsed().as_millis()
+    );
     Ok(())
 }
 
@@ -521,18 +792,16 @@ pub async fn sftp_mkdir(
     session_id: String,
     path: String,
 ) -> Result<(), String> {
-    let conn_arc = {
-        let mgr = state.sftp.lock().await;
-        mgr.sessions
-            .get(&session_id)
-            .ok_or("Sessão SFTP não encontrada")?
-            .clone()
-    };
+    let conn_arc = get_connection(&state, &session_id).await?;
     let conn = conn_arc.lock().await;
+    let context = conn.context(&session_id);
+    log::info!("sftp: mkdir iniciado {context} path='{path}'");
     conn.sftp
         .create_dir(&path)
         .await
-        .map_err(|e| format!("Erro ao criar diretório: {e}"))
+        .map_err(|e| log_error(format!("Erro ao criar diretório ({context}) path='{path}'"), e))?;
+    log::info!("sftp: mkdir concluído {context} path='{path}'");
+    Ok(())
 }
 
 #[tauri::command]
@@ -542,14 +811,14 @@ pub async fn sftp_delete(
     path: String,
     is_dir: bool,
 ) -> Result<(), String> {
-    let conn_arc = {
-        let mgr = state.sftp.lock().await;
-        mgr.sessions
-            .get(&session_id)
-            .ok_or("Sessão SFTP não encontrada")?
-            .clone()
-    };
+    let conn_arc = get_connection(&state, &session_id).await?;
     let conn = conn_arc.lock().await;
+    let context = conn.context(&session_id);
+    log::info!(
+        "sftp: delete iniciado {context} path='{}' is_dir={}",
+        path,
+        is_dir
+    );
     if is_dir {
         // Delete recursivo: remove conteúdo antes do diretório
         sftp_remove_recursive(&conn.sftp, &path).await
@@ -557,8 +826,15 @@ pub async fn sftp_delete(
         conn.sftp
             .remove_file(&path)
             .await
-            .map_err(|e| format!("Erro ao remover arquivo: {e}"))
-    }
+            .map_err(|e| {
+                log_error(
+                    format!("Erro ao remover arquivo ({context}) path='{path}'"),
+                    e,
+                )
+            })
+    }?;
+    log::info!("sftp: delete concluído {context} path='{path}'");
+    Ok(())
 }
 
 #[tauri::command]
@@ -568,18 +844,29 @@ pub async fn sftp_rename(
     old_path: String,
     new_path: String,
 ) -> Result<(), String> {
-    let conn_arc = {
-        let mgr = state.sftp.lock().await;
-        mgr.sessions
-            .get(&session_id)
-            .ok_or("Sessão SFTP não encontrada")?
-            .clone()
-    };
+    let conn_arc = get_connection(&state, &session_id).await?;
     let conn = conn_arc.lock().await;
+    let context = conn.context(&session_id);
+    log::info!(
+        "sftp: rename iniciado {context} from='{}' to='{}'",
+        old_path,
+        new_path
+    );
     conn.sftp
         .rename(&old_path, &new_path)
         .await
-        .map_err(|e| format!("Erro ao renomear: {e}"))
+        .map_err(|e| {
+            log_error(
+                format!("Erro ao renomear ({context}) from='{old_path}' to='{new_path}'"),
+                e,
+            )
+        })?;
+    log::info!(
+        "sftp: rename concluído {context} from='{}' to='{}'",
+        old_path,
+        new_path
+    );
+    Ok(())
 }
 
 #[tauri::command]
@@ -587,7 +874,13 @@ pub async fn sftp_disconnect(
     state: State<'_, AppState>,
     session_id: String,
 ) -> Result<(), String> {
-    state.sftp.lock().await.sessions.remove(&session_id);
+    let removed = state.sftp.lock().await.sessions.remove(&session_id);
+    if let Some(conn_arc) = removed {
+        let conn = conn_arc.lock().await;
+        log::info!("sftp: sessão removida {}", conn.context(&session_id));
+    } else {
+        log::warn!("sftp: disconnect chamado para sessão inexistente session={session_id}");
+    }
     Ok(())
 }
 
@@ -596,5 +889,7 @@ pub async fn sftp_session_exists(
     state: State<'_, AppState>,
     session_id: String,
 ) -> Result<bool, String> {
-    Ok(state.sftp.lock().await.sessions.contains_key(&session_id))
+    let exists = state.sftp.lock().await.sessions.contains_key(&session_id);
+    log::debug!("sftp: session_exists session={} exists={}", session_id, exists);
+    Ok(exists)
 }

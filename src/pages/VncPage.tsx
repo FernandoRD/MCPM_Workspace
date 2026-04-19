@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { ExternalLink, Loader2, Monitor, RefreshCw, Wifi, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { APP_NAME } from "@/lib/appInfo";
+import { logFrontendError } from "@/lib/logger";
 import { notify } from "@/lib/notifications";
 import { readSessionBootstrap, withStandaloneQuery } from "@/lib/windowMode";
 import { useConnectionLogsStore } from "@/store/connectionLogs";
@@ -166,6 +167,7 @@ export function VncPage() {
     setError(null);
     setLaunchInfo(null);
     updateTabStatus(tabId, "connecting");
+    const connectedAt = new Date().toISOString();
 
     try {
       const result = await invoke<VncLaunchResult>("vnc_connect", {
@@ -189,7 +191,7 @@ export function VncPage() {
         hostLabel: tab.hostLabel,
         hostAddress: `${targetHost}:${targetPort}`,
         sessionType: "vnc",
-        connectedAt: new Date().toISOString(),
+        connectedAt,
         status: "connected",
       });
 
@@ -204,6 +206,21 @@ export function VncPage() {
       setError(message);
       setLaunchInfo(null);
       updateTabStatus(tabId, "error");
+      openLog({
+        hostId: tab.hostId,
+        hostLabel: tab.hostLabel,
+        hostAddress: `${targetHost}:${targetPort}`,
+        sessionType: "vnc",
+        connectedAt,
+        status: "error",
+        message,
+      });
+      logFrontendError("vnc.connect", "Falha ao iniciar sessão VNC", err, {
+        sessionId: tabId,
+        host: targetHost,
+        port: targetPort,
+        preferredClient: vncSettings.linuxClient,
+      });
       notify(APP_NAME, t("notifications.vncError", { host: tab?.hostLabel ?? "VNC" }));
     } finally {
       setLaunching(false);

@@ -1,3 +1,4 @@
+mod app_logging;
 mod credentials;
 mod crypto;
 mod database;
@@ -43,6 +44,9 @@ pub struct AppState {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let storage = Storage::new().expect("Falha ao inicializar storage");
+    let log_path = app_logging::init(&storage.data_dir)
+        .expect("Falha ao inicializar logging persistente");
+    log::info!("logging inicializado em {}", log_path.display());
     let database =
         Database::open(&storage.data_dir).expect("Falha ao inicializar banco de dados");
 
@@ -67,6 +71,11 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             storage::get_app_data_dir,
+            app_logging::write_frontend_log,
+            app_logging::app_get_log_settings,
+            app_logging::app_set_log_directory,
+            app_logging::app_list_log_files,
+            app_logging::app_read_log_file,
             credentials::save_credential,
             credentials::get_credential,
             credentials::delete_credential,

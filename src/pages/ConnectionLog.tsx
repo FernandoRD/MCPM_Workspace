@@ -79,17 +79,24 @@ export function ConnectionLog() {
                     {formatDuration(log.durationSecs)}
                   </td>
                   <td className="px-4 py-2.5">
-                    <span
-                      className={
-                        log.status === "connected"
-                          ? "text-green-400"
-                          : log.status === "error"
-                          ? "text-red-400"
-                          : "text-[var(--text-muted)]"
-                      }
-                    >
-                      {t(`connectionLog.statusLabel.${log.status}`)}
-                    </span>
+                    <div className="flex flex-col gap-1">
+                      <span
+                        className={
+                          log.status === "connected"
+                            ? "text-green-400"
+                            : log.status === "error"
+                            ? "text-red-400"
+                            : "text-[var(--text-muted)]"
+                        }
+                      >
+                        {t(`connectionLog.statusLabel.${log.status}`)}
+                      </span>
+                      {log.message && (
+                        <span className="text-xs text-[var(--text-muted)] break-words max-w-md">
+                          {log.message}
+                        </span>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
