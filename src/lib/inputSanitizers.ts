@@ -7,6 +7,7 @@ import {
   SessionConnection,
   TunnelProfile,
 } from "@/types";
+import { normalizeGroupPath } from "@/lib/groups";
 
 function trimRequired(value: string | undefined): string | undefined {
   return typeof value === "string" ? value.trim() : value;
@@ -16,6 +17,12 @@ function trimOptional(value: string | undefined): string | undefined {
   if (typeof value !== "string") return value;
   const trimmed = value.trim();
   return trimmed || undefined;
+}
+
+function sanitizeGroupPaths(groups: string[]): string[] {
+  return Array.from(
+    new Set(groups.map((group) => normalizeGroupPath(group)).filter((group): group is string => !!group))
+  );
 }
 
 function sanitizeTags(tags: string[] | undefined): string[] | undefined {
@@ -37,7 +44,7 @@ export function sanitizeHostInput<T extends Partial<HostEntry>>(host: T): T {
     label: trimRequired(host.label) as T["label"],
     host: trimRequired(host.host) as T["host"],
     username: trimOptional(host.username) as T["username"],
-    group: trimOptional(host.group) as T["group"],
+    group: normalizeGroupPath(host.group) as T["group"],
     tags: sanitizeTags(host.tags) as T["tags"],
     jumpHostId: trimOptional(host.jumpHostId) as T["jumpHostId"],
     color: trimOptional(host.color) as T["color"],
@@ -101,7 +108,7 @@ export function sanitizeSettingsInput(settings: AppSettings): AppSettings {
         ...settings.rdp.internalClientPerformance,
       },
     },
-    groups: settings.groups.map((group) => group.trim()).filter(Boolean),
+    groups: sanitizeGroupPaths(settings.groups),
     sync: {
       ...settings.sync,
       s3: settings.sync.s3
@@ -134,7 +141,10 @@ export function sanitizeSettingsInput(settings: AppSettings): AppSettings {
         ...snippet,
         label: snippet.label.trim(),
         description: snippet.description?.trim() || undefined,
-        scopeValue: snippet.scopeValue?.trim() || undefined,
+        scopeValue:
+          snippet.scopeType === "group"
+            ? normalizeGroupPath(snippet.scopeValue) || undefined
+            : snippet.scopeValue?.trim() || undefined,
         tags: sanitizeTags(snippet.tags) ?? [],
       })),
       tunnels: sanitizeTunnelProfiles(settings.productivity.tunnels),

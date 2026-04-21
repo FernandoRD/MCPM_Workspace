@@ -188,7 +188,7 @@ Arquivo-base: [index.ts](/home/fernando/Documentos/ssh_vault/src/types/index.ts)
 ### Entidades principais
 
 - `HostEntry`
-  Host salvo no vault, com `protocol`, grupo, tags, notas, cor, TOTP, `jumpHostId`, preset SSH e vínculo opcional com `credentialId`.
+  Host salvo no vault, com `protocol`, grupo hierárquico em formato de caminho, tags, notas, cor, TOTP, `jumpHostId`, preset SSH e vínculo opcional com `credentialId`.
 - `Credential`
   Credencial reutilizável com `username`, `authMethod`, `password?` e `keyId?`.
 - `SshKey`
@@ -219,6 +219,7 @@ Arquivo-base: [index.ts](/home/fernando/Documentos/ssh_vault/src/types/index.ts)
 - `sync`
   `provider`, `autoSync`, `autoSyncIntervalMinutes?`, `lastSyncAt?`, configs por provider
 - `groups`
+  Lista persistida de grupos e subgrupos em formato de caminho, como `Produção/Web/API`
 - `productivity`
   `snippets`, `tunnels`, `workspaces`
 
@@ -330,6 +331,8 @@ Rotas atuais:
   Centraliza parsing, validação, matching, template e plano de aplicação para importação em massa por `.csv`.
 - [logger.ts](/home/fernando/Documentos/ssh_vault/src/lib/logger.ts)
   Centraliza logging persistente do frontend, incluindo erros globais de runtime e falhas das stores e páginas principais.
+- [groups.ts](/home/fernando/Documentos/ssh_vault/src/lib/groups.ts)
+  Centraliza normalização, árvore hierárquica, flatten para UI e operações de rename/delete em cascata para grupos e subgrupos.
 
 ### RDP no app principal
 
@@ -720,8 +723,19 @@ Regras práticas atuais:
 - Página: [Dashboard.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Dashboard.tsx)
 - Escopo atual:
   - credencial
-  - grupo
+  - grupo hierárquico
   - tags (`replace`, `add`, `remove`)
+
+### Grupos hierárquicos
+
+- Página: [Groups.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Groups.tsx)
+- Utilitários: [groups.ts](/home/fernando/Documentos/ssh_vault/src/lib/groups.ts)
+- Modelo atual:
+  grupos e subgrupos são representados como caminhos, por exemplo `Produção/Web/API`
+- Comportamentos suportados:
+  criação de grupos raiz e subgrupos, rename em cascata de um ramo inteiro, exclusão de um grupo pai junto com seus descendentes e filtro do dashboard com herança para filhos
+- Compatibilidade:
+  grupos simples legados continuam válidos e são tratados como nós de primeiro nível
 
 ### Importação de `~/.ssh/config`
 
@@ -840,7 +854,7 @@ Arquivos principais:
 
 Estado atual:
 
-- versão de referência atual do app: `0.4.0`
+- versão de referência atual do app: `0.4.1`
 - `package.json` é a fonte principal da versão do app
 - `tauri.conf.json` lê a versão a partir de `../package.json`
 - o frontend lê a versão a partir de `package.json` via `appInfo.ts`

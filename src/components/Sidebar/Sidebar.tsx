@@ -23,6 +23,7 @@ export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const openCommandPalette = useUIStore((s) => s.openCommandPalette);
+  const quickConnectShortcut = "Ctrl+Shift+K";
 
   const navItems = [
     { to: "/", icon: Server, label: t("nav.dashboard") },
@@ -60,7 +61,7 @@ export function Sidebar() {
             {t("nav.quickConnect")}
           </span>
           <span className="rounded border border-[var(--border)] px-1.5 py-0.5 text-[10px] text-[var(--text-muted)]">
-            Ctrl+K
+            {quickConnectShortcut}
           </span>
         </button>
         {navItems.map(({ to, icon: Icon, label }) => (

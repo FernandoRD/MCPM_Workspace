@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 import { ChevronDown, ChevronRight, ArrowLeft, RefreshCw, Lock, KeyRound, Cpu, Plus, Upload, CheckCircle2, XCircle, Loader2 } from "lucide-react";
@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/Button";
 import { TagBadge } from "@/components/ui/TagBadge";
 import { TotpDisplay } from "@/components/TotpDisplay/TotpDisplay";
 import { sanitizeHostInput } from "@/lib/inputSanitizers";
+import { collectAllGroupPaths, normalizeGroupPath } from "@/lib/groups";
 import { cn } from "@/lib/utils";
 
 type FormData = Omit<HostEntry, "id" | "createdAt" | "updatedAt" | "authMethod" | "passwordRef" | "privateKeyContent" | "passphrase" | "username">;
@@ -189,6 +190,14 @@ export function HostEditor() {
   };
 
   const otherHosts = hosts.filter((h) => h.id !== id);
+  const existingGroups = useMemo(
+    () =>
+      collectAllGroupPaths([
+        ...hosts.map((host) => host.group),
+        ...savedGroups,
+      ]),
+    [hosts, savedGroups]
+  );
 
   return (
     <div className="flex flex-col h-full">
@@ -424,12 +433,7 @@ export function HostEditor() {
                 <GroupCombobox
                   value={form.group ?? ""}
                   onChange={(v) => set("group", v || undefined)}
-                  existingGroups={[
-                    ...new Set([
-                      ...hosts.map((h) => h.group).filter((g): g is string => !!g),
-                      ...savedGroups,
-                    ]),
-                  ].sort()}
+                  existingGroups={existingGroups}
                 />
                 <Input
                   id="color"
@@ -704,6 +708,7 @@ function GroupCombobox({
         list={listId}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={(e) => onChange(normalizeGroupPath(e.target.value) ?? "")}
         placeholder={t("hostEditor.fields.groupPlaceholder")}
         className="h-9 w-full rounded-md border border-[var(--border)] bg-[var(--bg-primary)] px-3 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:outline-none focus:border-[var(--border-focus)]"
       />

@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { v4 as uuidv4 } from "uuid";
 import { AppSettings, SessionConnection } from "@/types";
+import i18n from "@/lib/i18n";
 import { buildSessionRoute } from "@/lib/windowMode";
 import { notify } from "@/lib/notifications";
 import { APP_NAME } from "@/lib/appInfo";
@@ -205,7 +206,7 @@ export async function launchQuickConnectSession({
       quickConnectBootstrapId: bootstrapId,
     });
 
-    const opened = await createStandaloneSessionWindow(route, "Quick Connect", sessionId, sessionType);
+    const opened = await createStandaloneSessionWindow(route, i18n.t("nav.quickConnect"), sessionId, sessionType);
     if (opened) return null;
 
     notify(APP_NAME, `Nao foi possivel abrir janela separada para ${hostLabel}. Abrindo em aba.`);

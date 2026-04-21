@@ -223,7 +223,7 @@
       "privateKey": "Private Key",
       "passphrase": "Key Passphrase",
       "group": "Group",
-      "groupPlaceholder": "E.g.: Production",
+      "groupPlaceholder": "E.g.: Production/Web",
       "tags": "Tags",
       "tagsPlaceholder": "E.g.: web, database, monitoring",
       "notes": "Notes",
@@ -865,17 +865,20 @@
   },
   "groups": {
     "title": "Groups",
-    "description": "Manage your SSH host groups",
+    "description": "Manage groups and subgroups to organize your hosts",
     "newGroup": "New Group",
     "namePlaceholder": "Group name...",
     "nameRequired": "Name is required",
     "nameExists": "A group with this name already exists",
+    "creatingRoot": "Creating a root group",
+    "creatingInside": "Creating inside {{parent}}",
+    "addSubgroup": "Add subgroup",
     "noGroups": "No groups created",
-    "noGroupsDescription": "Create groups to organize your SSH hosts",
+    "noGroupsDescription": "Create groups and subgroups to organize your hosts",
     "hostCount": "{{count}} host(s)",
     "deleteTitle": "Delete Group",
     "deleteConfirm": "Are you sure you want to delete the group \"{{name}}\"?",
-    "deleteWarning": "The {{count}} host(s) in this group will become ungrouped, but will not be deleted."
+    "deleteWarning": "The {{count}} host(s) in this group and its {{childrenCount}} subgroup(s) will become ungrouped, but will not be deleted."
   },
   "connectionLog": {
     "title": "Connection Log",

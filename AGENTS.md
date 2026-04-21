@@ -1,17 +1,15 @@
 <claude-mem-context>
 # Memory Context
 
-# [ssh_vault] recent context, 2026-04-18 9:24pm GMT-3
+# [ssh_vault] recent context, 2026-04-20 10:25pm GMT-3
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-Stats: 49 obs (21,776t read) | 815,966t work | 97% savings
+Stats: 50 obs (22,005t read) | 899,090t work | 98% savings
 
 ### Apr 18, 2026
-55 10:04a 🔵 ssh_vault Git Repository Has 697MB Pack — Blocking GitHub Push
-57 10:05a 🔵 Root Cause Found: Rust Build Artifacts Committed in 16c74d8 Block GitHub Push
 58 10:07a 🔴 git filter-branch Successfully Rewrote Local History — Removed 6,344 Build Artifacts from 9 Commits
 62 10:08a 🔵 History Rewrite Verified Clean: Largest Remaining Blob is 14.6MB — Push Should Succeed
 64 10:10a 🔵 Local Pack Still 704MB After gc — Old Blobs Retained by alteracao-esquema-ssh/telnet Branch and origin/main Tracking Ref
@@ -59,6 +57,9 @@ Stats: 49 obs (21,776t read) | 815,966t work | 97% savings
 167 9:19p 🟣 LogsPage.tsx: Fixed Log Viewer Height — Scrollable Panels with Fixed 28rem Height
 169 9:23p 🔄 LogsPage.tsx: Responsive Height Tuning — Asymmetric Panel Sizes with xl Breakpoints
 171 9:24p 🔴 LogsPage.tsx: Scrollable Log Viewer — Final State with Responsive Heights, Build Clean
+172 " ✅ Version Bump to 0.4.0 — Docs Updated with VNC, LogsPage, and app_logging.rs
+174 9:26p 🔵 Version Bump Partial Failure: README.md and TECHNICAL_REFERENCE.md Still Show 0.3.9 After Patch
+176 " ✅ ssh_vault Version 0.4.0 — Build Validated Clean
 
-Access 816k tokens of past work via get_observations([IDs]) or mem-search skill.
+Access 899k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>

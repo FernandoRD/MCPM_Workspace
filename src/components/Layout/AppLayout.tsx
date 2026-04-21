@@ -6,6 +6,20 @@ import { TabBar } from "@/components/TabBar/TabBar";
 import { isStandaloneWindow } from "@/lib/windowMode";
 import { useUIStore } from "@/store/uiStore";
 
+function shouldIgnoreCommandPaletteShortcut(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+
+  if (
+    target.isContentEditable ||
+    target.closest("input, textarea, select, [contenteditable='true']") ||
+    target.closest(".xterm")
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 export function AppLayout() {
   const location = useLocation();
   const standalone = isStandaloneWindow(location.search);
@@ -15,10 +29,16 @@ export function AppLayout() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        openCommandPalette();
-      }
+      const isShortcut =
+        (event.ctrlKey || event.metaKey) &&
+        event.shiftKey &&
+        !event.altKey &&
+        event.key.toLowerCase() === "k";
+
+      if (!isShortcut || shouldIgnoreCommandPaletteShortcut(event.target)) return;
+
+      event.preventDefault();
+      openCommandPalette();
     };
 
     window.addEventListener("keydown", onKeyDown, { capture: true });

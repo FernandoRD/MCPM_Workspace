@@ -39,6 +39,7 @@ import { Select } from "@/components/ui/Select";
 import { SshConfigImportModal } from "@/components/SshConfigImportModal";
 import { NewConnectionSplitButton } from "@/components/NewConnectionSplitButton";
 import { launchRdpSession, launchTerminalSession, launchVncSession } from "@/lib/sessionLauncher";
+import { buildGroupTree, collectAllGroupPaths, flattenGroupTree, isGroupInTree } from "@/lib/groups";
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { buildSessionRoute, isStandaloneWindow } from "@/lib/windowMode";
@@ -94,17 +95,28 @@ export function Dashboard() {
     left.localeCompare(right)
   );
 
-  const allGroups = [
-    ...new Set([
-      ...hosts.map((host) => host.group).filter((group): group is string => !!group),
-      ...savedGroups,
-    ]),
-  ].sort((left, right) => left.localeCompare(right));
+  const allGroups = useMemo(
+    () =>
+      collectAllGroupPaths([
+        ...hosts.map((host) => host.group),
+        ...savedGroups,
+      ]),
+    [hosts, savedGroups]
+  );
 
-  const groupCount = hosts.reduce<Record<string, number>>((acc, host) => {
-    if (host.group) acc[host.group] = (acc[host.group] ?? 0) + 1;
-    return acc;
-  }, {});
+  const flattenedGroups = useMemo(
+    () => flattenGroupTree(buildGroupTree(allGroups)),
+    [allGroups]
+  );
+
+  const groupCount = useMemo(
+    () =>
+      allGroups.reduce<Record<string, number>>((acc, groupPath) => {
+        acc[groupPath] = hosts.filter((host) => isGroupInTree(host.group, groupPath)).length;
+        return acc;
+      }, {}),
+    [allGroups, hosts]
+  );
 
   const filtered = hosts
     .filter((host) => {
@@ -113,7 +125,7 @@ export function Dashboard() {
         host.host.toLowerCase().includes(search.toLowerCase()) ||
         host.protocol.toLowerCase().includes(search.toLowerCase()) ||
         host.tags.some((tag) => tag.toLowerCase().includes(search.toLowerCase()));
-      const matchGroup = selectedGroup === null || host.group === selectedGroup;
+      const matchGroup = selectedGroup === null || isGroupInTree(host.group, selectedGroup);
       const matchTag = selectedTags.length === 0 || selectedTags.some((tag) => host.tags.includes(tag));
       return matchSearch && matchGroup && matchTag;
     })
@@ -380,20 +392,26 @@ export function Dashboard() {
                   <span className="text-xs opacity-70">({hosts.length})</span>
                 </button>
 
-                {allGroups.map((group) => (
+                {flattenedGroups.map((group) => (
                   <button
-                    key={group}
-                    onClick={() => setSelectedGroup(selectedGroup === group ? null : group)}
+                    key={group.path}
+                    onClick={() => setSelectedGroup(selectedGroup === group.path ? null : group.path)}
                     className={cn(
                       "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors",
-                      selectedGroup === group
+                      selectedGroup === group.path
                         ? "border-[var(--accent)] bg-[var(--accent-subtle)] text-[var(--accent)] font-medium"
                         : "border-[var(--border)] bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:border-[var(--text-muted)]"
                     )}
+                    title={group.path}
                   >
-                    <Layers size={13} />
-                    {group}
-                    <span className="text-xs opacity-70">({groupCount[group] ?? 0})</span>
+                    <span
+                      className="inline-flex items-center gap-2"
+                      style={{ paddingLeft: `${group.depth * 14}px` }}
+                    >
+                      <Layers size={13} />
+                      {group.name}
+                    </span>
+                    <span className="text-xs opacity-70">({groupCount[group.path] ?? 0})</span>
                   </button>
                 ))}
               </div>

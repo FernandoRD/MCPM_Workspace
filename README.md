@@ -6,7 +6,14 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 
 ## Versão atual
 
-`0.4.0`
+`0.4.1`
+
+## Novidades da 0.4.1
+
+- Suporte a grupos hierárquicos com subgrupos, usando caminhos como `Produção/Web/API` para organizar melhor a árvore de hosts
+- Tela `Groups` reformulada para criar subgrupos, renomear ramos inteiros e excluir um grupo pai junto com sua hierarquia
+- Filtros do dashboard e seleção de grupos agora entendem hierarquia: ao escolher um grupo pai, os hosts dos subgrupos entram automaticamente no resultado
+- Campo de grupo no editor de host passou a aceitar e sugerir caminhos hierárquicos, mantendo compatibilidade com grupos simples já existentes
 
 ## Novidades da 0.4.0
 
@@ -91,7 +98,7 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 - SFTP integrado para hosts `SSH`, com navegação remota, upload, download, rename, delete e mkdir
 - `Quick Connect` na command palette para conexões temporárias `SSH`, `Telnet`, `RDP` e `VNC` sem salvar host
 - Opção para abrir sessões na `mesma janela` ou no `terminal do sistema` (SSH/Telnet) e em `janelas dedicadas` (RDP/VNC)
-- Dashboard com filtros por grupo/tag, ordenação e edição em massa de `credencial`, `grupo` e `tags`
+- Dashboard com filtros por grupo/subgrupo e tag, ordenação e edição em massa de `credencial`, `grupo` e `tags`
 - Importação em massa de hosts via `.csv`, com template/export de exemplo, preview e merge controlado
 - Acesso às importações direto pelo `+ Nova Conexão`, sem atrapalhar o fluxo principal de cadastro individual
 - Operações com snippets, túneis e workspaces com compatibilidade por protocolo
