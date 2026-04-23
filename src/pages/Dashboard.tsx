@@ -614,8 +614,18 @@ function HostCard({
         </div>
       </div>
 
-      {(host.tags.length > 0 || host.mfaEnabled) && (
+      {(host.group || host.tags.length > 0 || host.mfaEnabled) && (
         <div className="flex flex-wrap gap-1">
+          {host.group && (
+            <Badge
+              variant="default"
+              className="max-w-[150px] gap-1"
+              title={host.group}
+            >
+              <Layers size={10} />
+              <span className="truncate">{host.group}</span>
+            </Badge>
+          )}
           {host.mfaEnabled && (
             <Badge variant="accent" className="flex items-center gap-1">
               <ShieldCheck size={10} />
