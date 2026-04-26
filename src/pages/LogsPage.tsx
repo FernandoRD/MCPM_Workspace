@@ -1,9 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { FileText, FolderOpen, RefreshCw, RotateCcw } from "lucide-react";
+import { FileText, FolderOpen, RefreshCw, RotateCcw, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { logFrontendError } from "@/lib/logger";
 
 interface LogSettingsInfo {
@@ -31,6 +33,10 @@ interface LogFileContent {
   truncated: boolean;
 }
 
+const LOG_LEVELS = ["all", "error", "warn", "info", "debug", "trace"] as const;
+
+type LogLevelFilter = (typeof LOG_LEVELS)[number];
+
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -42,6 +48,34 @@ function formatDate(value?: string | null): string {
   return new Date(value).toLocaleString();
 }
 
+function matchesLogLevel(line: string, level: LogLevelFilter): boolean {
+  if (level === "all") return true;
+  if (level === "warn") return /\b(warn|warning)\b/i.test(line);
+  return new RegExp(`\\b${level}\\b`, "i").test(line);
+}
+
+function filterLogLines(content: string, searchTerm: string, level: LogLevelFilter, caseSensitive: boolean) {
+  const lines = content ? content.split(/\r?\n/) : [];
+  const trimmedSearch = searchTerm.trim();
+  const needle = caseSensitive ? trimmedSearch : trimmedSearch.toLowerCase();
+
+  if (!needle && level === "all") {
+    return { content, filteredLines: lines.length, totalLines: lines.length };
+  }
+
+  const filtered = lines.filter((line) => {
+    const levelMatches = matchesLogLevel(line, level);
+    const searchMatches = !needle || (caseSensitive ? line : line.toLowerCase()).includes(needle);
+    return levelMatches && searchMatches;
+  });
+
+  return {
+    content: filtered.join("\n"),
+    filteredLines: filtered.length,
+    totalLines: lines.length,
+  };
+}
+
 export function LogsPage() {
   const { t } = useTranslation();
   const [settings, setSettings] = useState<LogSettingsInfo | null>(null);
@@ -51,6 +85,22 @@ export function LogsPage() {
   const [loading, setLoading] = useState(true);
   const [reading, setReading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [levelFilter, setLevelFilter] = useState<LogLevelFilter>("all");
+  const [caseSensitive, setCaseSensitive] = useState(false);
+
+  const filteredLog = useMemo(
+    () => filterLogLines(selectedContent?.content ?? "", searchTerm, levelFilter, caseSensitive),
+    [caseSensitive, levelFilter, searchTerm, selectedContent?.content]
+  );
+
+  const hasActiveFilters = searchTerm.trim() !== "" || levelFilter !== "all" || caseSensitive;
+
+  const clearFilters = () => {
+    setSearchTerm("");
+    setLevelFilter("all");
+    setCaseSensitive(false);
+  };
 
   const loadFileContent = useCallback(async (fileName: string) => {
     setReading(true);
@@ -250,13 +300,64 @@ export function LogsPage() {
               <p className="text-sm text-[var(--text-muted)]">{t("logs.noFileSelected")}</p>
             ) : (
               <div className="flex h-full flex-col gap-3">
+                <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_12rem_auto_auto]">
+                  <div className="relative">
+                    <Input
+                      id="log-search"
+                      label={t("logs.search")}
+                      value={searchTerm}
+                      onChange={(event) => setSearchTerm(event.target.value)}
+                      placeholder={t("logs.searchPlaceholder")}
+                      className="pl-9"
+                    />
+                    <Search
+                      size={14}
+                      className="pointer-events-none absolute left-3 top-[2.15rem] text-[var(--text-muted)]"
+                    />
+                  </div>
+                  <Select
+                    id="log-level-filter"
+                    label={t("logs.level")}
+                    value={levelFilter}
+                    onChange={(event) => setLevelFilter(event.target.value as LogLevelFilter)}
+                  >
+                    {LOG_LEVELS.map((level) => (
+                      <option key={level} value={level}>
+                        {t(`logs.levels.${level}`)}
+                      </option>
+                    ))}
+                  </Select>
+                  <label className="flex items-end gap-2 pb-2 text-sm text-[var(--text-primary)]">
+                    <input
+                      type="checkbox"
+                      checked={caseSensitive}
+                      onChange={(event) => setCaseSensitive(event.target.checked)}
+                      className="mb-0.5 h-4 w-4 rounded border-[var(--border)] accent-[var(--accent)]"
+                    />
+                    <span>{t("logs.caseSensitive")}</span>
+                  </label>
+                  <div className="flex items-end">
+                    <Button variant="secondary" size="sm" onClick={clearFilters} disabled={!hasActiveFilters}>
+                      <X size={14} />
+                      {t("logs.clearFilters")}
+                    </Button>
+                  </div>
+                </div>
+                <div className="text-xs text-[var(--text-muted)]">
+                  {t("logs.filteredLines", {
+                    count: filteredLog.filteredLines,
+                    total: filteredLog.totalLines,
+                  })}
+                </div>
                 {selectedContent.truncated && (
                   <div className="rounded-lg border border-[var(--warning)] bg-[var(--warning)]/10 px-3 py-2 text-xs text-[var(--warning)]">
                     {t("logs.truncated")}
                   </div>
                 )}
                 <pre className="min-h-0 flex-1 overflow-auto rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] p-4 text-xs leading-5 text-[var(--text-primary)] whitespace-pre-wrap break-words">
-                  {selectedContent.content || t("logs.emptyFile")}
+                  {selectedContent.content
+                    ? filteredLog.content || t("logs.noMatches")
+                    : t("logs.emptyFile")}
                 </pre>
               </div>
             )}

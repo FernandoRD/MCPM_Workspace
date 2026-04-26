@@ -25,6 +25,7 @@ import {
 } from "@/lib/sync";
 import { pushToProvider, pullFromProvider } from "@/lib/syncProviders";
 import { APP_NAME } from "@/lib/appInfo";
+import { setSessionMasterPassword } from "@/lib/masterPasswordSession";
 
 // ─── Página principal ─────────────────────────────────────────────────────────
 
@@ -251,6 +252,7 @@ export function Sync() {
         verificationPayload={settings.security?.verificationPayload}
         onConfirm={(password) => {
           const action = masterPasswordModal.action;
+          setSessionMasterPassword(password);
           setMasterPasswordModal((m) => ({ ...m, open: false }));
           if (action === "push") doPush(password);
           else doPull(password);
@@ -533,6 +535,19 @@ function AutoSyncConfig({
   const { t } = useTranslation();
   const interval = sync.autoSyncIntervalMinutes ?? 30;
   const [remainingMin, setRemainingMin] = useState<number | null>(null);
+  const masterPasswordMissing = !security?.masterPasswordSet;
+  const firstManualSyncMissing = !sync.lastSyncAt;
+  const blocked = sync.autoSync && (masterPasswordMissing || firstManualSyncMissing);
+
+  const handleToggle = () => {
+    if (sync.autoSync) {
+      updateSync({ autoSync: false });
+      return;
+    }
+
+    if (masterPasswordMissing) return;
+    updateSync({ autoSync: true });
+  };
 
   // Atualiza o countdown a cada 30 s com base em lastSyncAt + intervalo
   useEffect(() => {
@@ -574,10 +589,13 @@ function AutoSyncConfig({
         <button
           role="switch"
           aria-checked={sync.autoSync}
-          onClick={() => updateSync({ autoSync: !sync.autoSync })}
+          aria-disabled={!sync.autoSync && masterPasswordMissing}
+          title={masterPasswordMissing ? t("sync.autoSync.blockedNoMasterPassword") : undefined}
+          onClick={handleToggle}
           className={cn(
             "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
-            sync.autoSync ? "bg-[var(--accent)]" : "bg-[var(--border)]"
+            sync.autoSync ? "bg-[var(--accent)]" : "bg-[var(--border)]",
+            !sync.autoSync && masterPasswordMissing && "cursor-not-allowed opacity-60"
           )}
         >
           <span
@@ -588,6 +606,24 @@ function AutoSyncConfig({
           />
         </button>
       </div>
+
+      {masterPasswordMissing && (
+        <div className="flex items-start gap-2 rounded-lg border border-[var(--danger)]/30 bg-[var(--danger)]/5 px-3 py-2">
+          <AlertCircle size={14} className="mt-0.5 shrink-0 text-[var(--danger)]" />
+          <p className="text-xs leading-relaxed text-[var(--danger)]">
+            {t("sync.autoSync.blockedNoMasterPassword")}
+          </p>
+        </div>
+      )}
+
+      {sync.autoSync && !masterPasswordMissing && firstManualSyncMissing && (
+        <div className="flex items-start gap-2 rounded-lg border border-[var(--accent)]/30 bg-[var(--accent-subtle)] px-3 py-2">
+          <AlertCircle size={14} className="mt-0.5 shrink-0 text-[var(--accent)]" />
+          <p className="text-xs leading-relaxed text-[var(--accent)]">
+            {t("sync.autoSync.waitingFirstManualSync")}
+          </p>
+        </div>
+      )}
 
       {/* Intervalo + countdown — só mostra quando ativado */}
       {sync.autoSync && (
@@ -615,7 +651,7 @@ function AutoSyncConfig({
           </div>
 
           {/* Próximo sync */}
-          {remainingMin !== null && (
+          {remainingMin !== null && !blocked && (
             <div className="flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-primary)] px-3 py-2">
               <Timer size={13} className="text-[var(--accent)] shrink-0" />
               <p className="text-xs text-[var(--text-secondary)]">
@@ -628,9 +664,12 @@ function AutoSyncConfig({
 
           {/* Aviso sobre credenciais */}
           {security?.syncCredentials && security.masterPasswordSet && (
-            <p className="text-xs text-[var(--text-muted)] leading-relaxed">
-              ⚠ {t("sync.autoSync.noMasterPasswordWarning")}
-            </p>
+            <div className="flex items-start gap-2 rounded-lg border border-[var(--border)] bg-[var(--bg-primary)] px-3 py-2">
+              <KeyRound size={13} className="mt-0.5 shrink-0 text-[var(--accent)]" />
+              <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+                {t("sync.autoSync.masterPasswordSessionHint")}
+              </p>
+            </div>
           )}
         </>
       )}

@@ -84,6 +84,7 @@ src/
   App.tsx
   components/
     CommandPalette.tsx
+    CredentialForm.tsx
     Layout/AppLayout.tsx
     NewConnectionSplitButton.tsx
     Sidebar/Sidebar.tsx
@@ -310,7 +311,7 @@ Rotas atuais:
 - [VncPage.tsx](/home/fernando/Documentos/ssh_vault/src/pages/VncPage.tsx)
   Orquestra a conexão VNC, exibe o contrato de capacidade da sessão e diferencia cliente gerenciado de launcher externo.
 - [LogsPage.tsx](/home/fernando/Documentos/ssh_vault/src/pages/LogsPage.tsx)
-  Exibe os arquivos de diagnóstico, permite trocar o diretório de saída e facilita leitura sem sair da aplicação.
+  Exibe os arquivos de diagnóstico, permite trocar o diretório de saída e facilita leitura sem sair da aplicação. A visualização do arquivo carregado tem filtros locais por texto, nível (`error`, `warn`, `info`, `debug`, `trace`) e sensibilidade a maiúsculas/minúsculas, sem alterar o arquivo em disco.
 
 ### Branding e identidade
 
@@ -333,6 +334,8 @@ Rotas atuais:
   Centraliza logging persistente do frontend, incluindo erros globais de runtime e falhas das stores e páginas principais.
 - [groups.ts](/home/fernando/Documentos/ssh_vault/src/lib/groups.ts)
   Centraliza normalização, árvore hierárquica, flatten para UI e operações de rename/delete em cascata para grupos e subgrupos.
+- [masterPasswordSession.ts](/home/fernando/Documentos/ssh_vault/src/lib/masterPasswordSession.ts)
+  Mantém a senha mestra somente em memória durante a sessão atual para fluxos que precisam cifrar segredos sem persistir a senha.
 
 ### RDP no app principal
 
@@ -517,7 +520,10 @@ Observações:
 - `push` envia snapshot local atual
 - `pull` importa/mescla conteúdo remoto nas stores locais
 - `autoSync` só faz push em background
+- `autoSync` não executa push inicial quando `lastSyncAt` ainda está vazio; uma instalação nova precisa de uma primeira ação manual para definir se deve importar ou enviar dados
+- `autoSync` fica bloqueado se nenhuma senha mestra estiver configurada
 - segredos cifrados dependem da senha mestra informada no fluxo manual
+- quando o sync de credenciais está ativo, a senha mestra validada no sync manual fica apenas em memória da sessão via [masterPasswordSession.ts](/home/fernando/Documentos/ssh_vault/src/lib/masterPasswordSession.ts) e pode ser reutilizada pelo auto-sync para gerar `encryptedSecrets`
 
 ### Backup
 
@@ -726,14 +732,29 @@ Regras práticas atuais:
   - grupo hierárquico
   - tags (`replace`, `add`, `remove`)
 
+### Editor de hosts e credenciais
+
+- Editor: [HostEditor.tsx](/home/fernando/Documentos/ssh_vault/src/pages/HostEditor.tsx)
+- Formulário reutilizável: [CredentialForm.tsx](/home/fernando/Documentos/ssh_vault/src/components/CredentialForm.tsx)
+- Rotas dedicadas: [CredentialEditor.tsx](/home/fernando/Documentos/ssh_vault/src/pages/CredentialEditor.tsx) e [Credentials.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Credentials.tsx)
+- O editor de host mantém o formulário em estado local enquanto abre o gerenciamento de credenciais em um modal sobreposto.
+- No modal, é possível listar, criar, editar, selecionar e remover credenciais sem navegar para fora da criação/edição do host.
+- Ao salvar uma credencial pelo modal, o host seleciona automaticamente a credencial quando ela é compatível com o protocolo atual; para `RDP` e `VNC`, apenas credenciais de senha são selecionáveis.
+- As rotas `/credentials/new` e `/credentials/:id` usam o mesmo `CredentialForm`, mantendo validação e persistência em um único ponto.
+
 ### Grupos hierárquicos
 
 - Página: [Groups.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Groups.tsx)
+- Filtro no dashboard: [Dashboard.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Dashboard.tsx)
 - Utilitários: [groups.ts](/home/fernando/Documentos/ssh_vault/src/lib/groups.ts)
 - Modelo atual:
   grupos e subgrupos são representados como caminhos, por exemplo `Produção/Web/API`
 - Comportamentos suportados:
   criação de grupos raiz e subgrupos, rename em cascata de um ramo inteiro, exclusão de um grupo pai junto com seus descendentes e filtro do dashboard com herança para filhos
+- UI do dashboard:
+  a faixa principal mostra apenas grupos raiz para economizar espaço; subgrupos aparecem em menus flutuantes no hover/foco do grupo pai e podem abrir submenus recursivos
+- Ergonomia do hover:
+  o fechamento dos menus de subgrupo usa atraso cancelável para permitir mover o ponteiro do grupo pai até o submenu sem ocultar a lista imediatamente
 - Compatibilidade:
   grupos simples legados continuam válidos e são tratados como nós de primeiro nível
 
@@ -775,7 +796,12 @@ Regras da importação CSV:
 ### Auto-sync
 
 - Hook: [useAutoSync.ts](/home/fernando/Documentos/ssh_vault/src/hooks/useAutoSync.ts)
-- Dispara push periódico com base nas settings atuais
+- UI: [Sync.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Sync.tsx)
+- Memória de sessão da senha mestra: [masterPasswordSession.ts](/home/fernando/Documentos/ssh_vault/src/lib/masterPasswordSession.ts)
+- Dispara push periódico com base nas settings atuais, mas somente depois de existir `lastSyncAt`
+- Se `lastSyncAt` está vazio, o hook não faz push automático. Isso protege instalações novas contra sobrescrever um remoto existente com estado local vazio.
+- Se não há senha mestra configurada, o auto-sync fica bloqueado e a UI mostra o aviso correspondente.
+- Se `security.syncCredentials` está ativo, o auto-sync exige uma senha mestra já informada no sync manual da sessão atual para cifrar `encryptedSecrets`; sem ela, o disparo é ignorado e o usuário é notificado.
 
 ## 12. Cliente RDP interno
 
@@ -854,7 +880,7 @@ Arquivos principais:
 
 Estado atual:
 
-- versão de referência atual do app: `0.4.1`
+- versão de referência atual do app: `0.4.3`
 - `package.json` é a fonte principal da versão do app
 - `tauri.conf.json` lê a versão a partir de `../package.json`
 - o frontend lê a versão a partir de `package.json` via `appInfo.ts`

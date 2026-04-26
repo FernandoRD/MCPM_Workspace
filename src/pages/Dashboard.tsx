@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
@@ -23,6 +23,7 @@ import {
   Square,
   PencilLine,
   UserRound,
+  ChevronRight,
 } from "lucide-react";
 import { useHostsStore } from "@/store/hosts";
 import { useUIStore, DashboardSortBy } from "@/store/uiStore";
@@ -39,7 +40,8 @@ import { Select } from "@/components/ui/Select";
 import { SshConfigImportModal } from "@/components/SshConfigImportModal";
 import { NewConnectionSplitButton } from "@/components/NewConnectionSplitButton";
 import { launchRdpSession, launchTerminalSession, launchVncSession } from "@/lib/sessionLauncher";
-import { buildGroupTree, collectAllGroupPaths, flattenGroupTree, isGroupInTree } from "@/lib/groups";
+import type { GroupTreeNode } from "@/lib/groups";
+import { buildGroupTree, collectAllGroupPaths, isGroupInTree } from "@/lib/groups";
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { buildSessionRoute, isStandaloneWindow } from "@/lib/windowMode";
@@ -104,8 +106,8 @@ export function Dashboard() {
     [hosts, savedGroups]
   );
 
-  const flattenedGroups = useMemo(
-    () => flattenGroupTree(buildGroupTree(allGroups)),
+  const groupTree = useMemo(
+    () => buildGroupTree(allGroups),
     [allGroups]
   );
 
@@ -392,27 +394,14 @@ export function Dashboard() {
                   <span className="text-xs opacity-70">({hosts.length})</span>
                 </button>
 
-                {flattenedGroups.map((group) => (
-                  <button
+                {groupTree.map((group) => (
+                  <GroupFilterButton
                     key={group.path}
-                    onClick={() => setSelectedGroup(selectedGroup === group.path ? null : group.path)}
-                    className={cn(
-                      "flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors",
-                      selectedGroup === group.path
-                        ? "border-[var(--accent)] bg-[var(--accent-subtle)] text-[var(--accent)] font-medium"
-                        : "border-[var(--border)] bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:border-[var(--text-muted)]"
-                    )}
-                    title={group.path}
-                  >
-                    <span
-                      className="inline-flex items-center gap-2"
-                      style={{ paddingLeft: `${group.depth * 14}px` }}
-                    >
-                      <Layers size={13} />
-                      {group.name}
-                    </span>
-                    <span className="text-xs opacity-70">({groupCount[group.path] ?? 0})</span>
-                  </button>
+                    group={group}
+                    groupCount={groupCount}
+                    selectedGroup={selectedGroup}
+                    onSelect={setSelectedGroup}
+                  />
                 ))}
               </div>
             )}
@@ -471,6 +460,107 @@ export function Dashboard() {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function GroupFilterButton({
+  group,
+  groupCount,
+  selectedGroup,
+  onSelect,
+  nested = false,
+}: {
+  group: GroupTreeNode;
+  groupCount: Record<string, number>;
+  selectedGroup: string | null;
+  onSelect: (group: string | null) => void;
+  nested?: boolean;
+}) {
+  const hasChildren = group.children.length > 0;
+  const selected = selectedGroup === group.path;
+  const branchSelected = selectedGroup ? isGroupInTree(selectedGroup, group.path) : false;
+  const [open, setOpen] = useState(false);
+  const closeTimeoutRef = useRef<number | null>(null);
+
+  const clearCloseTimeout = () => {
+    if (closeTimeoutRef.current !== null) {
+      window.clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+  };
+
+  const openMenu = () => {
+    clearCloseTimeout();
+    setOpen(true);
+  };
+
+  const scheduleCloseMenu = () => {
+    clearCloseTimeout();
+    closeTimeoutRef.current = window.setTimeout(() => {
+      setOpen(false);
+      closeTimeoutRef.current = null;
+    }, 450);
+  };
+
+  useEffect(() => clearCloseTimeout, []);
+
+  return (
+    <div
+      className={cn("relative", nested ? "w-full" : "inline-flex")}
+      onMouseEnter={openMenu}
+      onMouseLeave={scheduleCloseMenu}
+      onFocus={openMenu}
+      onBlur={(event) => {
+        const nextTarget = event.relatedTarget as Node | null;
+        if (!event.currentTarget.contains(nextTarget)) {
+          scheduleCloseMenu();
+        }
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => onSelect(selected ? null : group.path)}
+        className={cn(
+          "flex min-w-0 items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors",
+          nested ? "w-full justify-between" : "max-w-[220px]",
+          branchSelected
+            ? "border-[var(--accent)] bg-[var(--accent-subtle)] text-[var(--accent)] font-medium"
+            : "border-[var(--border)] bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:border-[var(--text-muted)]"
+        )}
+        title={group.path}
+      >
+        <span className="inline-flex min-w-0 items-center gap-2">
+          <Layers size={13} className="shrink-0" />
+          <span className="truncate">{group.name}</span>
+        </span>
+        <span className="inline-flex shrink-0 items-center gap-1 text-xs opacity-70">
+          ({groupCount[group.path] ?? 0})
+          {hasChildren && <ChevronRight size={12} className={nested ? "" : "rotate-90"} />}
+        </span>
+      </button>
+
+      {hasChildren && open && (
+        <div
+          className={cn(
+            "absolute z-30 min-w-52 rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] p-1 shadow-xl",
+            nested ? "left-full top-0 ml-1" : "left-0 top-full mt-1"
+          )}
+        >
+          <div className="flex flex-col gap-1">
+            {group.children.map((child) => (
+              <GroupFilterButton
+                key={child.path}
+                group={child}
+                groupCount={groupCount}
+                selectedGroup={selectedGroup}
+                onSelect={onSelect}
+                nested
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

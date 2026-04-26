@@ -6,7 +6,22 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 
 ## Versão atual
 
-`0.4.1`
+`0.4.3`
+
+## Novidades da 0.4.3
+
+- Menus de subgrupos no dashboard agora fecham com atraso breve no hover, facilitando mover o mouse do grupo pai até um subgrupo sem a lista sumir
+- Tela `Logs` ganhou filtros de visualização por texto, nível (`error`, `warn`, `info`, `debug`, `trace`) e opção de diferenciar maiúsculas/minúsculas, com contador de linhas filtradas
+- A criação/edição de host agora abre o gerenciamento de credenciais em modal sobre a própria tela, evitando perder o formulário do host ao criar, editar, selecionar ou remover credenciais
+- O formulário de credencial foi extraído para um componente reutilizável e continua alimentando tanto a rota dedicada de credenciais quanto o novo modal no editor de host
+
+## Novidades da 0.4.2
+
+- Filtros de grupos do dashboard ficaram mais compactos: a faixa principal mostra apenas grupos raiz e expande subgrupos em menu flutuante ao passar o mouse ou focar o grupo pai
+- Seleção de subgrupo continua filtrando com herança, e o grupo pai fica destacado quando algum descendente está ativo
+- Auto-sync agora é bloqueado sem senha mestra configurada, com aviso direto na tela de sincronização
+- Auto-sync não dispara mais push inicial em instalações novas sem `lastSyncAt`, evitando sobrescrever um repositório remoto existente com um vault vazio
+- Quando o sync de credenciais está ativo, a senha mestra informada no sync manual fica apenas em memória da sessão e é reutilizada pelo auto-sync para gerar payload cifrado
 
 ## Novidades da 0.4.1
 
@@ -98,14 +113,14 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 - SFTP integrado para hosts `SSH`, com navegação remota, upload, download, rename, delete e mkdir
 - `Quick Connect` na command palette para conexões temporárias `SSH`, `Telnet`, `RDP` e `VNC` sem salvar host
 - Opção para abrir sessões na `mesma janela` ou no `terminal do sistema` (SSH/Telnet) e em `janelas dedicadas` (RDP/VNC)
-- Dashboard com filtros por grupo/subgrupo e tag, ordenação e edição em massa de `credencial`, `grupo` e `tags`
+- Dashboard com filtros compactos por grupo/subgrupo, tag, ordenação e edição em massa de `credencial`, `grupo` e `tags`
 - Importação em massa de hosts via `.csv`, com template/export de exemplo, preview e merge controlado
 - Acesso às importações direto pelo `+ Nova Conexão`, sem atrapalhar o fluxo principal de cadastro individual
 - Operações com snippets, túneis e workspaces com compatibilidade por protocolo
 - `Health check` de hosts e inventário de fingerprints salvas para hosts `SSH`, com edição manual do `known_hosts` interno do app
 - Backup/restore com arquivo `.sshvault`, preservando o protocolo de cada host
 - Sincronização remota com `GitHub Gist`, `S3/MinIO`, `WebDAV/Nextcloud` ou endpoint customizado
-- Auto-sync periódico de estado portátil
+- Auto-sync periódico de estado portátil, bloqueado até existir senha mestra configurada e uma primeira sincronização manual
 - MFA/TOTP por host `SSH`
 - Interface traduzida para `pt-BR` e `en-US`
 
@@ -150,6 +165,7 @@ O cliente RDP interno está em [clients/internal-rdp-client/README.md](/home/fer
 - Quando o arquivo principal passa de ~5 MB, ele é rotacionado para `logs/ssh_vault.log.1`
 - Eventos do backend em Rust, erros globais do frontend e falhas de `SSH`, `SFTP`, `Telnet`, `RDP` e `VNC` passam pelo mesmo logger persistente
 - O diretório de logs pode ser alterado pela tela `Logs`; o padrão continua sendo o diretório de dados local do sistema operacional
+- A visualização de logs permite filtrar o conteúdo carregado por termo livre, nível e sensibilidade a maiúsculas/minúsculas sem alterar os arquivos no disco
 - O viewer RDP interno grava em `ssh_vault_viewer.log` dentro do mesmo diretório configurado
 - O `Connection Log` da interface continua mostrando o histórico de sessões, agora com a mensagem do erro quando aplicável
 
@@ -219,6 +235,12 @@ clients/
 - `Node.js 18+`
 - `Rust stable`
 - Dependências nativas exigidas pelo Tauri para a sua plataforma
+
+No `Zorin OS 18.1`, além de instalar `Rust` e `Node.js`, instale as dependências nativas de build com:
+
+```bash
+sudo apt install libgtk-3-dev libglib2.0-dev pkg-config libsoup-3.0-dev libjavascriptcoregtk-4.1-0 libjavascriptcoregtk-4.1-dev gir1.2-javascriptcoregtk-4.1 libwebkit2gtk-4.1-dev build-essential curl wget libssl-dev libayatana-appindicator3-dev librsvg2-dev
+```
 
 ### Instalação
 

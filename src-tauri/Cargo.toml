@@ -1,6 +1,6 @@
 [package]
 name = "ssh-vault"
-version = "0.4.1"
+version = "0.4.3"
 description = "SSH Vault — Gerenciador de conexões SSH com sincronização remota"
 authors = ["SSH Vault"]
 edition = "2021"

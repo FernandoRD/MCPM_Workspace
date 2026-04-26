@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
-import { ChevronDown, ChevronRight, ArrowLeft, RefreshCw, Lock, KeyRound, Cpu, Plus, Upload, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { ChevronDown, ChevronRight, ArrowLeft, RefreshCw, Lock, KeyRound, Cpu, Plus, Upload, CheckCircle2, XCircle, Loader2, Pencil, Trash2 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import QRCode from "react-qr-code";
 import { useHostsStore } from "@/store/hosts";
@@ -13,6 +13,8 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
+import { CredentialForm } from "@/components/CredentialForm";
 import { TagBadge } from "@/components/ui/TagBadge";
 import { TotpDisplay } from "@/components/TotpDisplay/TotpDisplay";
 import { sanitizeHostInput } from "@/lib/inputSanitizers";
@@ -50,6 +52,7 @@ export function HostEditor() {
   const { addHost, updateHost, getHost, hosts } = useHostsStore();
   const savedGroups = useSettingsStore((s) => s.settings.groups);
   const credentials = useCredentialsStore((s) => s.credentials);
+  const deleteCredential = useCredentialsStore((s) => s.deleteCredential);
   const getSshKey = useSshKeysStore((s) => s.getSshKey);
 
   const [form, setForm] = useState<FormData>(DEFAULT_FORM);
@@ -60,6 +63,8 @@ export function HostEditor() {
   const [tagsInput, setTagsInput] = useState("");
   const [totpOtpauthUrl, setTotpOtpauthUrl] = useState<string | null>(null);
   const [generatingTotp, setGeneratingTotp] = useState(false);
+  const [credentialModalView, setCredentialModalView] = useState<"list" | "new" | "edit" | null>(null);
+  const [editingCredentialId, setEditingCredentialId] = useState<string | undefined>();
 
   // ssh-copy-id
   const [copyIdPassword, setCopyIdPassword] = useState("");
@@ -134,6 +139,52 @@ export function HostEditor() {
 
   const set = <K extends keyof FormData>(key: K, value: FormData[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
+
+  const openCredentialList = () => {
+    setEditingCredentialId(undefined);
+    setCredentialModalView("list");
+  };
+
+  const openNewCredentialModal = () => {
+    setEditingCredentialId(undefined);
+    setCredentialModalView("new");
+  };
+
+  const openEditCredentialModal = (credentialId: string) => {
+    setEditingCredentialId(credentialId);
+    setCredentialModalView("edit");
+  };
+
+  const closeCredentialModal = () => {
+    setCredentialModalView(null);
+    setEditingCredentialId(undefined);
+  };
+
+  const canUseCredential = (credential: Credential) =>
+    !(isRdp || isVnc) || credential.authMethod === "password";
+
+  const handleCredentialSaved = (credentialId: string, credential: Credential) => {
+    if (canUseCredential(credential)) {
+      set("credentialId", credentialId);
+    } else if (form.credentialId === credentialId) {
+      set("credentialId", undefined);
+    }
+    closeCredentialModal();
+  };
+
+  const handleDeleteCredential = (credential: Credential) => {
+    const usedBy = hosts.filter((host) => host.credentialId === credential.id);
+    const confirmed = window.confirm(
+      usedBy.length > 0
+        ? t("credentials.deleteInUseWarning", { count: usedBy.length })
+        : t("common.confirmDelete", { name: credential.label })
+    );
+    if (!confirmed) return;
+    if (form.credentialId === credential.id) {
+      set("credentialId", undefined);
+    }
+    deleteCredential(credential.id);
+  };
 
   const handleProtocolChange = (protocol: ConnectionProtocol) => {
     const nextCredentialId =
@@ -288,7 +339,7 @@ export function HostEditor() {
                     <Button
                       variant="secondary"
                       size="sm"
-                      onClick={() => navigate("/credentials/new")}
+                      onClick={openNewCredentialModal}
                     >
                       <Plus size={13} />
                       {t("credentials.createFirst")}
@@ -319,7 +370,7 @@ export function HostEditor() {
                   <Button
                     variant="secondary"
                     size="sm"
-                    onClick={() => navigate("/credentials/new")}
+                    onClick={openNewCredentialModal}
                   >
                     <Plus size={13} />
                     {t("credentials.createFirst")}
@@ -413,7 +464,7 @@ export function HostEditor() {
               )}
               <button
                 type="button"
-                onClick={() => navigate("/credentials")}
+                onClick={openCredentialList}
                 className="self-start text-xs text-[var(--accent)] hover:underline mt-1"
               >
                 {t("credentials.manageCredentials")}
@@ -635,6 +686,120 @@ export function HostEditor() {
           </div>
         </div>
       </div>
+
+      <Modal
+        open={credentialModalView !== null}
+        onClose={closeCredentialModal}
+        title={
+          credentialModalView === "new"
+            ? t("credentials.newCredential")
+            : credentialModalView === "edit"
+              ? t("credentials.editCredential")
+              : t("credentials.manageCredentials")
+        }
+        size="lg"
+      >
+        {credentialModalView === "new" || credentialModalView === "edit" ? (
+          <CredentialForm
+            credentialId={credentialModalView === "edit" ? editingCredentialId : undefined}
+            initialAuthMethod="password"
+            allowKeyNavigation={false}
+            onCancel={credentialModalView === "edit" ? openCredentialList : closeCredentialModal}
+            onSaved={handleCredentialSaved}
+          />
+        ) : (
+          <div className="flex flex-col gap-4">
+            <div className="flex justify-end">
+              <Button onClick={openNewCredentialModal}>
+                <Plus size={14} />
+                {t("credentials.newCredential")}
+              </Button>
+            </div>
+
+            {credentials.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-[var(--border)] px-4 py-10 text-center">
+                <KeyRound size={24} className="text-[var(--text-muted)]" />
+                <div>
+                  <p className="text-sm font-medium text-[var(--text-primary)]">{t("credentials.noCredentials")}</p>
+                  <p className="mt-1 text-sm text-[var(--text-muted)]">{t("credentials.noCredentialsDescription")}</p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex max-h-[55vh] flex-col gap-2 overflow-y-auto pr-1">
+                {credentials.map((credential) => {
+                  const selectable = canUseCredential(credential);
+                  const selected = form.credentialId === credential.id;
+
+                  return (
+                    <div
+                      key={credential.id}
+                      className={cn(
+                        "rounded-xl border bg-[var(--bg-primary)] px-4 py-3 transition-colors",
+                        selected ? "border-[var(--accent)]" : "border-[var(--border)]",
+                        !selectable && "opacity-70"
+                      )}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-[var(--accent-subtle)] text-[var(--accent)]">
+                          {credential.authMethod === "password" ? <Lock size={16} /> : credential.authMethod === "privateKey" ? <KeyRound size={16} /> : <Cpu size={16} />}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="truncate text-sm font-semibold text-[var(--text-primary)]">{credential.label}</p>
+                            <span className="rounded-full border border-[var(--border)] px-2 py-0.5 text-xs text-[var(--text-muted)]">
+                              {t(`credentials.types.${credential.authMethod}`)}
+                            </span>
+                            {selected && (
+                              <span className="rounded-full border border-[var(--accent)] bg-[var(--accent-subtle)] px-2 py-0.5 text-xs text-[var(--accent)]">
+                                {t("common.selected")}
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-1 truncate font-mono text-xs text-[var(--text-secondary)]">
+                            {credential.username}
+                          </p>
+                          {!selectable && (
+                            <p className="mt-1 text-xs text-[var(--text-muted)]">
+                              {t(isRdp ? "hostEditor.rdp.authenticationHint" : "hostEditor.vnc.authenticationHint")}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex flex-shrink-0 items-center gap-1">
+                          {selectable && (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => set("credentialId", selected ? undefined : credential.id)}
+                            >
+                              {selected ? t("common.remove") : t("common.select")}
+                            </Button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => openEditCredentialModal(credential.id)}
+                            className="flex h-8 w-8 items-center justify-center rounded text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+                            title={t("common.edit")}
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCredential(credential)}
+                            className="flex h-8 w-8 items-center justify-center rounded text-[var(--text-muted)] transition-colors hover:bg-[var(--danger)]/10 hover:text-[var(--danger)]"
+                            title={t("common.delete")}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
