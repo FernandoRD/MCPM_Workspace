@@ -109,6 +109,10 @@
       "recent": "Acesso mais recente",
       "oldest": "Acesso mais antigo"
     },
+    "cardMode": {
+      "full": "Cards completos",
+      "compact": "Cards compactos"
+    },
     "tags": {
       "label": "Tags",
       "clear": "Limpar"
@@ -128,6 +132,7 @@
       "edit": "Editar",
       "delete": "Excluir",
       "duplicate": "Duplicar",
+      "options": "Opções",
       "lastConnected": "Última conexão: {{date}}",
       "neverConnected": "Nunca conectado",
       "mfaBadge": "MFA"
@@ -226,6 +231,7 @@
       "groupPlaceholder": "Ex: Produção/Web",
       "tags": "Tags",
       "tagsPlaceholder": "Ex: web, banco, monitoramento",
+      "tagsHint": "Separe as tags por vírgula",
       "notes": "Notas",
       "notesPlaceholder": "Observações sobre este servidor...",
       "jumpHost": "Jump Host (Proxy)",
@@ -407,9 +413,12 @@
     }
   },
   "terminal": {
+    "loadingSession": "Carregando sessão...",
+    "sessionNotFound": "Sessão não encontrada",
     "connecting": "Conectando a {{host}}...",
     "connected": "Conectado",
     "disconnected": "Desconectado",
+    "errorPrefix": "Erro: {{error}}",
     "reconnect": "Reconectar",
     "close": "Fechar aba",
     "copy": "Copiar",
@@ -419,10 +428,20 @@
     "split": "Dividir",
     "splitHorizontal": "Dividir horizontalmente",
     "splitVertical": "Dividir verticalmente",
-    "openSftp": "Abrir SFTP"
+    "openSftp": "Abrir SFTP",
+    "hostKey": {
+      "unknownTitle": "Host desconhecido",
+      "unknownDescription": "Esta é a primeira conexão com {{host}}:{{port}}. Verifique a fingerprint abaixo antes de continuar.",
+      "fingerprintLabel": "Fingerprint (SHA-256)",
+      "warning": "Se você não consegue verificar esta fingerprint com o administrador do servidor, recuse a conexão.",
+      "reject": "Recusar",
+      "trustAndConnect": "Confiar e conectar"
+    }
   },
   "sftp": {
     "title": "Navegador SFTP",
+    "loadingSession": "Carregando sessão...",
+    "sessionNotFound": "Sessão não encontrada",
     "connecting": "Conectando...",
     "connected": "Conectado",
     "disconnected": "Desconectado",
@@ -468,6 +487,12 @@
       "importConfigTitle": "Importação de ~/.ssh/config",
       "importConfigHint": "Como agora o app também cobre outros protocolos, a importação do arquivo SSH fica agrupada aqui com as opções específicas de SSH.",
       "importConfigAction": "Importar ~/.ssh/config",
+      "sftpOpenMode": "Abrir SFTP a partir do terminal em",
+      "sftpOpenModeHint": "Define se o botão SFTP de uma sessão SSH abre um painel lateral junto do terminal ou cria uma nova aba.",
+      "sftpOpenModes": {
+        "sameTab": "Mesma aba, lado a lado",
+        "newTab": "Nova aba"
+      },
       "keepAliveInterval": "Keep-alive (segundos)",
       "keepAliveHint": "Envia um pacote de manutenção a cada N segundos para evitar desconexão por inatividade. 0 = desabilitado.",
       "inactivityTimeout": "Timeout de inatividade (segundos)",
@@ -630,7 +655,13 @@
     "noMasterPasswordNotice": "Defina uma senha mestra em Configurações → Segurança para habilitar o sync de credenciais.",
     "credentialsSyncDisabledNotice": "Sync de credenciais desabilitado. Ative em Configurações → Segurança.",
     "errors": {
-      "syncCredentialsNoMasterPassword": "Sync de credenciais está ativo, mas nenhuma senha mestra foi definida. Defina a senha mestra em Configurações → Segurança antes de sincronizar."
+      "syncCredentialsNoMasterPassword": "Sync de credenciais está ativo, mas nenhuma senha mestra foi definida. Defina a senha mestra em Configurações → Segurança antes de sincronizar.",
+      "githubTokenMissing": "Token do GitHub não configurado.",
+      "gistIdMissing": "Gist ID não configurado. Sincronize de outro dispositivo primeiro.",
+      "s3Missing": "S3 não configurado.",
+      "webdavMissing": "WebDAV não configurado.",
+      "customUrlMissing": "URL do endpoint customizado não configurada.",
+      "providerMissing": "Nenhum provider de sync configurado."
     },
     "masterPasswordPushPrompt": "Informe a senha mestra para cifrar as credenciais antes de enviar.",
     "masterPasswordPullPrompt": "Informe a senha mestra para decifrar as credenciais recebidas.",
@@ -665,6 +696,7 @@
     },
     "s3": {
       "endpoint": "Endpoint (opcional)",
+      "endpointPlaceholder": "https://s3.amazonaws.com (vazio = AWS padrão)",
       "endpointHint": "Deixe em branco para AWS S3. Para MinIO, informe a URL base com HTTPS (ex: https://minio.example.com)",
       "bucket": "Bucket",
       "region": "Região",
@@ -709,6 +741,7 @@
       "waitingFirstManualSync": "A sincronização automática só começa depois de uma primeira sincronização manual. Importe do remoto ou envie manualmente para confirmar qual versão deve prevalecer.",
       "masterPasswordSessionHint": "Quando o sync de credenciais está ativo, a sincronização automática usa a senha mestra informada no sync manual desta sessão para cifrar senhas, chaves e tokens.",
       "blockedNeedsSessionPassword": "Sincronização automática bloqueada. Faça um sync manual e informe a senha mestra nesta sessão.",
+      "errorWithMessage": "Erro no sync automático: {{error}}",
       "nextSyncIn": "Próximo sync em {{minutes}} min",
       "nextSyncNow": "Sincronizando em breve..."
     }
@@ -753,6 +786,17 @@
       "cancelled": "Importação cancelada.",
       "invalidFile": "Arquivo inválido ou corrompido",
       "wrongPassword": "Senha mestra incorreta. As credenciais não foram importadas."
+    },
+    "dialogs": {
+      "saveTitle": "Salvar backup do MPCM Workspace",
+      "openTitle": "Abrir backup do MPCM Workspace"
+    },
+    "errors": {
+      "invalidJson": "Arquivo inválido: não é um JSON válido",
+      "unexpectedStructure": "Arquivo inválido: estrutura inesperada",
+      "notBackup": "Arquivo inválido: não é um backup do MPCM Workspace",
+      "unsupportedVersion": "Versão de backup não suportada: {{version}}",
+      "invalidHosts": "Arquivo inválido: campo 'hosts' ausente ou inválido"
     },
     "masterPasswordPrompt": "Senha Mestra para Backup",
     "includeSettings": "Restaurar configurações (tema, idioma, terminal)",
@@ -1017,6 +1061,10 @@
     "rdpInternalViewerError": "Falha ao iniciar viewer RDP interno: {{host}}",
     "vncConnected": "Sessão VNC iniciada: {{host}}",
     "vncError": "Falha ao iniciar VNC: {{host}}",
+    "systemTerminalMissingConnection": "Não foi possível abrir terminal externo para {{host}}: dados de conexão ausentes.",
+    "systemTerminalErrorForHost": "Erro ao abrir terminal externo para {{host}}: {{error}}",
+    "systemTerminalError": "Erro ao abrir terminal externo: {{error}}",
+    "standaloneWindowFallback": "Não foi possível abrir janela separada para {{host}}. Abrindo em aba.",
     "syncPushSuccess": "Sincronização enviada com sucesso",
     "syncPullSuccess": "Dados importados com sucesso",
     "syncError": "Erro na sincronização"

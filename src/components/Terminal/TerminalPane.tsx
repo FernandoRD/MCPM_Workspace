@@ -5,6 +5,7 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
+import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "@/store/settings";
 import { useSessionsStore } from "@/store/sessions";
 
@@ -19,6 +20,7 @@ interface TerminalPaneProps {
   privateKeyContent: string | null;
   passphrase: string | null;
   sshCompatPreset?: string;
+  reconnectNonce?: number;
   onStatusChange: (paneId: string, status: "connecting" | "connected" | "disconnected" | "error") => void;
   onConnected: () => void;
   onDisconnected?: (status: "disconnected" | "error") => void;
@@ -48,10 +50,12 @@ export function TerminalPane({
   privateKeyContent,
   passphrase,
   sshCompatPreset,
+  reconnectNonce = 0,
   onStatusChange,
   onConnected,
   onDisconnected,
 }: TerminalPaneProps) {
+  const { t } = useTranslation();
   const termRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -210,7 +214,7 @@ export function TerminalPane({
           setPendingFingerprint(fingerprint);
           return;
         }
-        xtermRef.current?.writeln(`\r\n\x1b[1;31mErro: ${err}\x1b[0m\r\n`);
+        xtermRef.current?.writeln(`\r\n\x1b[1;31m${t("terminal.errorPrefix", { error: err })}\x1b[0m\r\n`);
         onStatusChange(paneId, "error");
       });
     }
@@ -236,7 +240,7 @@ export function TerminalPane({
 
     void wasConnected; // suppress unused warning
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [appendTerminalOutput, clearConnectionBindings, paneId, protocol, authMethod, host, passphrase, password, port, privateKeyContent, sshCompatPreset, sshSettings?.inactivityTimeout, sshSettings?.keepAliveInterval, username]);
+  }, [appendTerminalOutput, clearConnectionBindings, paneId, protocol, authMethod, host, passphrase, password, port, privateKeyContent, sshCompatPreset, sshSettings?.inactivityTimeout, sshSettings?.keepAliveInterval, t, username]);
 
   const handleTrustHost = useCallback(async (accepted: boolean) => {
     if (!pendingFingerprint) return;
@@ -275,7 +279,7 @@ export function TerminalPane({
       fitRef.current = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clearConnectionBindings, paneId]);
+  }, [clearConnectionBindings, connect, paneId, reconnectNonce]);
 
   return (
     <div className="relative h-full w-full" style={{ backgroundColor: "var(--terminal-bg)" }}>
@@ -285,31 +289,30 @@ export function TerminalPane({
         <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/70">
           <div className="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] p-6 shadow-2xl flex flex-col gap-4">
             <div className="flex flex-col gap-1">
-              <p className="font-semibold text-[var(--text-primary)]">Host desconhecido</p>
+              <p className="font-semibold text-[var(--text-primary)]">{t("terminal.hostKey.unknownTitle")}</p>
               <p className="text-sm text-[var(--text-muted)]">
-                Esta é a primeira conexão com <span className="font-medium text-[var(--text-primary)]">{host}:{port}</span>.
-                Verifique a fingerprint abaixo antes de continuar.
+                {t("terminal.hostKey.unknownDescription", { host, port })}
               </p>
             </div>
             <div className="rounded-lg bg-[var(--bg-primary)] border border-[var(--border)] px-4 py-3">
-              <p className="text-xs text-[var(--text-muted)] mb-1">Fingerprint (SHA-256)</p>
+              <p className="text-xs text-[var(--text-muted)] mb-1">{t("terminal.hostKey.fingerprintLabel")}</p>
               <p className="font-mono text-xs text-[var(--text-primary)] break-all select-all">{pendingFingerprint}</p>
             </div>
             <p className="text-xs text-[var(--text-muted)]">
-              Se você não consegue verificar esta fingerprint com o administrador do servidor, recuse a conexão.
+              {t("terminal.hostKey.warning")}
             </p>
             <div className="flex gap-2 justify-end">
               <button
                 onClick={() => handleTrustHost(false)}
                 className="px-4 py-2 rounded-lg text-sm border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] transition-colors"
               >
-                Recusar
+                {t("terminal.hostKey.reject")}
               </button>
               <button
                 onClick={() => handleTrustHost(true)}
                 className="px-4 py-2 rounded-lg text-sm bg-[var(--accent)] text-white hover:opacity-90 transition-opacity"
               >
-                Confiar e conectar
+                {t("terminal.hostKey.trustAndConnect")}
               </button>
             </div>
           </div>

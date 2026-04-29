@@ -5,6 +5,7 @@
  */
 import { invoke } from "@tauri-apps/api/core";
 import { AppSettings } from "@/types";
+import i18n from "@/lib/i18n";
 
 /**
  * Envia o payload para o provider configurado.
@@ -16,7 +17,7 @@ export async function pushToProvider(
 ): Promise<string | undefined> {
   switch (sync.provider) {
     case "githubGist": {
-      if (!sync.gist?.token) throw new Error("Token do GitHub não configurado.");
+      if (!sync.gist?.token) throw new Error(i18n.t("sync.errors.githubTokenMissing"));
       const returnedId = await invoke<string>("sync_gist_push", {
         token: sync.gist.token,
         gistId: sync.gist.gistId ?? null,
@@ -27,7 +28,7 @@ export async function pushToProvider(
     }
     case "s3": {
       const s3 = sync.s3;
-      if (!s3) throw new Error("S3 não configurado.");
+      if (!s3) throw new Error(i18n.t("sync.errors.s3Missing"));
       await invoke("sync_s3_push", {
         endpoint: s3.endpoint ?? "",
         bucket: s3.bucket,
@@ -40,7 +41,7 @@ export async function pushToProvider(
     }
     case "webdav": {
       const wdav = sync.webdav;
-      if (!wdav) throw new Error("WebDAV não configurado.");
+      if (!wdav) throw new Error(i18n.t("sync.errors.webdavMissing"));
       await invoke("sync_webdav_push", {
         url: wdav.url,
         username: wdav.username,
@@ -51,7 +52,7 @@ export async function pushToProvider(
       return undefined;
     }
     case "custom": {
-      if (!sync.custom?.url) throw new Error("URL do endpoint customizado não configurada.");
+      if (!sync.custom?.url) throw new Error(i18n.t("sync.errors.customUrlMissing"));
       await invoke("sync_custom_push", {
         url: sync.custom.url,
         payloadJson: payload,
@@ -59,16 +60,16 @@ export async function pushToProvider(
       return undefined;
     }
     default:
-      throw new Error("Nenhum provider de sync configurado.");
+      throw new Error(i18n.t("sync.errors.providerMissing"));
   }
 }
 
 export async function pullFromProvider(sync: AppSettings["sync"]): Promise<string> {
   switch (sync.provider) {
     case "githubGist": {
-      if (!sync.gist?.token) throw new Error("Token do GitHub não configurado.");
+      if (!sync.gist?.token) throw new Error(i18n.t("sync.errors.githubTokenMissing"));
       if (!sync.gist?.gistId)
-        throw new Error("Gist ID não configurado. Sincronize de outro dispositivo primeiro.");
+        throw new Error(i18n.t("sync.errors.gistIdMissing"));
       return invoke<string>("sync_gist_pull", {
         token: sync.gist.token,
         gistId: sync.gist.gistId,
@@ -76,7 +77,7 @@ export async function pullFromProvider(sync: AppSettings["sync"]): Promise<strin
     }
     case "s3": {
       const s3 = sync.s3;
-      if (!s3) throw new Error("S3 não configurado.");
+      if (!s3) throw new Error(i18n.t("sync.errors.s3Missing"));
       return invoke<string>("sync_s3_pull", {
         endpoint: s3.endpoint ?? "",
         bucket: s3.bucket,
@@ -87,7 +88,7 @@ export async function pullFromProvider(sync: AppSettings["sync"]): Promise<strin
     }
     case "webdav": {
       const wdav = sync.webdav;
-      if (!wdav) throw new Error("WebDAV não configurado.");
+      if (!wdav) throw new Error(i18n.t("sync.errors.webdavMissing"));
       return invoke<string>("sync_webdav_pull", {
         url: wdav.url,
         username: wdav.username,
@@ -96,10 +97,10 @@ export async function pullFromProvider(sync: AppSettings["sync"]): Promise<strin
       });
     }
     case "custom": {
-      if (!sync.custom?.url) throw new Error("URL do endpoint customizado não configurada.");
+      if (!sync.custom?.url) throw new Error(i18n.t("sync.errors.customUrlMissing"));
       return invoke<string>("sync_custom_pull", { url: sync.custom.url });
     }
     default:
-      throw new Error("Nenhum provider de sync configurado.");
+      throw new Error(i18n.t("sync.errors.providerMissing"));
   }
 }

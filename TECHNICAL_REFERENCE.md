@@ -27,13 +27,15 @@ O MPCM Workspace é uma aplicação desktop Tauri com frontend React e backend R
 - chaves SSH
 - sessões de terminal multi-protocolo, sessões gráficas `RDP`/`VNC`, SFTP e diagnóstico persistente
 - barra de abas de sessão com reorganização manual por drag and drop
+- splits redimensionáveis entre panes de terminal e entre terminal/SFTP embutido
+- modo de cards completo/compacto no dashboard
 - snippets, túneis e workspaces
 - sincronização remota
 - backup/restore
 - importação em massa via `.csv`
 - health check, inventário de fingerprints e edição manual do inventário `known_hosts`
 
-O posicionamento atual do produto é `Multi-Protocol Connection Manager` e isso já se reflete na arquitetura de sessão: `SSH` e `Telnet` compartilham a camada de terminal, `RDP` usa uma rota e uma orquestração próprias para abrir o launcher nativo da plataforma ou, em modo experimental, o viewer interno empacotado com o app, e recursos específicos como `SFTP`, túneis, inventário de fingerprints, `~/.ssh/config` e MFA/TOTP continuam restritos a `SSH`.
+O posicionamento atual do produto é `Multi-Protocol Connection Manager` e isso já se reflete na arquitetura de sessão: `SSH` e `Telnet` compartilham a camada de terminal, `SFTP` pode ser aberto como painel embutido lado a lado em uma sessão `SSH` ou como aba própria, `RDP` usa uma rota e uma orquestração próprias para abrir o launcher nativo da plataforma ou, em modo experimental, o viewer interno empacotado com o app, e recursos específicos como `SFTP`, túneis, inventário de fingerprints, `~/.ssh/config` e MFA/TOTP continuam restritos a `SSH`.
 
 No onboarding de hosts, o app agora combina três caminhos principais:
 
@@ -199,7 +201,7 @@ Arquivo-base: [index.ts](/home/fernando/Documentos/ssh_vault/src/types/index.ts)
 - `TerminalPaneState`
   Estado de cada pane de terminal, compartilhado por sessões `SSH` e `Telnet`.
 - `AppSettings`
-  Tema, idioma, terminal, SSH, RDP, segurança, sync, grupos e produtividade.
+  Tema, idioma, dashboard, terminal, SSH, RDP, VNC, segurança, sync, grupos e produtividade.
 
 ### AppSettings
 
@@ -207,10 +209,12 @@ Arquivo-base: [index.ts](/home/fernando/Documentos/ssh_vault/src/types/index.ts)
 
 - `themeId`
 - `locale`
+- `dashboard`
+  `cardMode`
 - `terminal`
   `fontSize`, `fontFamily`, `cursorStyle`, `cursorBlink`, `scrollback`, `sessionOpenMode`
 - `ssh`
-  `keepAliveInterval`, `inactivityTimeout`
+  `keepAliveInterval`, `inactivityTimeout`, `sftpOpenMode`
 - `rdp`
   `launchMode`, `linuxClient`, `fullscreen`, `dynamicResolution`, `width`, `height`, `multimon`, `clipboard`, `audioMode`, `certificateMode`, `internalClientPerformance`
 - `vnc`
@@ -243,6 +247,7 @@ Ele sanitiza e reidrata:
 - segredos de sync e backup
 
 O campo `protocol` do host é parte desse estado portátil e é preservado em sync, backup e restore.
+As preferências `dashboard.cardMode` e `ssh.sftpOpenMode` também fazem parte das settings portáveis, então viajam em sync/backup junto com idioma, tema, terminal, RDP, VNC, grupos e produtividade.
 
 ## 5. Stores Zustand
 
@@ -255,16 +260,16 @@ O campo `protocol` do host é parte desse estado portátil e é preservado em sy
 - [sshKeys.ts](/home/fernando/Documentos/ssh_vault/src/store/sshKeys.ts)
   CRUD de chaves e `replaceSshKeys`.
 - [settings.ts](/home/fernando/Documentos/ssh_vault/src/store/settings.ts)
-  Inicialização, normalização, updates parciais e `replaceSettings`.
+  Inicialização, normalização, updates parciais e `replaceSettings`. Também aplica `i18n.changeLanguage` em `init`, `setLocale`, `replaceSettings` e `resetSettings`.
 - [connectionLogs.ts](/home/fernando/Documentos/ssh_vault/src/store/connectionLogs.ts)
   Histórico local de conexões.
 
 ### Voláteis
 
 - [sessions.ts](/home/fernando/Documentos/ssh_vault/src/store/sessions.ts)
-  Abas/sessões abertas na janela atual, incluindo a ordem visual usada pela `TabBar` e a ação de reordenação manual.
+  Abas/sessões abertas na janela atual, incluindo a ordem visual usada pela `TabBar`, a ação de reordenação manual, snapshots de terminal e snapshots de SFTP.
 - [uiStore.ts](/home/fernando/Documentos/ssh_vault/src/store/uiStore.ts)
-  Busca, filtros do dashboard e estado da command palette.
+  Busca, filtros do dashboard, ordenação e estado da command palette. Preferências portáveis do dashboard, como `cardMode`, vivem em `settings`.
 - [tunnelRuntime.ts](/home/fernando/Documentos/ssh_vault/src/store/tunnelRuntime.ts)
   Estado de túneis ativos em runtime.
 
@@ -303,9 +308,15 @@ Rotas atuais:
 ### Sessões e janelas
 
 - [sessionLauncher.ts](/home/fernando/Documentos/ssh_vault/src/lib/sessionLauncher.ts)
-  Decide entre abrir em aba ou janela dedicada para sessões de terminal e RDP.
+  Decide entre abrir em aba ou janela dedicada para sessões de terminal, RDP e VNC. Mensagens de fallback usam o catálogo de i18n.
 - [windowMode.ts](/home/fernando/Documentos/ssh_vault/src/lib/windowMode.ts)
   Helpers para rotas e bootstrap de janelas standalone.
+- [TerminalPage.tsx](/home/fernando/Documentos/ssh_vault/src/pages/TerminalPage.tsx)
+  Orquestra sessões `SSH`/`Telnet`, splits redimensionáveis, reconexão manual, fechamento em encerramento limpo e painel SFTP embutido quando `ssh.sftpOpenMode = "sameTab"`.
+- [TerminalPane.tsx](/home/fernando/Documentos/ssh_vault/src/components/Terminal/TerminalPane.tsx)
+  Encapsula `xterm.js`, reanexação de saída, resize no backend, diálogo TOFU de fingerprint e reconexão controlada por `reconnectNonce`.
+- [SftpPage.tsx](/home/fernando/Documentos/ssh_vault/src/pages/SftpPage.tsx)
+  Pode operar como rota independente (`/sftp/:tabId`) ou como painel embutido ao lado de uma sessão `SSH`.
 - [RdpPage.tsx](/home/fernando/Documentos/ssh_vault/src/pages/RdpPage.tsx)
   Orquestra a conexão RDP, exibe diagnósticos de launcher e acompanha o ciclo de vida da sessão.
 - [VncPage.tsx](/home/fernando/Documentos/ssh_vault/src/pages/VncPage.tsx)
@@ -375,6 +386,8 @@ Rotas atuais:
   Export/import `.sshvault`.
 - [portableState.ts](/home/fernando/Documentos/ssh_vault/src/lib/portableState.ts)
   Sanitização, merge e reidratação.
+
+As mensagens de erro dos helpers de sync/backup são resolvidas pelo i18n no frontend antes de chegar à UI, evitando textos fixos em português quando a aplicação está em `en-US`.
 
 ### Operações auxiliares
 
@@ -614,6 +627,17 @@ Ao invés de abrir uma `WebviewWindow` com a aplicação React completa, o app d
 - Emuladores detectados (Windows): `wt` (Windows Terminal) ou `cmd`
 - Chaves privadas: decodificadas via `russh_keys`, re-serializadas para o formato nativo OpenSSH (`-----BEGIN OPENSSH PRIVATE KEY-----`) antes de gravar o arquivo temporário — resolve o erro `error in libcrypto: unsupported` de versões mais antigas do cliente OpenSSH
 - Arquivos temporários de chave: `$TMPDIR/ssh_vault_keys/key_<uuid>`, permissão `0600`, limpos na próxima inicialização do app via `cleanup_old_temp_keys()`
+- Encerramento limpo por `exit` ou `Ctrl+D` emite `disconnected` e fecha a aba ou janela da sessão. Falhas usam `error` e mantêm a tela aberta para permitir reconexão.
+- Panes secundários em split fecham individualmente ao encerrar de forma limpa; a sessão principal só fecha quando o pane principal encerra ou quando não há outro pane aplicável.
+
+#### Split panes e SFTP embutido
+
+- Página: [TerminalPage.tsx](/home/fernando/Documentos/ssh_vault/src/pages/TerminalPage.tsx)
+- Painel SFTP: [SftpPage.tsx](/home/fernando/Documentos/ssh_vault/src/pages/SftpPage.tsx)
+- A divisão de panes de terminal usa pesos locais (`paneWeights`) calculados pela página e pode ser ajustada por pointer drag no divisor.
+- A divisão terminal/SFTP usa percentual local (`sftpPanelPercent`) e mantém mínimo visual para o painel SFTP.
+- O modo `ssh.sftpOpenMode = "sameTab"` abre o SFTP ao lado do terminal; `ssh.sftpOpenMode = "newTab"` mantém o comportamento antigo de criar uma aba SFTP dedicada.
+- O estado desse comportamento é normalizado em [inputSanitizers.ts](/home/fernando/Documentos/ssh_vault/src/lib/inputSanitizers.ts), persistido em [settings.ts](/home/fernando/Documentos/ssh_vault/src/store/settings.ts) e incluído no estado portátil via [portableState.ts](/home/fernando/Documentos/ssh_vault/src/lib/portableState.ts).
 
 **RDP e VNC**
 
@@ -732,6 +756,17 @@ Regras práticas atuais:
   - grupo hierárquico
   - tags (`replace`, `add`, `remove`)
 
+### Dashboard
+
+- Página: [Dashboard.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Dashboard.tsx)
+- Preferência persistida: `settings.dashboard.cardMode`
+- Modos:
+  - `full`: card completo atual, com metadados e ações principais
+  - `compact`: card reduzido com nome do host, ação de conectar e menu de opções
+- Os cards mantêm largura fixa por modo e o grid muda a quantidade de colunas conforme o redimensionamento da janela.
+- O estado do modo de card fica em `AppSettings.dashboard`, não no `uiStore`, para participar de sync, backup e restore.
+- Badges de protocolo usam estilo consistente entre `SSH`, `Telnet`, `RDP` e `VNC`.
+
 ### Editor de hosts e credenciais
 
 - Editor: [HostEditor.tsx](/home/fernando/Documentos/ssh_vault/src/pages/HostEditor.tsx)
@@ -802,6 +837,15 @@ Regras da importação CSV:
 - Se `lastSyncAt` está vazio, o hook não faz push automático. Isso protege instalações novas contra sobrescrever um remoto existente com estado local vazio.
 - Se não há senha mestra configurada, o auto-sync fica bloqueado e a UI mostra o aviso correspondente.
 - Se `security.syncCredentials` está ativo, o auto-sync exige uma senha mestra já informada no sync manual da sessão atual para cifrar `encryptedSecrets`; sem ela, o disparo é ignorado e o usuário é notificado.
+
+### Localização
+
+- Configuração persistida: `settings.locale`
+- Catálogos: [src/locales/pt-BR/translation.json](/home/fernando/Documentos/ssh_vault/src/locales/pt-BR/translation.json) e [src/locales/en-US/translation.json](/home/fernando/Documentos/ssh_vault/src/locales/en-US/translation.json)
+- Inicialização: [settings.ts](/home/fernando/Documentos/ssh_vault/src/store/settings.ts) aplica `i18n.changeLanguage` ao carregar settings do banco ou ao cair no default.
+- Mutação: `setLocale`, `replaceSettings` e `resetSettings` também chamam `i18n.changeLanguage`, mantendo a UI sincronizada com settings importadas/restauradas.
+- Áreas auditadas e alinhadas ao catálogo: loading inicial, terminal, SFTP, diálogo de fingerprint, sync automático, providers de sync, backup, launcher de sessão, editor de host e placeholder de S3.
+- A tela `Operations` ainda mantém um dicionário PT/EN local no componente, mas escolhe o bloco correto a partir do locale atual.
 
 ## 12. Cliente RDP interno
 
@@ -880,7 +924,7 @@ Arquivos principais:
 
 Estado atual:
 
-- versão de referência atual do app: `0.4.3`
+- versão de referência atual do app: `0.4.4`
 - `package.json` é a fonte principal da versão do app
 - `tauri.conf.json` lê a versão a partir de `../package.json`
 - o frontend lê a versão a partir de `package.json` via `appInfo.ts`

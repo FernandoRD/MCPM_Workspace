@@ -96,9 +96,19 @@ export function sanitizeTunnelProfiles(profiles: TunnelProfile[]): TunnelProfile
 export function sanitizeSettingsInput(settings: AppSettings): AppSettings {
   const rdpWidth = Number.isFinite(settings.rdp.width) ? Math.round(settings.rdp.width) : 1600;
   const rdpHeight = Number.isFinite(settings.rdp.height) ? Math.round(settings.rdp.height) : 900;
+  const sftpOpenMode = settings.ssh.sftpOpenMode === "newTab" ? "newTab" : "sameTab";
+  const dashboardCardMode = settings.dashboard?.cardMode === "compact" ? "compact" : "full";
 
   return {
     ...settings,
+    dashboard: {
+      ...settings.dashboard,
+      cardMode: dashboardCardMode,
+    },
+    ssh: {
+      ...settings.ssh,
+      sftpOpenMode,
+    },
     rdp: {
       ...settings.rdp,
       width: Math.min(7680, Math.max(640, rdpWidth)),

@@ -109,6 +109,10 @@
       "recent": "Most recently accessed",
       "oldest": "Least recently accessed"
     },
+    "cardMode": {
+      "full": "Full cards",
+      "compact": "Compact cards"
+    },
     "tags": {
       "label": "Tags",
       "clear": "Clear"
@@ -128,6 +132,7 @@
       "edit": "Edit",
       "delete": "Delete",
       "duplicate": "Duplicate",
+      "options": "Options",
       "lastConnected": "Last connected: {{date}}",
       "neverConnected": "Never connected",
       "mfaBadge": "MFA"
@@ -226,6 +231,7 @@
       "groupPlaceholder": "E.g.: Production/Web",
       "tags": "Tags",
       "tagsPlaceholder": "E.g.: web, database, monitoring",
+      "tagsHint": "Separate tags with commas",
       "notes": "Notes",
       "notesPlaceholder": "Notes about this server...",
       "jumpHost": "Jump Host (Proxy)",
@@ -407,9 +413,12 @@
     }
   },
   "terminal": {
+    "loadingSession": "Loading session...",
+    "sessionNotFound": "Session not found",
     "connecting": "Connecting to {{host}}...",
     "connected": "Connected",
     "disconnected": "Disconnected",
+    "errorPrefix": "Error: {{error}}",
     "reconnect": "Reconnect",
     "close": "Close tab",
     "copy": "Copy",
@@ -419,10 +428,20 @@
     "split": "Split",
     "splitHorizontal": "Split horizontally",
     "splitVertical": "Split vertically",
-    "openSftp": "Open SFTP"
+    "openSftp": "Open SFTP",
+    "hostKey": {
+      "unknownTitle": "Unknown host",
+      "unknownDescription": "This is the first connection to {{host}}:{{port}}. Verify the fingerprint below before continuing.",
+      "fingerprintLabel": "Fingerprint (SHA-256)",
+      "warning": "If you cannot verify this fingerprint with the server administrator, reject the connection.",
+      "reject": "Reject",
+      "trustAndConnect": "Trust and connect"
+    }
   },
   "sftp": {
     "title": "SFTP Browser",
+    "loadingSession": "Loading session...",
+    "sessionNotFound": "Session not found",
     "connecting": "Connecting...",
     "connected": "Connected",
     "disconnected": "Disconnected",
@@ -468,6 +487,12 @@
       "importConfigTitle": "Import ~/.ssh/config",
       "importConfigHint": "Now that the app supports multiple protocols, the SSH config import lives here with the rest of the SSH-specific settings.",
       "importConfigAction": "Import ~/.ssh/config",
+      "sftpOpenMode": "Open SFTP from terminal in",
+      "sftpOpenModeHint": "Controls whether the SFTP button in an SSH session opens a side panel next to the terminal or creates a new tab.",
+      "sftpOpenModes": {
+        "sameTab": "Same tab, side by side",
+        "newTab": "New tab"
+      },
       "keepAliveInterval": "Keep-alive (seconds)",
       "keepAliveHint": "Sends a keepalive packet every N seconds to prevent disconnection due to inactivity. 0 = disabled.",
       "inactivityTimeout": "Inactivity timeout (seconds)",
@@ -630,7 +655,13 @@
     "noMasterPasswordNotice": "Set a master password in Settings → Security to enable credential sync.",
     "credentialsSyncDisabledNotice": "Credential sync is disabled. Enable it in Settings → Security.",
     "errors": {
-      "syncCredentialsNoMasterPassword": "Credential sync is enabled, but no master password has been set. Set the master password in Settings → Security before syncing."
+      "syncCredentialsNoMasterPassword": "Credential sync is enabled, but no master password has been set. Set the master password in Settings → Security before syncing.",
+      "githubTokenMissing": "GitHub token is not configured.",
+      "gistIdMissing": "Gist ID is not configured. Sync from another device first.",
+      "s3Missing": "S3 is not configured.",
+      "webdavMissing": "WebDAV is not configured.",
+      "customUrlMissing": "Custom endpoint URL is not configured.",
+      "providerMissing": "No sync provider configured."
     },
     "masterPasswordPushPrompt": "Enter the master password to encrypt credentials before uploading.",
     "masterPasswordPullPrompt": "Enter the master password to decrypt credentials received from remote.",
@@ -665,6 +696,7 @@
     },
     "s3": {
       "endpoint": "Endpoint (optional)",
+      "endpointPlaceholder": "https://s3.amazonaws.com (empty = AWS default)",
       "endpointHint": "Leave blank for AWS S3. For MinIO, provide the HTTPS base URL (e.g. https://minio.example.com)",
       "bucket": "Bucket",
       "region": "Region",
@@ -709,6 +741,7 @@
       "waitingFirstManualSync": "Automatic sync starts only after the first manual sync. Import from remote or push manually to confirm which version should win.",
       "masterPasswordSessionHint": "When credential sync is enabled, automatic sync uses the master password entered during manual sync in this session to encrypt passwords, keys, and tokens.",
       "blockedNeedsSessionPassword": "Automatic sync is blocked. Run a manual sync and enter the master password in this session.",
+      "errorWithMessage": "Automatic sync error: {{error}}",
       "nextSyncIn": "Next sync in {{minutes}} min",
       "nextSyncNow": "Syncing soon..."
     }
@@ -753,6 +786,17 @@
       "cancelled": "Import cancelled.",
       "invalidFile": "Invalid or corrupted file",
       "wrongPassword": "Incorrect master password. Credentials were not imported."
+    },
+    "dialogs": {
+      "saveTitle": "Save MPCM Workspace backup",
+      "openTitle": "Open MPCM Workspace backup"
+    },
+    "errors": {
+      "invalidJson": "Invalid file: not valid JSON",
+      "unexpectedStructure": "Invalid file: unexpected structure",
+      "notBackup": "Invalid file: not an MPCM Workspace backup",
+      "unsupportedVersion": "Unsupported backup version: {{version}}",
+      "invalidHosts": "Invalid file: missing or invalid 'hosts' field"
     },
     "masterPasswordPrompt": "Master Password for Backup",
     "includeSettings": "Restore settings (theme, language, terminal)",
@@ -1017,6 +1061,10 @@
     "rdpInternalViewerError": "Failed to launch internal RDP viewer: {{host}}",
     "vncConnected": "VNC session launched: {{host}}",
     "vncError": "Failed to launch VNC: {{host}}",
+    "systemTerminalMissingConnection": "Could not open external terminal for {{host}}: missing connection data.",
+    "systemTerminalErrorForHost": "Error opening external terminal for {{host}}: {{error}}",
+    "systemTerminalError": "Error opening external terminal: {{error}}",
+    "standaloneWindowFallback": "Could not open a separate window for {{host}}. Opening in a tab.",
     "syncPushSuccess": "Sync sent successfully",
     "syncPullSuccess": "Data imported successfully",
     "syncError": "Sync error"

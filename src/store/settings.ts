@@ -13,6 +13,7 @@ interface SettingsStore {
   setTheme: (themeId: ThemeId) => void;
   setLocale: (locale: string) => void;
   updateTerminal: (terminal: Partial<AppSettings["terminal"]>) => void;
+  updateDashboard: (dashboard: Partial<AppSettings["dashboard"]>) => void;
   updateSecurity: (security: Partial<AppSettings["security"]>) => void;
   updateSsh: (ssh: Partial<AppSettings["ssh"]>) => void;
   updateRdp: (rdp: Partial<AppSettings["rdp"]>) => void;
@@ -30,6 +31,9 @@ interface SettingsStore {
 const DEFAULT_SETTINGS: AppSettings = {
   themeId: "dark",
   locale: "pt-BR",
+  dashboard: {
+    cardMode: "full",
+  },
   terminal: {
     fontSize: 14,
     fontFamily: "JetBrains Mono",
@@ -45,6 +49,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   ssh: {
     keepAliveInterval: 60,
     inactivityTimeout: 0,
+    sftpOpenMode: "sameTab",
   },
   rdp: {
     launchMode: "native",
@@ -84,6 +89,10 @@ function normalizeSettings(settings?: Partial<AppSettings> | null): AppSettings 
     terminal: {
       ...DEFAULT_SETTINGS.terminal,
       ...(settings?.terminal ?? {}),
+    },
+    dashboard: {
+      ...DEFAULT_SETTINGS.dashboard,
+      ...(settings?.dashboard ?? {}),
     },
     security: {
       ...DEFAULT_SETTINGS.security,
@@ -198,6 +207,16 @@ export const useSettingsStore = create<SettingsStore>()((set, _get) => ({
       const settings = {
         ...s.settings,
         terminal: { ...s.settings.terminal, ...terminal },
+      };
+      persistSettings(settings);
+      return { settings };
+    }),
+
+  updateDashboard: (dashboard) =>
+    set((s) => {
+      const settings = {
+        ...s.settings,
+        dashboard: { ...DEFAULT_SETTINGS.dashboard, ...s.settings.dashboard, ...dashboard },
       };
       persistSettings(settings);
       return { settings };

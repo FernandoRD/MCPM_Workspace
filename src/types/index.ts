@@ -193,6 +193,9 @@ export type CredentialMeta = Omit<Credential, "password" | "passphrase">;
 export interface AppSettings {
   themeId: string;
   locale: string;
+  dashboard: {
+    cardMode: "full" | "compact";
+  };
   terminal: {
     fontSize: number;
     fontFamily: string;
@@ -204,6 +207,7 @@ export interface AppSettings {
   ssh: {
     keepAliveInterval: number;
     inactivityTimeout: number;
+    sftpOpenMode: "sameTab" | "newTab";
   };
   rdp: RdpSettings;
   vnc: VncSettings;

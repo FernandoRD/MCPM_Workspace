@@ -299,6 +299,23 @@ export function Settings() {
                         {t("settings.ssh.importConfigAction")}
                       </Button>
                     </div>
+
+                    <div className="max-w-sm">
+                      <Select
+                        id="sftpOpenMode"
+                        label={t("settings.ssh.sftpOpenMode")}
+                        value={settings.ssh?.sftpOpenMode ?? "sameTab"}
+                        onChange={(e) =>
+                          updateSsh({ sftpOpenMode: e.target.value as AppSettings["ssh"]["sftpOpenMode"] })
+                        }
+                      >
+                        <option value="sameTab">{t("settings.ssh.sftpOpenModes.sameTab")}</option>
+                        <option value="newTab">{t("settings.ssh.sftpOpenModes.newTab")}</option>
+                      </Select>
+                      <p className="mt-1 text-xs text-[var(--text-muted)]">
+                        {t("settings.ssh.sftpOpenModeHint")}
+                      </p>
+                    </div>
                   </div>
                 </SettingPanel>
 

@@ -125,7 +125,7 @@ export async function launchTerminalSession({
 }: LaunchTerminalSessionParams): Promise<string | null> {
   if (openMode === "window") {
     if (!systemTerminalConnection) {
-      notify(APP_NAME, `Não foi possível abrir terminal externo para ${hostLabel}: dados de conexão ausentes.`);
+      notify(APP_NAME, i18n.t("notifications.systemTerminalMissingConnection", { host: hostLabel }));
       return null;
     }
     try {
@@ -139,7 +139,7 @@ export async function launchTerminalSession({
         privateKeyPassphrase: systemTerminalConnection.privateKeyPassphrase ?? null,
       });
     } catch (err) {
-      notify(APP_NAME, `Erro ao abrir terminal externo para ${hostLabel}: ${err}`);
+      notify(APP_NAME, i18n.t("notifications.systemTerminalErrorForHost", { host: hostLabel, error: String(err) }));
     }
     return null;
   }
@@ -178,7 +178,7 @@ export async function launchQuickConnectSession({
         privateKeyPassphrase: sanitizedConnection.passphrase ?? null,
       });
     } catch (err) {
-      notify(APP_NAME, `Erro ao abrir terminal externo: ${err}`);
+      notify(APP_NAME, i18n.t("notifications.systemTerminalError", { error: String(err) }));
     }
     return null;
   }
@@ -209,7 +209,7 @@ export async function launchQuickConnectSession({
     const opened = await createStandaloneSessionWindow(route, i18n.t("nav.quickConnect"), sessionId, sessionType);
     if (opened) return null;
 
-    notify(APP_NAME, `Nao foi possivel abrir janela separada para ${hostLabel}. Abrindo em aba.`);
+    notify(APP_NAME, i18n.t("notifications.standaloneWindowFallback", { host: hostLabel }));
   }
 
   const sessionId = openQuickConnectSession(
@@ -245,7 +245,7 @@ export async function launchRdpSession({
     const opened = await createStandaloneSessionWindow(route, hostLabel, sessionId, "rdp");
     if (opened) return null;
 
-    notify(APP_NAME, `Não foi possível abrir janela separada para ${hostLabel}. Abrindo em aba.`);
+    notify(APP_NAME, i18n.t("notifications.standaloneWindowFallback", { host: hostLabel }));
   }
 
   const sessionId = openRdpTab(hostId, hostLabel, hostAddress);
@@ -277,7 +277,7 @@ export async function launchVncSession({
     const opened = await createStandaloneSessionWindow(route, hostLabel, sessionId, "vnc");
     if (opened) return null;
 
-    notify(APP_NAME, `Não foi possível abrir janela separada para ${hostLabel}. Abrindo em aba.`);
+    notify(APP_NAME, i18n.t("notifications.standaloneWindowFallback", { host: hostLabel }));
   }
 
   const sessionId = openVncTab(hostId, hostLabel, hostAddress);

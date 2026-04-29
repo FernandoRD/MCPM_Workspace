@@ -17,6 +17,8 @@ import {
   ArrowDownAZ,
   Clock,
   ClockArrowUp,
+  LayoutGrid,
+  Rows3,
   Tag,
   X,
   CheckSquare,
@@ -49,6 +51,7 @@ import { buildSessionRoute, isStandaloneWindow } from "@/lib/windowMode";
 type BulkEditCredentialMode = "keep" | "set" | "clear";
 type BulkEditGroupMode = "keep" | "set" | "clear";
 type BulkEditTagsMode = "keep" | "replace" | "add" | "remove" | "clear";
+type DashboardCardMode = "full" | "compact";
 
 interface BulkEditChanges {
   credentialMode: BulkEditCredentialMode;
@@ -75,6 +78,8 @@ export function Dashboard() {
   const locale = useSettingsStore((s) => s.settings.locale);
   const sessionOpenMode = useSettingsStore((s) => s.settings.terminal.sessionOpenMode);
   const savedGroups = useSettingsStore((s) => s.settings.groups);
+  const cardMode = useSettingsStore((s) => s.settings.dashboard.cardMode);
+  const updateDashboard = useSettingsStore((s) => s.updateDashboard);
   const updateGroups = useSettingsStore((s) => s.updateGroups);
   const standaloneWindow = isStandaloneWindow(location.search);
 
@@ -342,6 +347,7 @@ export function Dashboard() {
           )}
         </div>
         <SortSelector value={sortBy} onChange={setSortBy} />
+        <CardModeToggle value={cardMode} onChange={(nextMode) => updateDashboard({ cardMode: nextMode })} />
       </div>
 
       {selectedHostIds.length > 0 && (
@@ -438,11 +444,20 @@ export function Dashboard() {
             {filtered.length === 0 ? (
               <p className="text-center py-12 text-[var(--text-muted)]">{t("common.noResults")}</p>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              <div
+                className="grid justify-start gap-3"
+                style={{
+                  gridTemplateColumns:
+                    cardMode === "compact"
+                      ? "repeat(auto-fill, 18rem)"
+                      : "repeat(auto-fill, 19rem)",
+                }}
+              >
                 {filtered.map((host) => (
                   <HostCard
                     key={host.id}
                     host={host}
+                    mode={cardMode}
                     locale={locale}
                     menuOpen={menuHostId === host.id}
                     selected={selectedHostIds.includes(host.id)}
@@ -604,8 +619,45 @@ function SortSelector({
   );
 }
 
+function CardModeToggle({
+  value,
+  onChange,
+}: {
+  value: DashboardCardMode;
+  onChange: (value: DashboardCardMode) => void;
+}) {
+  const { t } = useTranslation();
+  const options: Array<{ value: DashboardCardMode; icon: React.ElementType; label: string }> = [
+    { value: "full", icon: LayoutGrid, label: t("dashboard.cardMode.full") },
+    { value: "compact", icon: Rows3, label: t("dashboard.cardMode.compact") },
+  ];
+
+  return (
+    <div className="flex h-9 items-center overflow-hidden rounded-md border border-[var(--border)] bg-[var(--bg-secondary)]">
+      {options.map(({ value: optionValue, icon: Icon, label }) => (
+        <button
+          key={optionValue}
+          type="button"
+          title={label}
+          aria-label={label}
+          onClick={() => onChange(optionValue)}
+          className={cn(
+            "flex h-full items-center justify-center px-2.5 transition-colors",
+            value === optionValue
+              ? "bg-[var(--accent)] text-white"
+              : "text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+          )}
+        >
+          <Icon size={14} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function HostCard({
   host,
+  mode,
   locale,
   menuOpen,
   selected,
@@ -618,6 +670,7 @@ function HostCard({
   onDuplicate,
 }: {
   host: HostEntry;
+  mode: DashboardCardMode;
   locale: string;
   menuOpen: boolean;
   selected: boolean;
@@ -630,6 +683,49 @@ function HostCard({
   onDuplicate: (id: string) => void;
 }) {
   const { t } = useTranslation();
+  const isDesktopProtocol = host.protocol === "rdp" || host.protocol === "vnc";
+
+  if (mode === "compact") {
+    return (
+      <div
+        className={cn(
+          "relative group flex items-center gap-2 rounded-lg border bg-[var(--bg-secondary)] px-3 py-2 transition-colors",
+          selected
+            ? "border-[var(--accent)] ring-1 ring-[var(--accent)]/20"
+            : "border-[var(--border)] hover:border-[var(--border-focus)]"
+        )}
+      >
+        <p className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--text-primary)]" title={host.label}>
+          {host.label}
+        </p>
+
+        <Button size="sm" onClick={() => onConnect(host)} className="shrink-0">
+          {isDesktopProtocol ? <Monitor size={12} /> : <Terminal size={12} />}
+          {t(isDesktopProtocol ? "dashboard.host.openDesktop" : "dashboard.host.connect")}
+        </Button>
+
+        <div className="relative shrink-0">
+          <button
+            onClick={() => onMenuToggle(host.id)}
+            className="flex h-7 w-7 items-center justify-center rounded text-[var(--text-muted)] transition-colors hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]"
+            title={t("dashboard.host.options")}
+          >
+            <MoreVertical size={14} />
+          </button>
+          {menuOpen && (
+            <HostContextMenu
+              host={host}
+              onConnect={onConnect}
+              onOpenSftp={onOpenSftp}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onDuplicate={onDuplicate}
+            />
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -668,7 +764,7 @@ function HostCard({
               <p className="text-xs text-[var(--text-muted)] truncate max-w-[130px]">
                 {host.host}:{host.port}
               </p>
-              <Badge variant={host.protocol === "telnet" ? "warning" : "accent"}>
+              <Badge variant="accent">
                 {t(`protocols.${host.protocol}`)}
               </Badge>
             </div>
@@ -682,24 +778,19 @@ function HostCard({
               "h-7 w-7 flex items-center justify-center rounded text-[var(--text-muted)] hover:bg-[var(--bg-hover)] transition-colors",
               selected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
             )}
+            title={t("dashboard.host.options")}
           >
             <MoreVertical size={14} />
           </button>
           {menuOpen && (
-            <div className="absolute right-0 top-8 z-20 w-40 rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] shadow-xl py-1">
-              <ContextItem
-                icon={host.protocol === "rdp" || host.protocol === "vnc" ? Monitor : Terminal}
-                label={t(host.protocol === "rdp" || host.protocol === "vnc" ? "dashboard.host.openDesktop" : "dashboard.host.connect")}
-                onClick={() => onConnect(host)}
-              />
-              {host.protocol === "ssh" && (
-                <ContextItem icon={FolderOpen} label={t("dashboard.host.openSftp")} onClick={() => onOpenSftp(host)} />
-              )}
-              <ContextItem icon={Edit2} label={t("dashboard.host.edit")} onClick={() => onEdit(host)} />
-              <ContextItem icon={Copy} label={t("dashboard.host.duplicate")} onClick={() => onDuplicate(host.id)} />
-              <div className="my-1 border-t border-[var(--border)]" />
-              <ContextItem icon={Trash2} label={t("dashboard.host.delete")} onClick={() => onDelete(host.id)} danger />
-            </div>
+            <HostContextMenu
+              host={host}
+              onConnect={onConnect}
+              onOpenSftp={onOpenSftp}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onDuplicate={onDuplicate}
+            />
           )}
         </div>
       </div>
@@ -734,10 +825,46 @@ function HostCard({
           {host.lastConnectedAt ? formatDate(host.lastConnectedAt, locale) : t("dashboard.host.neverConnected")}
         </p>
         <Button size="sm" onClick={() => onConnect(host)}>
-          {host.protocol === "rdp" || host.protocol === "vnc" ? <Monitor size={12} /> : <Terminal size={12} />}
-          {t(host.protocol === "rdp" || host.protocol === "vnc" ? "dashboard.host.openDesktop" : "dashboard.host.connect")}
+          {isDesktopProtocol ? <Monitor size={12} /> : <Terminal size={12} />}
+          {t(isDesktopProtocol ? "dashboard.host.openDesktop" : "dashboard.host.connect")}
         </Button>
       </div>
+    </div>
+  );
+}
+
+function HostContextMenu({
+  host,
+  onConnect,
+  onOpenSftp,
+  onEdit,
+  onDelete,
+  onDuplicate,
+}: {
+  host: HostEntry;
+  onConnect: (host: HostEntry) => void;
+  onOpenSftp: (host: HostEntry) => void;
+  onEdit: (host: HostEntry) => void;
+  onDelete: (id: string) => void;
+  onDuplicate: (id: string) => void;
+}) {
+  const { t } = useTranslation();
+  const isDesktopProtocol = host.protocol === "rdp" || host.protocol === "vnc";
+
+  return (
+    <div className="absolute right-0 top-8 z-20 w-40 rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] py-1 shadow-xl">
+      <ContextItem
+        icon={isDesktopProtocol ? Monitor : Terminal}
+        label={t(isDesktopProtocol ? "dashboard.host.openDesktop" : "dashboard.host.connect")}
+        onClick={() => onConnect(host)}
+      />
+      {host.protocol === "ssh" && (
+        <ContextItem icon={FolderOpen} label={t("dashboard.host.openSftp")} onClick={() => onOpenSftp(host)} />
+      )}
+      <ContextItem icon={Edit2} label={t("dashboard.host.edit")} onClick={() => onEdit(host)} />
+      <ContextItem icon={Copy} label={t("dashboard.host.duplicate")} onClick={() => onDuplicate(host.id)} />
+      <div className="my-1 border-t border-[var(--border)]" />
+      <ContextItem icon={Trash2} label={t("dashboard.host.delete")} onClick={() => onDelete(host.id)} danger />
     </div>
   );
 }

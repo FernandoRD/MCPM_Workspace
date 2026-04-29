@@ -35,6 +35,14 @@ import { logFrontendError } from "@/lib/logger";
 import { launchTerminalSession } from "@/lib/sessionLauncher";
 import { readSessionBootstrap, withStandaloneQuery } from "@/lib/windowMode";
 
+interface SftpPageProps {
+  embedded?: boolean;
+  embeddedSessionId?: string;
+  embeddedHostId?: string;
+  embeddedHostAddress?: string;
+  onClose?: () => void;
+}
+
 interface SftpEntry {
   name: string;
   path: string;
@@ -71,9 +79,16 @@ function getPathBaseName(path: string): string {
   return path.split(/[\\/]/).pop() ?? path;
 }
 
-export function SftpPage() {
+export function SftpPage({
+  embedded = false,
+  embeddedSessionId,
+  embeddedHostId,
+  embeddedHostAddress,
+  onClose,
+}: SftpPageProps = {}) {
   const { t } = useTranslation();
-  const { tabId } = useParams<{ tabId: string }>();
+  const { tabId: routeTabId } = useParams<{ tabId: string }>();
+  const tabId = embeddedSessionId ?? routeTabId;
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -93,13 +108,15 @@ export function SftpPage() {
   const openLog = useConnectionLogsStore((s) => s.openLog);
   const closeLog = useConnectionLogsStore((s) => s.closeLog);
   const bootstrap = readSessionBootstrap(location.search);
-  const standaloneWindow = bootstrap.standalone;
+  const standaloneWindow = embedded ? false : bootstrap.standalone;
 
-  const tab = tabs.find((t) => t.id === tabId);
-  const host = tab ? getHost(tab.hostId) : undefined;
+  const tab = tabs.find((t) => t.id === (embedded ? routeTabId : tabId));
+  const host = embeddedHostId ? getHost(embeddedHostId) : tab ? getHost(tab.hostId) : undefined;
+  const hostAddress = embeddedHostAddress ?? tab?.hostAddress ?? "";
+  const sessionId = tabId!;
 
   useEffect(() => {
-    if (!tabId || tab || !bootstrap.standalone || !bootstrap.hostId) return;
+    if (embedded || !tabId || tab || !bootstrap.standalone || !bootstrap.hostId) return;
 
     ensureSession({
       id: tabId,
@@ -112,7 +129,7 @@ export function SftpPage() {
       splitDirection: "horizontal",
       createdAt: new Date().toISOString(),
     });
-  }, [bootstrap.hostAddress, bootstrap.hostId, bootstrap.hostLabel, bootstrap.standalone, ensureSession, tab, tabId]);
+  }, [bootstrap.hostAddress, bootstrap.hostId, bootstrap.hostLabel, bootstrap.standalone, embedded, ensureSession, tab, tabId]);
 
   const [status, setStatus] = useState<Status>("connecting");
   const [currentPath, setCurrentPath] = useState(sftpSnapshot?.currentPath ?? "/");
@@ -136,8 +153,11 @@ export function SftpPage() {
   // Delete confirm state
   const [deletingEntry, setDeletingEntry] = useState<SftpEntry | null>(null);
 
-  const sessionId = tabId!;
   const logIdRef = useRef<string | null>(null);
+
+  const updateSftpStatus = useCallback((nextStatus: Status) => {
+    if (!embedded) updatePaneStatus(sessionId, nextStatus);
+  }, [embedded, sessionId, updatePaneStatus]);
 
   const loadDir = useCallback(async (path: string) => {
     setLoading(true);
@@ -165,7 +185,7 @@ export function SftpPage() {
       const message = t("sftp.sshOnly");
       setStatus("error");
       setError(message);
-      updatePaneStatus(sessionId, "error");
+      updateSftpStatus("error");
       return;
     }
 
@@ -193,7 +213,7 @@ export function SftpPage() {
       if (sessionExists) {
         setStatus("connected");
         setError(null);
-        updatePaneStatus(sessionId, "connected");
+        updateSftpStatus("connected");
         await loadDir(sftpSnapshot?.currentPath ?? currentPath ?? "/");
         return;
       }
@@ -221,11 +241,11 @@ export function SftpPage() {
       });
       setStatus("connected");
       setLastConnected(host.id);
-      updatePaneStatus(sessionId, "connected");
+      updateSftpStatus("connected");
       logIdRef.current = openLog({
         hostId: host.id,
         hostLabel: host.label,
-        hostAddress: tab!.hostAddress,
+        hostAddress,
         sessionType: "sftp",
         connectedAt,
         status: "connected",
@@ -235,11 +255,11 @@ export function SftpPage() {
       const message = String(err);
       setStatus("error");
       setError(message);
-      updatePaneStatus(sessionId, "error");
+      updateSftpStatus("error");
       openLog({
         hostId: host.id,
         hostLabel: host.label,
-        hostAddress: tab!.hostAddress,
+        hostAddress,
         sessionType: "sftp",
         connectedAt,
         status: "error",
@@ -253,7 +273,7 @@ export function SftpPage() {
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPath, loadDir, sessionId, host, sftpSnapshot?.currentPath, updatePaneStatus]);
+  }, [currentPath, host, hostAddress, loadDir, sessionId, sftpSnapshot?.currentPath, updateSftpStatus]);
 
   // Conecta ao montar; ao desmontar apenas remove a UI local.
   useEffect(() => {
@@ -411,10 +431,32 @@ export function SftpPage() {
         closeLog(logIdRef.current, "disconnected");
         logIdRef.current = null;
       }
+      if (embedded) {
+        onClose?.();
+        return;
+      }
       closeSession(sessionId);
       navigate(withStandaloneQuery("/", bootstrap.standalone));
     }
-  }, [bootstrap.standalone, closeLog, closeSession, navigate, sessionId]);
+  }, [bootstrap.standalone, closeLog, closeSession, embedded, navigate, onClose, sessionId]);
+
+  const handleReconnect = useCallback(async () => {
+    setError(null);
+    setStatus("connecting");
+    updateSftpStatus("connecting");
+    try {
+      await invoke("sftp_disconnect", { sessionId });
+    } catch (err) {
+      logFrontendError("sftp.reconnect", "Falha ao encerrar sessão SFTP antes de reconectar", err, {
+        sessionId,
+      });
+    }
+    if (logIdRef.current) {
+      closeLog(logIdRef.current, "disconnected");
+      logIdRef.current = null;
+    }
+    await connect();
+  }, [closeLog, connect, sessionId, updateSftpStatus]);
 
   const handleRename = async (entry: SftpEntry) => {
     if (!renameValue.trim() || renameValue === entry.name) {
@@ -450,20 +492,22 @@ export function SftpPage() {
         [{ label: "/", path: "/" }]
       );
 
-  if (!tab && bootstrap.standalone && bootstrap.hostId) {
+  if (!embedded && !tab && bootstrap.standalone && bootstrap.hostId) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
-        <p className="text-[var(--text-muted)]">Carregando sessão...</p>
+        <p className="text-[var(--text-muted)]">{t("sftp.loadingSession")}</p>
       </div>
     );
   }
 
-  if (!tab || !host) {
+  if ((!embedded && !tab) || !host) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
         <WifiOff size={32} className="text-[var(--text-muted)]" />
-        <p className="text-[var(--text-muted)]">Sessão não encontrada</p>
-        <Button onClick={() => navigate(withStandaloneQuery("/", bootstrap.standalone))}>Voltar</Button>
+        <p className="text-[var(--text-muted)]">{t("sftp.sessionNotFound")}</p>
+        {!embedded && (
+          <Button onClick={() => navigate(withStandaloneQuery("/", bootstrap.standalone))}>{t("common.back")}</Button>
+        )}
       </div>
     );
   }
@@ -483,7 +527,7 @@ export function SftpPage() {
         <WifiOff size={32} className="text-[var(--danger)]" />
         <p className="text-sm text-[var(--text-primary)]">{t("sftp.disconnected")}</p>
         {error && <p className="text-xs text-[var(--danger)] max-w-xs text-center">{error}</p>}
-        <Button size="sm" onClick={connect}>
+        <Button size="sm" onClick={() => void handleReconnect()}>
           <RotateCcw size={13} />
           {t("sftp.reconnect")}
         </Button>
@@ -567,10 +611,19 @@ export function SftpPage() {
             variant="ghost"
             size="sm"
             onClick={() => loadDir(currentPath)}
-            title="Refresh"
+            title={t("sftp.refresh")}
             disabled={!!transferProgress}
           >
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void handleReconnect()}
+            title={t("sftp.reconnect")}
+            disabled={!!transferProgress}
+          >
+            <RotateCcw size={14} />
           </Button>
           <div className="w-px h-4 bg-[var(--border)] mx-0.5" />
           <Button
@@ -580,7 +633,7 @@ export function SftpPage() {
               const route = await launchTerminalSession({
                 hostId: host.id,
                 hostLabel: host.label,
-                hostAddress: tab.hostAddress,
+                hostAddress,
                 openMode: sessionOpenMode,
                 openSession,
                 standaloneWindow,
@@ -589,6 +642,7 @@ export function SftpPage() {
             }}
             title={t("sftp.openTerminal")}
             className="gap-1.5 text-xs"
+            disabled={embedded}
           >
             <Terminal size={14} />
             {t("sftp.openTerminal")}

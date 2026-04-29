@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { AppLayout } from "@/components/Layout/AppLayout";
 import { Dashboard } from "@/pages/Dashboard";
 import { HostEditor } from "@/pages/HostEditor";
@@ -29,6 +30,7 @@ import { useConnectionLogsStore } from "@/store/connectionLogs";
 import { useAutoSync } from "@/hooks/useAutoSync";
 
 export default function App() {
+  const { t } = useTranslation();
   const [ready, setReady] = useState(false);
   useAutoSync();
   const initHosts = useHostsStore((s) => s.init);
@@ -56,7 +58,7 @@ export default function App() {
           fontSize: "14px",
         }}
       >
-        Carregando...
+        {t("common.loading")}
       </div>
     );
   }

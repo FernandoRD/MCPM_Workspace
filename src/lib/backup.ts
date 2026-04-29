@@ -36,6 +36,7 @@ import {
   sanitizeSshKeys,
   TransferSecretsPayload,
 } from "@/lib/portableState";
+import i18n from "@/lib/i18n";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -103,7 +104,7 @@ export async function exportBackup(
   // Abrir diálogo de salvar
   const now = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   const filePath = await save({
-    title: "Salvar backup do MPCM Workspace",
+    title: i18n.t("backup.dialogs.saveTitle"),
     defaultPath: `mpcm-workspace-backup-${now}.sshvault`,
     filters: [
       { name: "MPCM Workspace Backup", extensions: ["sshvault"] },
@@ -127,7 +128,7 @@ export async function importBackup(
   masterPassword: string | null
 ): Promise<ImportResult | null> {
   const filePath = await open({
-    title: "Abrir backup do MPCM Workspace",
+    title: i18n.t("backup.dialogs.openTitle"),
     multiple: false,
     filters: [
       { name: "MPCM Workspace Backup", extensions: ["sshvault", "json"] },
@@ -162,23 +163,23 @@ function parseBackupFile(raw: string): BackupFile {
   try {
     data = JSON.parse(raw);
   } catch {
-    throw new Error("Arquivo inválido: não é um JSON válido");
+    throw new Error(i18n.t("backup.errors.invalidJson"));
   }
 
   if (!data || typeof data !== "object") {
-    throw new Error("Arquivo inválido: estrutura inesperada");
+    throw new Error(i18n.t("backup.errors.unexpectedStructure"));
   }
 
   const obj = data as Record<string, unknown>;
 
   if (obj["app"] !== "ssh-vault") {
-    throw new Error("Arquivo inválido: não é um backup do MPCM Workspace");
+    throw new Error(i18n.t("backup.errors.notBackup"));
   }
   if (obj["version"] !== 1) {
-    throw new Error(`Versão de backup não suportada: ${obj["version"]}`);
+    throw new Error(i18n.t("backup.errors.unsupportedVersion", { version: String(obj["version"]) }));
   }
   if (!Array.isArray(obj["hosts"])) {
-    throw new Error("Arquivo inválido: campo 'hosts' ausente ou inválido");
+    throw new Error(i18n.t("backup.errors.invalidHosts"));
   }
 
   return obj as unknown as BackupFile;
@@ -202,6 +203,9 @@ export function hydrateBackupData(
           {
             themeId: backup.settings.themeId,
             locale: backup.settings.locale,
+            dashboard: backup.settings.dashboard ?? {
+              cardMode: "full",
+            },
             terminal: backup.settings.terminal,
             ssh: backup.settings.ssh,
             rdp: backup.settings.rdp ?? {

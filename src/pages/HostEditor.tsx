@@ -501,7 +501,7 @@ export function HostEditor() {
                 placeholder={t("hostEditor.fields.tagsPlaceholder")}
                 value={tagsInput}
                 onChange={(e) => setTagsInput(e.target.value)}
-                hint="Separe as tags por vírgula"
+                hint={t("hostEditor.fields.tagsHint")}
               />
               {parsedTags.length > 0 && (
                 <div className="flex flex-wrap gap-2">

@@ -3,6 +3,7 @@ import { AppSettings, Credential, HostEntry, SshKey } from "@/types";
 export interface PortableSyncSettings {
   themeId: string;
   locale: string;
+  dashboard: AppSettings["dashboard"];
   terminal: AppSettings["terminal"];
   ssh: AppSettings["ssh"];
   rdp: AppSettings["rdp"];
@@ -54,6 +55,7 @@ export function buildPortableSettings(settings: AppSettings): PortableSyncSettin
   return {
     themeId: settings.themeId,
     locale: settings.locale,
+    dashboard: settings.dashboard,
     terminal: settings.terminal,
     ssh: settings.ssh,
     rdp: settings.rdp,
@@ -242,6 +244,7 @@ export function mergePortableSettings(
     ...current,
     themeId: incoming?.themeId ?? current.themeId,
     locale: incoming?.locale ?? current.locale,
+    dashboard: incoming?.dashboard ? { ...current.dashboard, ...incoming.dashboard } : current.dashboard,
     terminal: incoming?.terminal ? { ...current.terminal, ...incoming.terminal } : current.terminal,
     ssh: incoming?.ssh ? { ...current.ssh, ...incoming.ssh } : current.ssh,
     rdp: incoming?.rdp

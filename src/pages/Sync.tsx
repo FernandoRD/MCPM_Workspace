@@ -355,7 +355,7 @@ function S3ConfigForm({
       <Input
         id="s3-endpoint"
         label={t("sync.s3.endpoint")}
-        placeholder="https://s3.amazonaws.com (vazio = AWS padrão)"
+        placeholder={t("sync.s3.endpointPlaceholder")}
         value={endpoint}
         onChange={(e) => setEndpoint(e.target.value)}
         hint={t("sync.s3.endpointHint")}

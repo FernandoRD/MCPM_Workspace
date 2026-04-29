@@ -6,7 +6,17 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 
 ## Versão atual
 
-`0.4.3`
+`0.4.4`
+
+## Novidades da 0.4.4
+
+- Sessões `SSH` e `Telnet` ganharam botão de reconectar na tela do terminal, mantendo a aba aberta em falhas para permitir nova tentativa
+- Encerramento limpo de terminal por `exit` ou `Ctrl+D` volta a fechar a aba/janela da sessão; em splits, panes secundários fecham individualmente
+- O botão `Abrir SFTP` em uma sessão `SSH` pode abrir o SFTP lado a lado na mesma aba, com alternativa configurável para abrir em nova aba
+- Divisões entre terminais e entre terminal/SFTP agora são redimensionáveis arrastando a região de divisão
+- Dashboard ganhou modo de cards `completo` ou `compacto`, com escolha persistida nas configurações e cards de tamanho fixo em grid responsivo
+- Configurações portáveis foram ampliadas para sincronizar/restaurar preferências de dashboard e comportamento de abertura do SFTP
+- Auditoria de localização corrigiu textos visíveis que ainda estavam fora do i18n em terminal, SFTP, backup, sync, notificações e estado inicial da aplicação
 
 ## Novidades da 0.4.3
 
@@ -108,12 +118,12 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 - Cadastro de hosts com protocolo `SSH`, `Telnet`, `RDP` ou `VNC`, além de `grupos`, `tags`, `notas`, `cores`, `jump host` e presets de compatibilidade SSH
 - Credenciais reutilizáveis separadas dos hosts
 - Chaves SSH próprias, com geração de fingerprint e vínculo por credencial
-- Terminal integrado com `xterm.js`, múltiplas abas com reorganização por drag and drop, split pane e reanexação de sessão por aba
+- Terminal integrado com `xterm.js`, múltiplas abas com reorganização por drag and drop, split panes redimensionáveis, reconexão manual e fechamento automático em encerramento limpo
 - Página dedicada para sessões `RDP` e `VNC`, com monitoramento completo para clientes gerenciados pelo app e comportamento explícito quando a sessão é repassada para um launcher externo
-- SFTP integrado para hosts `SSH`, com navegação remota, upload, download, rename, delete e mkdir
+- SFTP integrado para hosts `SSH`, com navegação remota, upload, download, rename, delete e mkdir; pode abrir em aba própria ou lado a lado com o terminal SSH conforme preferência do usuário
 - `Quick Connect` na command palette para conexões temporárias `SSH`, `Telnet`, `RDP` e `VNC` sem salvar host
 - Opção para abrir sessões na `mesma janela` ou no `terminal do sistema` (SSH/Telnet) e em `janelas dedicadas` (RDP/VNC)
-- Dashboard com filtros compactos por grupo/subgrupo, tag, ordenação e edição em massa de `credencial`, `grupo` e `tags`
+- Dashboard com filtros compactos por grupo/subgrupo, tag, ordenação, modo de cards completo/compacto e edição em massa de `credencial`, `grupo` e `tags`
 - Importação em massa de hosts via `.csv`, com template/export de exemplo, preview e merge controlado
 - Acesso às importações direto pelo `+ Nova Conexão`, sem atrapalhar o fluxo principal de cadastro individual
 - Operações com snippets, túneis e workspaces com compatibilidade por protocolo
@@ -122,7 +132,7 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 - Sincronização remota com `GitHub Gist`, `S3/MinIO`, `WebDAV/Nextcloud` ou endpoint customizado
 - Auto-sync periódico de estado portátil, bloqueado até existir senha mestra configurada e uma primeira sincronização manual
 - MFA/TOTP por host `SSH`
-- Interface traduzida para `pt-BR` e `en-US`
+- Interface traduzida para `pt-BR` e `en-US`, com a localização aplicada também em mensagens de backup, sync, terminal, SFTP e notificações principais
 
 Hoje o app já opera como `Multi-Protocol Connection Manager`, com `SSH` e `Telnet` compartilhando a infraestrutura de terminal, `RDP` usando uma rota própria para abrir o launcher nativo da plataforma ou o viewer interno empacotado com o app, e `VNC` usando um fluxo dedicado para acionar clientes externos com transparência sobre o que o app consegue ou não monitorar.
 
@@ -131,20 +141,20 @@ O cliente RDP interno está em [clients/internal-rdp-client/README.md](/home/fer
 ## Escopo por protocolo
 
 - `SSH`
-  Terminal completo, SFTP, snippets remotos, batch execution, túneis, health check, inventário de fingerprints com edição manual do `known_hosts` interno do app, MFA/TOTP, import de `~/.ssh/config`, importação em massa via `.csv`, jump host e presets de compatibilidade.
+  Terminal completo com splits redimensionáveis e reconexão, SFTP em aba ou lado a lado, snippets remotos, batch execution, túneis, health check, inventário de fingerprints com edição manual do `known_hosts` interno do app, MFA/TOTP, import de `~/.ssh/config`, importação em massa via `.csv`, jump host e presets de compatibilidade.
 - `Telnet`
-  Terminal interativo com múltiplas abas, quick connect, workspaces, preservação de sessão entre trocas de aba e suporte ao cadastro/import em massa via `.csv`.
+  Terminal interativo com múltiplas abas, splits redimensionáveis, reconexão, quick connect, workspaces, preservação de sessão entre trocas de aba e suporte ao cadastro/import em massa via `.csv`.
 - `RDP`
   Sessão gráfica via launcher nativo ou viewer interno experimental, quick connect, abertura em aba ou janela dedicada, escolha de cliente no Linux para o modo nativo, opções globais de resolução, fullscreen, multimonitor, clipboard, áudio e certificado, além de suporte ao cadastro/import em massa via `.csv`.
 - `VNC`
   Sessão gráfica via launcher externo, quick connect, abertura em aba ou janela dedicada, escolha de cliente preferido no Linux, opções globais de fullscreen e view-only, além de indicação explícita quando o cliente foi apenas delegado ao sistema e não pode ser monitorado pelo app.
 - `SFTP`
-  Continua sendo um recurso derivado de `SSH`, então não aparece para hosts `Telnet`.
+  Continua sendo um recurso derivado de `SSH`, então não aparece para hosts `Telnet`. O modo padrão abre o navegador lado a lado com o terminal, mas o usuário pode voltar ao comportamento de nova aba nas configurações.
 
 ## Arquitetura em alto nível
 
 - `Frontend`
-  React Router organiza as páginas, Zustand mantém estado local e persistido, e a UI roda dentro do WebView do Tauri. O terminal do frontend foi neutralizado para servir `SSH` e `Telnet` com a mesma infraestrutura visual, enquanto `RDP` usa uma página de sessão própria para orquestrar o launcher nativo ou o viewer interno experimental. Os fluxos de onboarding agora incluem cadastro único, importação de `~/.ssh/config` e importação em massa por `.csv`.
+  React Router organiza as páginas, Zustand mantém estado local e persistido, e a UI roda dentro do WebView do Tauri. O terminal do frontend foi neutralizado para servir `SSH` e `Telnet` com a mesma infraestrutura visual, incluindo splits redimensionáveis e reconexão. `SFTP` pode ser renderizado como painel embutido ao lado do terminal ou como aba própria, enquanto `RDP` usa uma página de sessão própria para orquestrar o launcher nativo ou o viewer interno experimental. Os fluxos de onboarding agora incluem cadastro único, importação de `~/.ssh/config` e importação em massa por `.csv`.
 - `Backend`
   O backend em Rust expõe comandos Tauri para terminal `SSH`/`Telnet`, SFTP, `RDP`, sync, criptografia, TOTP e persistência.
 - `Persistência`
@@ -175,6 +185,7 @@ O cliente RDP interno está em [clients/internal-rdp-client/README.md](/home/fer
 
 - O payload de sync inclui hosts, credenciais, chaves SSH e configurações portáveis
 - O protocolo do host viaja no payload portátil e é restaurado em import, restore e sync
+- Preferências portáveis incluem idioma, tema, modo de cards do dashboard, comportamento de abertura do SFTP, terminal, SSH, RDP, VNC, grupos e produtividade
 - O `push` publica o snapshot local atual no provider
 - O `pull` importa/mescla o conteúdo remoto no estado local
 - Auto-sync faz `push` em background sem prompt de senha mestra, então segredos cifrados dependentes da senha não entram nesse fluxo
@@ -305,6 +316,9 @@ O projeto já cobre o núcleo operacional multi-protocolo atual e inclui:
 - janelas dedicadas de sessão
 - suporte consolidado a `Telnet`
 - suporte a `RDP` via launcher nativo e viewer interno experimental
+- SFTP lado a lado com SSH ou em aba própria, conforme configuração
+- cards do dashboard em modo completo ou compacto
+- splits de terminal/SFTP redimensionáveis
 - importação em massa via `.csv`
 - fluxo de `+ Nova Conexão` com menu de ações
 - seleção de cliente RDP no Linux
@@ -312,6 +326,7 @@ O projeto já cobre o núcleo operacional multi-protocolo atual e inclui:
 - health check, inventário de fingerprints e edição manual do `known_hosts` interno
 - edição em massa de hosts
 - sync/backup alinhados com hosts, credenciais, chaves SSH, protocolo e settings portáveis
+- localização aplicada em `pt-BR` e `en-US` nos fluxos principais de UI, sync, backup e sessão
 - página `About` com identidade e posicionamento do produto
 
 ## Licença

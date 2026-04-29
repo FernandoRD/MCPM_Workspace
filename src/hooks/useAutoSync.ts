@@ -80,7 +80,7 @@ export function useAutoSync() {
         }
         updateSyncRef.current({ lastSyncAt: new Date().toISOString() });
       } catch (e) {
-        notify(APP_NAME, `Erro no sync automático: ${String(e)}`);
+        notify(APP_NAME, i18n.t("sync.autoSync.errorWithMessage", { error: String(e) }));
       }
     };
 
