@@ -605,9 +605,15 @@
       "scrollback": "Scrollback lines",
       "sessionOpenMode": "Open SSH sessions in",
       "sessionOpenModeHint": "Choose whether new terminal sessions open as tabs in the current window or in the system terminal.",
+      "rightClickBehavior": "Terminal right click",
+      "rightClickBehaviorHint": "In copy/paste mode, right click copies the selection; without a selection, it pastes the clipboard into the session.",
       "sessionOpenModes": {
         "tab": "Current window",
         "window": "System terminal"
+      },
+      "rightClickBehaviors": {
+        "contextMenu": "Context menu",
+        "copyPaste": "Quick copy/paste"
       },
       "cursorStyles": {
         "block": "Block",

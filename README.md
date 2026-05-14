@@ -6,7 +6,15 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 
 ## Versão atual
 
-`0.4.4`
+`0.4.5`
+
+## Novidades da 0.4.5
+
+- Sincronização remota agora propaga remoções de hosts usando tombstones (`deletedHosts`), evitando que hosts apagados voltem ao importar/mesclar de outro dispositivo
+- Push manual passa a inferir remoções quando o host existe no remoto mas já não existe localmente, ajudando a limpar registros apagados antes desta correção
+- Links detectados no terminal `SSH`/`Telnet` agora abrem pelo plugin `opener` do Tauri, em vez de depender do comportamento padrão do WebView
+- Configurações de terminal ganharam escolha para o botão direito: manter o menu de contexto ou usar copiar/colar rápido
+- No modo copiar/colar rápido, clique direito copia a seleção; sem seleção, tenta colar o clipboard na sessão usando clipboard nativo com fallback do WebView
 
 ## Novidades da 0.4.4
 
@@ -118,7 +126,7 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 - Cadastro de hosts com protocolo `SSH`, `Telnet`, `RDP` ou `VNC`, além de `grupos`, `tags`, `notas`, `cores`, `jump host` e presets de compatibilidade SSH
 - Credenciais reutilizáveis separadas dos hosts
 - Chaves SSH próprias, com geração de fingerprint e vínculo por credencial
-- Terminal integrado com `xterm.js`, múltiplas abas com reorganização por drag and drop, split panes redimensionáveis, reconexão manual e fechamento automático em encerramento limpo
+- Terminal integrado com `xterm.js`, múltiplas abas com reorganização por drag and drop, split panes redimensionáveis, reconexão manual, links clicáveis, comportamento configurável para botão direito e fechamento automático em encerramento limpo
 - Página dedicada para sessões `RDP` e `VNC`, com monitoramento completo para clientes gerenciados pelo app e comportamento explícito quando a sessão é repassada para um launcher externo
 - SFTP integrado para hosts `SSH`, com navegação remota, upload, download, rename, delete e mkdir; pode abrir em aba própria ou lado a lado com o terminal SSH conforme preferência do usuário
 - `Quick Connect` na command palette para conexões temporárias `SSH`, `Telnet`, `RDP` e `VNC` sem salvar host
@@ -185,9 +193,10 @@ O cliente RDP interno está em [clients/internal-rdp-client/README.md](/home/fer
 
 - O payload de sync inclui hosts, credenciais, chaves SSH e configurações portáveis
 - O protocolo do host viaja no payload portátil e é restaurado em import, restore e sync
-- Preferências portáveis incluem idioma, tema, modo de cards do dashboard, comportamento de abertura do SFTP, terminal, SSH, RDP, VNC, grupos e produtividade
+- Preferências portáveis incluem idioma, tema, modo de cards do dashboard, comportamento de abertura do SFTP, terminal, SSH, RDP, VNC, grupos, produtividade e tombstones de hosts removidos
 - O `push` publica o snapshot local atual no provider
 - O `pull` importa/mescla o conteúdo remoto no estado local
+- Remoções de hosts viajam como `deletedHosts`, preservando o merge de hosts novos locais sem ressuscitar hosts já apagados em outro dispositivo
 - Auto-sync faz `push` em background sem prompt de senha mestra, então segredos cifrados dependentes da senha não entram nesse fluxo
 
 ### Backup
@@ -247,10 +256,64 @@ clients/
 - `Rust stable`
 - Dependências nativas exigidas pelo Tauri para a sua plataforma
 
-No `Zorin OS 18.1`, além de instalar `Rust` e `Node.js`, instale as dependências nativas de build com:
+Para executar o `AppImage` final em Debian, Ubuntu, Zorin OS e derivados, instale o suporte a FUSE usado pelo formato AppImage:
+
+```bash
+sudo apt install libfuse2
+```
+
+Em bases mais novas que renomearam a ABI do pacote, use:
+
+```bash
+sudo apt install libfuse2t64
+```
+
+Para executar o `AppImage` final em Arch Linux, Manjaro, EndeavourOS e derivados:
+
+```bash
+sudo pacman -S --needed fuse2
+```
+
+O `AppImage` já empacota as bibliotecas GTK/WebKit principais exigidas pelo Tauri, incluindo `libwebkit2gtk-4.1`, `libjavascriptcoregtk-4.1`, `libgtk-3`, `libsoup-3.0` e dependências gráficas auxiliares. Ainda assim, o sistema precisa ter um ambiente gráfico X11 ou Wayland funcional, `dbus` em execução e `glibc` compatível com a distribuição usada no build.
+
+Para recursos opcionais que dependem de programas do sistema, instale os clientes externos necessários.
+
+Debian, Ubuntu, Zorin OS e derivados:
+
+```bash
+sudo apt install openssh-client telnet xdg-utils gnome-keyring freerdp3-x11 remmina krdc tigervnc-viewer vinagre
+```
+
+Arch Linux, Manjaro, EndeavourOS e derivados:
+
+```bash
+sudo pacman -S --needed openssh inetutils xdg-utils gnome-keyring freerdp remmina krdc tigervnc
+```
+
+Para executar o binário cru gerado em `src-tauri/target/release/ssh-vault`, fora do `AppImage`, as bibliotecas Tauri/WebKit precisam existir no sistema.
+
+Debian, Ubuntu, Zorin OS e derivados:
+
+```bash
+sudo apt install libwebkit2gtk-4.1-0 libjavascriptcoregtk-4.1-0 libgtk-3-0 libsoup-3.0-0 libsecret-1-0
+```
+
+Arch Linux, Manjaro, EndeavourOS e derivados:
+
+```bash
+sudo pacman -S --needed webkit2gtk-4.1 gtk3 libsoup3 libsecret
+```
+
+Para compilar o projeto no `Zorin OS 18.1`, além de instalar `Rust` e `Node.js`, instale as dependências nativas de build com:
 
 ```bash
 sudo apt install libgtk-3-dev libglib2.0-dev pkg-config libsoup-3.0-dev libjavascriptcoregtk-4.1-0 libjavascriptcoregtk-4.1-dev gir1.2-javascriptcoregtk-4.1 libwebkit2gtk-4.1-dev build-essential curl wget libssl-dev libayatana-appindicator3-dev librsvg2-dev
+```
+
+Para compilar em Arch Linux e derivados:
+
+```bash
+sudo pacman -S --needed nodejs npm rust base-devel pkgconf curl wget file openssl appmenu-gtk-module gtk3 libappindicator-gtk3 librsvg webkit2gtk-4.1 xdotool
 ```
 
 ### Instalação

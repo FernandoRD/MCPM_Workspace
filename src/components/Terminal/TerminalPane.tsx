@@ -5,9 +5,11 @@ import { WebLinksAddon } from "@xterm/addon-web-links";
 import "@xterm/xterm/css/xterm.css";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "react-i18next";
 import { useSettingsStore } from "@/store/settings";
 import { useSessionsStore } from "@/store/sessions";
+import { logFrontendError } from "@/lib/logger";
 
 interface TerminalPaneProps {
   paneId: string;
@@ -36,6 +38,74 @@ function writeBase64Chunk(term: Terminal | null, chunk: string) {
     term.write(bytes);
   } catch {
     term.write(chunk);
+  }
+}
+
+async function writeClipboardText(text: string): Promise<void> {
+  try {
+    await invoke("terminal_clipboard_write", { text });
+    return;
+  } catch {
+    // Continua para fallbacks do WebView.
+  }
+
+  try {
+    await navigator.clipboard.writeText(text);
+    return;
+  } catch {
+    // Alguns WebViews bloqueiam navigator.clipboard em contextmenu, mesmo com
+    // gesto do usuário. O fallback abaixo usa a rota legada de copy do DOM.
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  textarea.style.top = "0";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+
+  try {
+    if (!document.execCommand("copy")) {
+      throw new Error("document.execCommand('copy') retornou false");
+    }
+  } finally {
+    document.body.removeChild(textarea);
+  }
+}
+
+async function readClipboardText(): Promise<string> {
+  try {
+    return await invoke<string>("terminal_clipboard_read");
+  } catch {
+    // Continua para fallbacks do WebView.
+  }
+
+  try {
+    return await navigator.clipboard.readText();
+  } catch {
+    // Fallback best-effort para ambientes que ainda permitem paste via
+    // execCommand durante um gesto de usuário.
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  textarea.style.top = "0";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.focus();
+
+  try {
+    if (!document.execCommand("paste")) {
+      throw new Error("document.execCommand('paste') retornou false");
+    }
+    return textarea.value;
+  } finally {
+    document.body.removeChild(textarea);
   }
 }
 
@@ -78,6 +148,33 @@ export function TerminalPane({
     cleanupRef.current = null;
   }, []);
 
+  const handleContextMenu = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (terminalSettings.rightClickBehavior !== "copyPaste") return;
+
+    event.preventDefault();
+    const xterm = xtermRef.current;
+    if (!xterm) return;
+
+    xterm.focus();
+    const selectedText = xterm.getSelection();
+    if (selectedText) {
+      void writeClipboardText(selectedText).then(() => {
+        xterm.clearSelection();
+      }).catch((error) => {
+        logFrontendError("terminal.copySelection", "Falha ao copiar seleção do terminal", error);
+      });
+      return;
+    }
+
+    void readClipboardText().then((text) => {
+      if (!text) return;
+      const inputCommand = protocol === "telnet" ? "telnet_send_input" : "ssh_send_input";
+      return invoke(inputCommand, { tabId: paneId, data: text });
+    }).catch((error) => {
+      logFrontendError("terminal.pasteClipboard", "Falha ao colar clipboard no terminal", error);
+    });
+  }, [paneId, protocol, terminalSettings.rightClickBehavior]);
+
   const connect = useCallback(async () => {
     if (!termRef.current) return;
 
@@ -111,7 +208,12 @@ export function TerminalPane({
       });
       const fitAddon = new FitAddon();
       xterm.loadAddon(fitAddon);
-      xterm.loadAddon(new WebLinksAddon());
+      xterm.loadAddon(new WebLinksAddon((event, uri) => {
+        event.preventDefault();
+        void openUrl(uri).catch((error) => {
+          logFrontendError("terminal.openUrl", "Falha ao abrir URL do terminal", error, { uri });
+        });
+      }));
       xterm.open(termRef.current);
       fitAddon.fit();
       xtermRef.current = xterm;
@@ -282,7 +384,11 @@ export function TerminalPane({
   }, [clearConnectionBindings, connect, paneId, reconnectNonce]);
 
   return (
-    <div className="relative h-full w-full" style={{ backgroundColor: "var(--terminal-bg)" }}>
+    <div
+      className="relative h-full w-full"
+      style={{ backgroundColor: "var(--terminal-bg)" }}
+      onContextMenu={handleContextMenu}
+    >
       <div ref={termRef} className="h-full w-full" />
 
       {pendingFingerprint && (

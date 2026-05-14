@@ -1,4 +1,5 @@
 mod app_logging;
+mod app_clipboard;
 mod credentials;
 mod crypto;
 mod database;
@@ -71,6 +72,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             storage::get_app_data_dir,
+            app_clipboard::terminal_clipboard_write,
+            app_clipboard::terminal_clipboard_read,
             app_logging::write_frontend_log,
             app_logging::app_get_log_settings,
             app_logging::app_set_log_directory,

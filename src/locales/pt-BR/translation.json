@@ -605,9 +605,15 @@
       "scrollback": "Linhas de histórico",
       "sessionOpenMode": "Abrir sessões SSH em",
       "sessionOpenModeHint": "Escolha se novas sessões de terminal devem abrir como aba na janela atual ou no terminal do sistema.",
+      "rightClickBehavior": "Botão direito no terminal",
+      "rightClickBehaviorHint": "No modo copiar/colar, clique direito copia a seleção; sem seleção, cola o clipboard na sessão.",
       "sessionOpenModes": {
         "tab": "Mesma janela",
         "window": "Terminal do sistema"
+      },
+      "rightClickBehaviors": {
+        "contextMenu": "Menu de contexto",
+        "copyPaste": "Copiar/colar rápido"
       },
       "cursorStyles": {
         "block": "Bloco",

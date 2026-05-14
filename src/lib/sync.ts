@@ -47,6 +47,8 @@ export interface SyncFile {
   version: 1;
   syncedAt: string;
   hosts: HostEntry[];
+  /** Tombstones de hosts removidos, por id -> ISO date */
+  deletedHosts?: Record<string, string>;
   /** Credenciais sem segredos sensíveis */
   credentials: Credential[];
   /** Chaves SSH sem material privado */
@@ -63,6 +65,44 @@ export interface SyncResult {
   credentialsUpdated: number;
   sshKeysAdded: number;
   sshKeysUpdated: number;
+}
+
+const TOMBSTONE_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+
+function timestamp(value: string | undefined): number {
+  const parsed = value ? Date.parse(value) : NaN;
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizeDeletedHosts(
+  deletedHosts: Record<string, string> | undefined,
+  now = Date.now()
+): Record<string, string> {
+  const entries = Object.entries(deletedHosts ?? {}).filter(([id, deletedAt]) => {
+    const deletedTs = timestamp(deletedAt);
+    return Boolean(id) && deletedTs > 0 && now - deletedTs <= TOMBSTONE_RETENTION_MS;
+  });
+
+  return Object.fromEntries(entries);
+}
+
+function mergeDeletedHosts(
+  localDeletedHosts: Record<string, string> | undefined,
+  remoteDeletedHosts: Record<string, string> | undefined
+): Record<string, string> {
+  const merged = normalizeDeletedHosts(localDeletedHosts);
+  for (const [id, deletedAt] of Object.entries(normalizeDeletedHosts(remoteDeletedHosts))) {
+    if (timestamp(deletedAt) > timestamp(merged[id])) {
+      merged[id] = deletedAt;
+    }
+  }
+  return merged;
+}
+
+function shouldDeleteHost(host: HostEntry | undefined, deletedAt: string | undefined): boolean {
+  if (!deletedAt) return false;
+  if (!host) return true;
+  return timestamp(deletedAt) >= timestamp(host.updatedAt || host.createdAt);
 }
 
 // ─── Build payload ────────────────────────────────────────────────────────────
@@ -85,6 +125,7 @@ export async function buildSyncPayload(
   const cleanHosts = sanitizeHosts(hosts);
   const exportedCredentials = sanitizeCredentials(credentials);
   const exportedSshKeys = sanitizeSshKeys(sshKeys);
+  const deletedHosts = normalizeDeletedHosts(settings.sync.deletedHosts);
   let encryptedSecrets: EncryptedCredentials | undefined;
 
   // Só cifra os segredos quando a flag syncCredentials está habilitada E uma
@@ -107,6 +148,7 @@ export async function buildSyncPayload(
     version: 1,
     syncedAt: new Date().toISOString(),
     hosts: cleanHosts,
+    ...(Object.keys(deletedHosts).length > 0 ? { deletedHosts } : {}),
     credentials: exportedCredentials,
     sshKeys: exportedSshKeys,
     settings: buildPortableSettings(settings),
@@ -166,6 +208,8 @@ export async function applySyncPayload(
   const remoteHosts = hydrateHosts(file.hosts ?? [], secretsPayload.hosts, currentHosts);
   const remoteCredentials = hydrateCredentials(file.credentials ?? [], secretsPayload.credentials, currentCredentials);
   const remoteSshKeys = hydrateSshKeys(file.sshKeys ?? [], secretsPayload.sshKeys, currentSshKeys);
+  const remoteDeletedHosts = normalizeDeletedHosts(file.deletedHosts ?? file.settings?.sync?.deletedHosts);
+  const mergedDeletedHosts = mergeDeletedHosts(currentSettings.sync.deletedHosts, remoteDeletedHosts);
 
   let finalHosts: HostEntry[];
   let finalCredentials: Credential[];
@@ -187,12 +231,26 @@ export async function applySyncPayload(
   } else {
     const localHostsById = new Map(currentHosts.map((h) => [h.id, h]));
     for (const remoteHost of remoteHosts) {
+      const deletedAt = mergedDeletedHosts[remoteHost.id];
+      if (shouldDeleteHost(remoteHost, deletedAt)) {
+        localHostsById.delete(remoteHost.id);
+        continue;
+      }
+
       if (localHostsById.has(remoteHost.id)) {
         hostsUpdated++;
       } else {
         hostsAdded++;
       }
       localHostsById.set(remoteHost.id, remoteHost);
+    }
+    for (const [hostId, deletedAt] of Object.entries(mergedDeletedHosts)) {
+      const host = localHostsById.get(hostId);
+      if (shouldDeleteHost(host, deletedAt)) {
+        localHostsById.delete(hostId);
+      } else {
+        delete mergedDeletedHosts[hostId];
+      }
     }
     finalHosts = Array.from(localHostsById.values());
 
@@ -222,7 +280,14 @@ export async function applySyncPayload(
   replaceHosts(finalHosts);
   replaceCredentials(finalCredentials);
   replaceSshKeys(finalSshKeys);
-  replaceSettings(mergePortableSettings(currentSettings, file.settings, secretsPayload.settings));
+  const nextSettings = mergePortableSettings(currentSettings, file.settings, secretsPayload.settings);
+  replaceSettings({
+    ...nextSettings,
+    sync: {
+      ...nextSettings.sync,
+      deletedHosts: mergedDeletedHosts,
+    },
+  });
 
   return {
     hostsAdded,

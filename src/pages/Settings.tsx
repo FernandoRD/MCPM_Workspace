@@ -270,6 +270,25 @@ export function Settings() {
                         {t("settings.terminal.sessionOpenModeHint")}
                       </p>
                     </div>
+
+                    <div>
+                      <Select
+                        id="rightClickBehavior"
+                        label={t("settings.terminal.rightClickBehavior")}
+                        value={settings.terminal.rightClickBehavior}
+                        onChange={(e) =>
+                          updateTerminal({
+                            rightClickBehavior: e.target.value as "contextMenu" | "copyPaste",
+                          })
+                        }
+                      >
+                        <option value="contextMenu">{t("settings.terminal.rightClickBehaviors.contextMenu")}</option>
+                        <option value="copyPaste">{t("settings.terminal.rightClickBehaviors.copyPaste")}</option>
+                      </Select>
+                      <p className="mt-1 text-xs text-[var(--text-muted)]">
+                        {t("settings.terminal.rightClickBehaviorHint")}
+                      </p>
+                    </div>
                   </div>
                 </SettingPanel>
               </div>

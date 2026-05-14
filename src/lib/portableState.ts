@@ -12,6 +12,7 @@ export interface PortableSyncSettings {
     provider: AppSettings["sync"]["provider"];
     autoSync: boolean;
     autoSyncIntervalMinutes?: number;
+    deletedHosts?: Record<string, string>;
     gist?: { gistId?: string };
     s3?: { endpoint: string; bucket: string; region: string };
     webdav?: { url: string; username: string; path: string };
@@ -66,6 +67,7 @@ export function buildPortableSettings(settings: AppSettings): PortableSyncSettin
       provider: settings.sync.provider,
       autoSync: settings.sync.autoSync,
       autoSyncIntervalMinutes: settings.sync.autoSyncIntervalMinutes,
+      deletedHosts: settings.sync.deletedHosts,
       gist: settings.sync.gist ? { gistId: settings.sync.gist.gistId } : undefined,
       s3: settings.sync.s3
         ? {
@@ -273,6 +275,7 @@ export function mergePortableSettings(
       autoSync: incoming?.sync?.autoSync ?? current.sync.autoSync,
       autoSyncIntervalMinutes:
         incoming?.sync?.autoSyncIntervalMinutes ?? current.sync.autoSyncIntervalMinutes,
+      deletedHosts: incoming?.sync?.deletedHosts ?? current.sync.deletedHosts,
       gist: nextGist,
       s3: nextS3,
       webdav: nextWebdav,

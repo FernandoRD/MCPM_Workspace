@@ -81,6 +81,7 @@ export function Dashboard() {
   const cardMode = useSettingsStore((s) => s.settings.dashboard.cardMode);
   const updateDashboard = useSettingsStore((s) => s.updateDashboard);
   const updateGroups = useSettingsStore((s) => s.updateGroups);
+  const updateSync = useSettingsStore((s) => s.updateSync);
   const standaloneWindow = isStandaloneWindow(location.search);
 
   const [showBulkEditModal, setShowBulkEditModal] = useState(false);
@@ -233,6 +234,17 @@ export function Dashboard() {
         hostAddress: standaloneWindow ? hostAddress : undefined,
       })
     );
+  };
+
+  const handleDeleteHost = (hostId: string) => {
+    const currentDeletedHosts = useSettingsStore.getState().settings.sync.deletedHosts;
+    deleteHost(hostId);
+    updateSync({
+      deletedHosts: {
+        ...(currentDeletedHosts ?? {}),
+        [hostId]: new Date().toISOString(),
+      },
+    });
   };
 
   const toggleHostSelection = (hostId: string) => {
@@ -466,7 +478,7 @@ export function Dashboard() {
                     onConnect={handleConnect}
                     onOpenSftp={handleOpenSftp}
                     onEdit={(item) => navigate(`/hosts/${item.id}`)}
-                    onDelete={(id) => deleteHost(id)}
+                    onDelete={handleDeleteHost}
                     onDuplicate={(id) => duplicateHost(id)}
                   />
                 ))}

@@ -86,10 +86,41 @@ export function Sync() {
     setError(null);
     setLastResult(null);
     try {
-      const payload = await buildSyncPayload(hosts, credentials, sshKeys, settings, masterPassword);
+      const localHostIds = new Set(hosts.map((host) => host.id));
+      const inferredDeletedHosts: Record<string, string> = {};
+
+      try {
+        const remoteJson = await pullFromProvider(sync);
+        const remoteFile = parseSyncFile(remoteJson);
+        const deletedAt = new Date().toISOString();
+        for (const remoteHost of remoteFile.hosts ?? []) {
+          if (!localHostIds.has(remoteHost.id)) {
+            inferredDeletedHosts[remoteHost.id] = remoteFile.deletedHosts?.[remoteHost.id] ?? deletedAt;
+          }
+        }
+      } catch {
+        // O remoto pode ainda não existir no primeiro push; nesse caso o upload
+        // normal continua sendo a fonte de verdade.
+      }
+
+      const settingsForPush = {
+        ...settings,
+        sync: {
+          ...settings.sync,
+          deletedHosts: {
+            ...(settings.sync.deletedHosts ?? {}),
+            ...inferredDeletedHosts,
+          },
+        },
+      };
+
+      const payload = await buildSyncPayload(hosts, credentials, sshKeys, settingsForPush, masterPassword);
       const newGistId = await pushToProvider(sync, payload);
       if (newGistId) updateSync({ gist: { ...sync.gist!, gistId: newGistId } });
-      updateSync({ lastSyncAt: new Date().toISOString() });
+      updateSync({
+        deletedHosts: settingsForPush.sync.deletedHosts,
+        lastSyncAt: new Date().toISOString(),
+      });
       notify(APP_NAME, t("notifications.syncPushSuccess"));
     } catch (e) {
       setError(String(e));

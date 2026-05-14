@@ -16,7 +16,8 @@ Documento de referência para desenvolvimento e manutenção do MPCM Workspace n
 10. Segurança e segredos
 11. Fluxos importantes
 12. Laboratório RDP interno
-13. Versionamento
+13. Empacotamento Linux
+14. Versionamento
 
 ## 1. Visão geral
 
@@ -28,6 +29,7 @@ O MPCM Workspace é uma aplicação desktop Tauri com frontend React e backend R
 - sessões de terminal multi-protocolo, sessões gráficas `RDP`/`VNC`, SFTP e diagnóstico persistente
 - barra de abas de sessão com reorganização manual por drag and drop
 - splits redimensionáveis entre panes de terminal e entre terminal/SFTP embutido
+- links clicáveis no terminal e modo configurável de botão direito para menu ou copiar/colar rápido
 - modo de cards completo/compacto no dashboard
 - snippets, túneis e workspaces
 - sincronização remota
@@ -151,6 +153,7 @@ src/
 
 src-tauri/
   src/
+    app_clipboard.rs
     app_logging.rs
     credentials.rs
     crypto.rs
@@ -212,7 +215,7 @@ Arquivo-base: [index.ts](/home/fernando/Documentos/ssh_vault/src/types/index.ts)
 - `dashboard`
   `cardMode`
 - `terminal`
-  `fontSize`, `fontFamily`, `cursorStyle`, `cursorBlink`, `scrollback`, `sessionOpenMode`
+  `fontSize`, `fontFamily`, `cursorStyle`, `cursorBlink`, `scrollback`, `sessionOpenMode`, `rightClickBehavior`
 - `ssh`
   `keepAliveInterval`, `inactivityTimeout`, `sftpOpenMode`
 - `rdp`
@@ -222,7 +225,7 @@ Arquivo-base: [index.ts](/home/fernando/Documentos/ssh_vault/src/types/index.ts)
 - `security`
   `masterPasswordSet`, `verificationPayload?`, `syncCredentials`
 - `sync`
-  `provider`, `autoSync`, `autoSyncIntervalMinutes?`, `lastSyncAt?`, configs por provider
+  `provider`, `autoSync`, `autoSyncIntervalMinutes?`, `lastSyncAt?`, `deletedHosts?`, configs por provider
 - `groups`
   Lista persistida de grupos e subgrupos em formato de caminho, como `Produção/Web/API`
 - `productivity`
@@ -247,7 +250,7 @@ Ele sanitiza e reidrata:
 - segredos de sync e backup
 
 O campo `protocol` do host é parte desse estado portátil e é preservado em sync, backup e restore.
-As preferências `dashboard.cardMode` e `ssh.sftpOpenMode` também fazem parte das settings portáveis, então viajam em sync/backup junto com idioma, tema, terminal, RDP, VNC, grupos e produtividade.
+As preferências `dashboard.cardMode`, `ssh.sftpOpenMode` e `terminal.rightClickBehavior` também fazem parte das settings portáveis, então viajam em sync/backup junto com idioma, tema, terminal, RDP, VNC, grupos e produtividade. Tombstones de hosts removidos (`sync.deletedHosts`) também viajam no sync para que exclusões sejam propagadas entre dispositivos sem transformar todo pull em replace destrutivo.
 
 ## 5. Stores Zustand
 
@@ -508,6 +511,11 @@ Arquivo-base: [lib.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/lib.rs)
 - `sync_custom_push`
 - `sync_custom_pull`
 
+### Clipboard do terminal
+
+- `terminal_clipboard_write`
+- `terminal_clipboard_read`
+
 ## 9. Sync e backup
 
 ### Sync
@@ -524,13 +532,16 @@ O pacote de sync atual inclui:
 - `credentials`
 - `sshKeys`
 - `settings` portáveis
+- `deletedHosts?`
 - `encryptedSecrets?`
 
 O `protocol` de cada host faz parte desse pacote e é preservado durante `push`, `pull` e merge local.
+Hosts removidos são propagados por `deletedHosts`, um mapa `hostId -> ISO date` mantido por tempo limitado. Durante merge, um tombstone remove o host local quando a data de remoção é igual ou posterior a `updatedAt`/`createdAt` do host; se o host local foi recriado/atualizado depois, o tombstone local é descartado.
 
 Observações:
 
 - `push` envia snapshot local atual
+- `push` manual tenta inferir tombstones quando o host ainda existe no remoto e já não existe localmente
 - `pull` importa/mescla conteúdo remoto nas stores locais
 - `autoSync` só faz push em background
 - `autoSync` não executa push inicial quando `lastSyncAt` ainda está vazio; uma instalação nova precisa de uma primeira ação manual para definir se deve importar ou enviar dados
@@ -629,6 +640,16 @@ Ao invés de abrir uma `WebviewWindow` com a aplicação React completa, o app d
 - Arquivos temporários de chave: `$TMPDIR/ssh_vault_keys/key_<uuid>`, permissão `0600`, limpos na próxima inicialização do app via `cleanup_old_temp_keys()`
 - Encerramento limpo por `exit` ou `Ctrl+D` emite `disconnected` e fecha a aba ou janela da sessão. Falhas usam `error` e mantêm a tela aberta para permitir reconexão.
 - Panes secundários em split fecham individualmente ao encerrar de forma limpa; a sessão principal só fecha quando o pane principal encerra ou quando não há outro pane aplicável.
+
+### Terminal integrado: links e botão direito
+
+- UI: [TerminalPane.tsx](/home/fernando/Documentos/ssh_vault/src/components/Terminal/TerminalPane.tsx)
+- Links: `@xterm/addon-web-links` detecta URLs; o handler customizado chama `openUrl` de `@tauri-apps/plugin-opener`, evitando dependência de `window.open` dentro do WebView.
+- Preferência: `terminal.rightClickBehavior` aceita `"contextMenu"` ou `"copyPaste"`.
+- Modo `"contextMenu"` preserva o menu nativo/contextual do WebView.
+- Modo `"copyPaste"` intercepta `contextmenu`: se houver seleção no xterm, copia; se não houver seleção, lê o clipboard e envia o texto para `ssh_send_input` ou `telnet_send_input`.
+- Clipboard nativo: [app_clipboard.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/app_clipboard.rs) expõe `terminal_clipboard_write` e `terminal_clipboard_read`. No Linux tenta `wl-copy`/`wl-paste`, `xclip` ou `xsel`; no macOS usa `pbcopy`/`pbpaste`; no Windows usa PowerShell `Set-Clipboard`/`Get-Clipboard`.
+- Segurança de lifecycle: operações nativas de clipboard rodam em `spawn_blocking`; escrita não espera indefinidamente por utilitários como `wl-copy`, que podem permanecer vivos para servir o clipboard.
 
 #### Split panes e SFTP embutido
 
@@ -913,7 +934,80 @@ Separação interna atual do protótipo:
 
 Essa separação é intencional: o objetivo é chegar a um contrato claro para integração futura com `Tauri`, em vez de acoplar cedo demais um MVP experimental ao app principal.
 
-## 13. Versionamento
+## 13. Empacotamento Linux
+
+O pacote Linux principal é gerado pelo Tauri como `AppImage`. No build validado da versão `0.4.5`, o `AppDir` inclui as bibliotecas gráficas principais usadas pelo runtime Tauri/WebKit:
+
+- `libwebkit2gtk-4.1.so.0`
+- `libjavascriptcoregtk-4.1.so.0`
+- `libgtk-3.so.0`
+- `libsoup-3.0.so.0`
+- `libsecret-1.so.0`
+- dependências auxiliares de GTK, X11, Wayland, GStreamer, Pango, Cairo e GDK Pixbuf
+
+Isso significa que a instalação do usuário final não precisa instalar `webkit2gtk` para executar o `AppImage`, desde que a distribuição forneça suporte básico ao formato AppImage, ambiente gráfico funcional, `dbus` e uma `glibc` compatível com a máquina de build.
+
+Requisito mínimo para executar o `AppImage` em Debian, Ubuntu, Zorin OS e derivados:
+
+```bash
+sudo apt install libfuse2
+```
+
+Em bases mais novas que usam o pacote com ABI `t64`:
+
+```bash
+sudo apt install libfuse2t64
+```
+
+Requisito mínimo para executar o `AppImage` em Arch Linux, Manjaro, EndeavourOS e derivados:
+
+```bash
+sudo pacman -S --needed fuse2
+```
+
+Dependências opcionais para integrações que chamam programas externos:
+
+Debian, Ubuntu, Zorin OS e derivados:
+
+```bash
+sudo apt install openssh-client telnet xdg-utils gnome-keyring freerdp3-x11 remmina krdc tigervnc-viewer vinagre wl-clipboard xclip xsel
+```
+
+Arch Linux, Manjaro, EndeavourOS e derivados:
+
+```bash
+sudo pacman -S --needed openssh inetutils xdg-utils gnome-keyring freerdp remmina krdc tigervnc wl-clipboard xclip xsel
+```
+
+Se o binário cru `src-tauri/target/release/ssh-vault` for executado fora do `AppImage`, as bibliotecas dinâmicas do Tauri/WebKit precisam estar instaladas no host.
+
+Debian, Ubuntu, Zorin OS e derivados:
+
+```bash
+sudo apt install libwebkit2gtk-4.1-0 libjavascriptcoregtk-4.1-0 libgtk-3-0 libsoup-3.0-0 libsecret-1-0
+```
+
+Arch Linux, Manjaro, EndeavourOS e derivados:
+
+```bash
+sudo pacman -S --needed webkit2gtk-4.1 gtk3 libsoup3 libsecret
+```
+
+Dependências de build documentadas para Debian, Ubuntu, Zorin OS e derivados:
+
+```bash
+sudo apt install libgtk-3-dev libglib2.0-dev pkg-config libsoup-3.0-dev libjavascriptcoregtk-4.1-0 libjavascriptcoregtk-4.1-dev gir1.2-javascriptcoregtk-4.1 libwebkit2gtk-4.1-dev build-essential curl wget libssl-dev libayatana-appindicator3-dev librsvg2-dev
+```
+
+Dependências de build documentadas para Arch Linux, Manjaro, EndeavourOS e derivados:
+
+```bash
+sudo pacman -S --needed nodejs npm rust base-devel pkgconf curl wget file openssl appmenu-gtk-module gtk3 libappindicator-gtk3 librsvg webkit2gtk-4.1 xdotool
+```
+
+O viewer RDP interno empacotado em `src-tauri/resources/internal-rdp-client/viewer_mvp` tem dependências dinâmicas mínimas no Linux (`libgcc_s`, `libm`, `libc` e o loader ELF), então não adiciona uma cadeia gráfica externa além do que o app Tauri já carrega.
+
+## 14. Versionamento
 
 Arquivos principais:
 
@@ -924,7 +1018,7 @@ Arquivos principais:
 
 Estado atual:
 
-- versão de referência atual do app: `0.4.4`
+- versão de referência atual do app: `0.4.5`
 - `package.json` é a fonte principal da versão do app
 - `tauri.conf.json` lê a versão a partir de `../package.json`
 - o frontend lê a versão a partir de `package.json` via `appInfo.ts`

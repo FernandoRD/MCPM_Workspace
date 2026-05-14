@@ -41,6 +41,7 @@ const DEFAULT_SETTINGS: AppSettings = {
     cursorBlink: true,
     scrollback: 5000,
     sessionOpenMode: "tab",
+    rightClickBehavior: "contextMenu",
   },
   security: {
     masterPasswordSet: false,

@@ -203,6 +203,7 @@ export interface AppSettings {
     cursorBlink: boolean;
     scrollback: number;
     sessionOpenMode: "tab" | "window";
+    rightClickBehavior: "contextMenu" | "copyPaste";
   };
   ssh: {
     keepAliveInterval: number;
@@ -223,6 +224,7 @@ export interface AppSettings {
     autoSync: boolean;
     autoSyncIntervalMinutes?: number;
     lastSyncAt?: string;
+    deletedHosts?: Record<string, string>;
     gist?: GistSyncConfig;
     s3?: S3SyncConfig;
     webdav?: WebDavSyncConfig;
