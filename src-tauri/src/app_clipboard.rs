@@ -2,6 +2,12 @@ use std::io::Write;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 #[tauri::command]
 pub async fn terminal_clipboard_write(text: String) -> Result<(), String> {
     tokio::task::spawn_blocking(move || write_clipboard(&text))
@@ -17,20 +23,32 @@ pub async fn terminal_clipboard_read() -> Result<String, String> {
 }
 
 fn command_exists(command: &str) -> bool {
-    Command::new(command)
-        .arg("--version")
+    let mut cmd = Command::new(command);
+    cmd.arg("--version")
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .is_ok()
+        .stderr(Stdio::null());
+    prepare_command(&mut cmd);
+    cmd.status().is_ok()
+}
+
+#[cfg(target_os = "windows")]
+fn prepare_command(command: &mut Command) {
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(target_os = "windows"))]
+fn prepare_command(_command: &mut Command) {
 }
 
 fn run_with_stdin(command: &str, args: &[&str], input: &str) -> Result<(), String> {
-    let mut child = Command::new(command)
-        .args(args)
+    let mut cmd = Command::new(command);
+    cmd.args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::null());
+    prepare_command(&mut cmd);
+
+    let mut child = cmd
         .spawn()
         .map_err(|e| format!("{command}: {e}"))?;
 
@@ -58,10 +76,11 @@ fn run_with_stdin(command: &str, args: &[&str], input: &str) -> Result<(), Strin
 }
 
 fn run_capture(command: &str, args: &[&str]) -> Result<String, String> {
-    let mut child = Command::new(command)
-        .args(args)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+    let mut cmd = Command::new(command);
+    cmd.args(args).stdout(Stdio::piped()).stderr(Stdio::piped());
+    prepare_command(&mut cmd);
+
+    let mut child = cmd
         .spawn()
         .map_err(|e| format!("{command}: {e}"))?;
 
