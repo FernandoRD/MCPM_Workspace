@@ -174,7 +174,12 @@ fn write_clipboard(text: &str) -> Result<(), String> {
 fn read_clipboard() -> Result<String, String> {
     run_capture(
         "powershell",
-        &["-NoProfile", "-NonInteractive", "-Command", "Get-Clipboard -Raw"],
+        &[
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); [Console]::Out.Write((Get-Clipboard -Raw))",
+        ],
     )
 }
 

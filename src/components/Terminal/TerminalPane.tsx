@@ -109,6 +109,10 @@ async function readClipboardText(): Promise<string> {
   }
 }
 
+function normalizeTerminalPasteText(text: string): string {
+  return text.replace(/[\r\n]+$/, "");
+}
+
 export function TerminalPane({
   paneId,
   protocol,
@@ -167,9 +171,10 @@ export function TerminalPane({
     }
 
     void readClipboardText().then((text) => {
-      if (!text) return;
+      const pasteText = normalizeTerminalPasteText(text);
+      if (!pasteText) return;
       const inputCommand = protocol === "telnet" ? "telnet_send_input" : "ssh_send_input";
-      return invoke(inputCommand, { tabId: paneId, data: text });
+      return invoke(inputCommand, { tabId: paneId, data: pasteText });
     }).catch((error) => {
       logFrontendError("terminal.pasteClipboard", "Falha ao colar clipboard no terminal", error);
     });
