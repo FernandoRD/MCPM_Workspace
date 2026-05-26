@@ -618,6 +618,7 @@ Arquivo principal: [ssh.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/ss
 - UI: [CommandPalette.tsx](/home/fernando/Documentos/ssh_vault/src/components/CommandPalette.tsx)
 - Abre sessão temporária para `SSH`, `Telnet`, `RDP` e `VNC`
 - Não cria host salvo
+- Campos sensíveis do Quick Connect usam um controle local de visibilidade (`QuickConnectPasswordInput`) para senhas `SSH`, `RDP`, `VNC` e passphrase de chave privada.
 
 Para `RDP`, o formato suportado é `rdp://usuario@host:porta` e a sessão usa o mesmo fluxo dos hosts persistidos, respeitando o `launchMode` ativo entre launcher nativo e viewer interno experimental.
 
@@ -797,6 +798,7 @@ Regras práticas atuais:
 - No modal, é possível listar, criar, editar, selecionar e remover credenciais sem navegar para fora da criação/edição do host.
 - Ao salvar uma credencial pelo modal, o host seleciona automaticamente a credencial quando ela é compatível com o protocolo atual; para `RDP` e `VNC`, apenas credenciais de senha são selecionáveis.
 - As rotas `/credentials/new` e `/credentials/:id` usam o mesmo `CredentialForm`, mantendo validação e persistência em um único ponto.
+- Campos `type="password"` que usam o componente compartilhado [Input.tsx](/home/fernando/Documentos/ssh_vault/src/components/ui/Input.tsx) recebem automaticamente o botão de visibilidade com ícone de olho. Isso cobre credenciais, passphrases de chaves SSH, senha de deploy, copy-id e confirmação de senha mestra.
 
 ### Grupos hierárquicos
 
@@ -936,7 +938,7 @@ Essa separação é intencional: o objetivo é chegar a um contrato claro para i
 
 ## 13. Empacotamento Linux
 
-O pacote Linux principal é gerado pelo Tauri como `AppImage`. No build validado da versão `0.4.5`, o `AppDir` inclui as bibliotecas gráficas principais usadas pelo runtime Tauri/WebKit:
+O pacote Linux principal é gerado pelo Tauri como `AppImage`. No build validado da versão `0.4.6`, o `AppDir` inclui as bibliotecas gráficas principais usadas pelo runtime Tauri/WebKit:
 
 - `libwebkit2gtk-4.1.so.0`
 - `libjavascriptcoregtk-4.1.so.0`
@@ -1018,7 +1020,7 @@ Arquivos principais:
 
 Estado atual:
 
-- versão de referência atual do app: `0.4.5`
+- versão de referência atual do app: `0.4.6`
 - `package.json` é a fonte principal da versão do app
 - `tauri.conf.json` lê a versão a partir de `../package.json`
 - o frontend lê a versão a partir de `package.json` via `appInfo.ts`

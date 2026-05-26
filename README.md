@@ -6,7 +6,13 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 
 ## Versão atual
 
-`0.4.5`
+`0.4.6`
+
+## Novidades da 0.4.6
+
+- Campos de senha baseados no componente `Input` agora exibem um botão de visibilidade com ícone de olho, cobrindo credenciais, chaves SSH, senha de deploy, copy-id e confirmação de senha mestra
+- `Quick Connect` ganhou o mesmo controle de visibilidade para senhas `SSH`, `RDP`, `VNC` e passphrase de chave privada
+- O botão de visibilidade preserva o foco do campo e alterna corretamente entre senha oculta e texto visível
 
 ## Novidades da 0.4.5
 

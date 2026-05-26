@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { FolderOpen, Plus, Search, Server, Settings, ShieldEllipsis, Workflow, Zap, Monitor } from "lucide-react";
+import { Eye, EyeOff, FolderOpen, Plus, Search, Server, Settings, ShieldEllipsis, Workflow, Zap, Monitor } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useHostsStore } from "@/store/hosts";
 import { useCredentialsStore } from "@/store/credentials";
@@ -24,6 +24,44 @@ interface ParsedQuickConnect {
   port: number;
   hostAddress: string;
   label: string;
+}
+
+function QuickConnectPasswordInput({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+}) {
+  const [showPassword, setShowPassword] = useState(false);
+
+  return (
+    <label className="flex flex-col gap-1 text-xs text-[var(--text-muted)]">
+      {label}
+      <span className="relative">
+        <input
+          type={showPassword ? "text" : "password"}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          className="w-full rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] px-3 py-2 pr-9 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--border-focus)]"
+        />
+        <button
+          type="button"
+          aria-label="Toggle password visibility"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => setShowPassword((current) => !current)}
+          className="absolute right-2.5 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]"
+        >
+          {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+        </button>
+      </span>
+    </label>
+  );
 }
 
 function parseTargetHost(target: string, defaultPort: number): Omit<ParsedQuickConnect, "protocol" | "username" | "hostAddress" | "label"> | null {
@@ -472,50 +510,38 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
               )}
 
               {quickConnectCandidate.protocol === "ssh" && quickConnectAuthMethod === "password" && (
-                <label className="flex flex-col gap-1 text-xs text-[var(--text-muted)]">
-                  {t("credentials.fields.password")}
-                  <input
-                    type="password"
-                    value={quickConnectPassword}
-                    onChange={(event) => {
-                      setQuickConnectPassword(event.target.value);
-                      setQuickConnectError(null);
-                    }}
-                    className="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--border-focus)]"
-                  />
-                </label>
+                <QuickConnectPasswordInput
+                  label={t("credentials.fields.password")}
+                  value={quickConnectPassword}
+                  onChange={(value) => {
+                    setQuickConnectPassword(value);
+                    setQuickConnectError(null);
+                  }}
+                />
               )}
 
               {quickConnectCandidate.protocol === "rdp" && (
-                <label className="flex flex-col gap-1 text-xs text-[var(--text-muted)]">
-                  {t("credentials.fields.password")}
-                  <input
-                    type="password"
-                    value={quickConnectPassword}
-                    onChange={(event) => {
-                      setQuickConnectPassword(event.target.value);
-                      setQuickConnectError(null);
-                    }}
-                    placeholder={t("commandPalette.directConnectRdpPasswordPlaceholder")}
-                    className="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--border-focus)]"
-                  />
-                </label>
+                <QuickConnectPasswordInput
+                  label={t("credentials.fields.password")}
+                  value={quickConnectPassword}
+                  onChange={(value) => {
+                    setQuickConnectPassword(value);
+                    setQuickConnectError(null);
+                  }}
+                  placeholder={t("commandPalette.directConnectRdpPasswordPlaceholder")}
+                />
               )}
 
               {quickConnectCandidate.protocol === "vnc" && (
-                <label className="flex flex-col gap-1 text-xs text-[var(--text-muted)]">
-                  {t("credentials.fields.password")}
-                  <input
-                    type="password"
-                    value={quickConnectPassword}
-                    onChange={(event) => {
-                      setQuickConnectPassword(event.target.value);
-                      setQuickConnectError(null);
-                    }}
-                    placeholder={t("commandPalette.directConnectVncPasswordPlaceholder")}
-                    className="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--border-focus)]"
-                  />
-                </label>
+                <QuickConnectPasswordInput
+                  label={t("credentials.fields.password")}
+                  value={quickConnectPassword}
+                  onChange={(value) => {
+                    setQuickConnectPassword(value);
+                    setQuickConnectError(null);
+                  }}
+                  placeholder={t("commandPalette.directConnectVncPasswordPlaceholder")}
+                />
               )}
 
               {quickConnectCandidate.protocol === "ssh" && quickConnectAuthMethod === "privateKey" && (
@@ -532,18 +558,14 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
                       className="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--border-focus)]"
                     />
                   </label>
-                  <label className="flex flex-col gap-1 text-xs text-[var(--text-muted)]">
-                    {t("hostEditor.fields.passphrase")}
-                    <input
-                      type="password"
-                      value={quickConnectPassphrase}
-                      onChange={(event) => {
-                        setQuickConnectPassphrase(event.target.value);
-                        setQuickConnectError(null);
-                      }}
-                      className="rounded-lg border border-[var(--border)] bg-[var(--bg-secondary)] px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--border-focus)]"
-                    />
-                  </label>
+                  <QuickConnectPasswordInput
+                    label={t("hostEditor.fields.passphrase")}
+                    value={quickConnectPassphrase}
+                    onChange={(value) => {
+                      setQuickConnectPassphrase(value);
+                      setQuickConnectError(null);
+                    }}
+                  />
                 </div>
               )}
 
