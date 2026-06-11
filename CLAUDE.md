@@ -6,13 +6,13 @@ Contexto de desenvolvimento para Claude Code neste projeto.
 
 - **Nome do produto**: MPCM Workspace
 - **Classificação**: Multi-Protocol Connection Manager
-- **Versão atual**: 0.4.6
+- **Versão atual**: 0.4.7
 - **Diretório de dados em runtime**: `mpcm-workspace` (migração automática do legado `ssh-vault`)
 
 ## Stack e versões
 
 | Camada | Tecnologia |
-|---|---|
+| --- | --- |
 | Framework desktop | Tauri 2.x |
 | Backend | Rust (edition 2021) |
 | Frontend | React 19, TypeScript, Vite 7 |
@@ -56,14 +56,16 @@ npm run rdp:viewer -- <host> <port> <user> <pass>
 ## Versionamento
 
 `package.json` é a fonte única de versão. Após editar:
+
 ```bash
 npm run version:sync
 ```
+
 Isso propaga para `Cargo.toml`, `Cargo.lock` e `package-lock.json`.
 
 ## Estrutura de diretórios
 
-```
+```text
 src/                          # Frontend React/TypeScript
   App.tsx                     # Rotas e bootstrap de stores
   components/
@@ -134,6 +136,7 @@ scripts/                      # sync-version.mjs, prepare-internal-rdp-viewer.mj
 ## Estado portátil (sync/backup)
 
 `portableState.ts` define o que viaja em sync e backup:
+
 - hosts, credentials, sshKeys
 - settings portáveis (tema, locale, terminal, SSH, RDP, VNC, grupos, produtividade, `rightClickBehavior`, `cardMode`, `sftpOpenMode`)
 - `sync.deletedHosts` (tombstones para propagar remoções)
@@ -154,9 +157,10 @@ scripts/                      # sync-version.mjs, prepare-internal-rdp-viewer.mj
 - Versão sempre editada em `package.json` + `npm run version:sync`
 - Não commitar binários nem `dist/` nem `target/` (cobertos pelo `.gitignore`)
 
-## Estado atual (0.4.6)
+## Estado atual (0.4.7)
 
 Funcional e estável:
+
 - Multi-protocolo SSH/Telnet/RDP/VNC
 - Terminal com splits, reconexão, links, copyPaste com auto-copy e bracketed paste
 - SFTP embutido lado a lado ou em aba

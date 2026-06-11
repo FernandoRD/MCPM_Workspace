@@ -6,16 +6,19 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 
 ## Versão atual
 
-`0.4.6`
+`0.4.7`
+
+## Novidades da 0.4.7
+
+- No modo copiar/colar rápido, a seleção de texto no terminal copia automaticamente para o clipboard (comportamento PuTTY), sem precisar do clique direito para copiar
+- Clique direito em modo copiar/colar rápido sempre cola o clipboard na sessão, sem mais verificar se há seleção
+- Colagem de texto com múltiplas linhas em editores remotos (`nano`, `vim`, etc.) passou a usar `xterm.paste()` com suporte a bracketed paste, impedindo que as linhas coladas se misturem com o conteúdo existente no editor
 
 ## Novidades da 0.4.6
 
 - Campos de senha baseados no componente `Input` agora exibem um botão de visibilidade com ícone de olho, cobrindo credenciais, chaves SSH, senha de deploy, copy-id e confirmação de senha mestra
 - `Quick Connect` ganhou o mesmo controle de visibilidade para senhas `SSH`, `RDP`, `VNC` e passphrase de chave privada
 - O botão de visibilidade preserva o foco do campo e alterna corretamente entre senha oculta e texto visível
-- No modo copiar/colar rápido, a seleção de texto no terminal copia automaticamente para o clipboard (comportamento PuTTY), sem precisar do clique direito para copiar
-- Clique direito em modo copiar/colar rápido sempre cola o clipboard na sessão, sem mais verificar se há seleção
-- Colagem de texto com múltiplas linhas em editores remotos (`nano`, `vim`, etc.) passou a usar `xterm.paste()` com suporte a bracketed paste, impedindo que as linhas coladas se misturem com o conteúdo existente no editor
 
 ## Novidades da 0.4.5
 
