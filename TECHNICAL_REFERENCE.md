@@ -648,7 +648,10 @@ Ao invés de abrir uma `WebviewWindow` com a aplicação React completa, o app d
 - Links: `@xterm/addon-web-links` detecta URLs; o handler customizado chama `openUrl` de `@tauri-apps/plugin-opener`, evitando dependência de `window.open` dentro do WebView.
 - Preferência: `terminal.rightClickBehavior` aceita `"contextMenu"` ou `"copyPaste"`.
 - Modo `"contextMenu"` preserva o menu nativo/contextual do WebView.
-- Modo `"copyPaste"` intercepta `contextmenu`: se houver seleção no xterm, copia; se não houver seleção, lê o clipboard e envia o texto para `ssh_send_input` ou `telnet_send_input`.
+- Modo `"copyPaste"` (comportamento PuTTY):
+  - `onSelectionChange` do xterm copia automaticamente qualquer seleção para o clipboard sem precisar de clique direito. O handler lê `rightClickBehaviorRef.current` para responder a mudanças de setting sem remontar o terminal.
+  - Clique direito sempre cola o clipboard na sessão, usando `xterm.paste(text)` em vez de chamar `ssh_send_input`/`telnet_send_input` diretamente.
+  - `xterm.paste()` respeita o estado interno de bracketed paste do xterm: quando o editor remoto (`vim`, `nano`, etc.) ativou bracketed paste mode via `\e[?2004h`, o texto é automaticamente envolvido em `\e[200~...\e[201~` antes de chegar ao backend, impedindo que linhas coladas se misturem com o conteúdo existente.
 - Clipboard nativo: [app_clipboard.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/app_clipboard.rs) expõe `terminal_clipboard_write` e `terminal_clipboard_read`. No Linux tenta `wl-copy`/`wl-paste`, `xclip` ou `xsel`; no macOS usa `pbcopy`/`pbpaste`; no Windows usa PowerShell `Set-Clipboard`/`Get-Clipboard`.
 - Segurança de lifecycle: operações nativas de clipboard rodam em `spawn_blocking`; escrita não espera indefinidamente por utilitários como `wl-copy`, que podem permanecer vivos para servir o clipboard.
 

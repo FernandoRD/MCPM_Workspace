@@ -144,6 +144,10 @@ export function TerminalPane({
   const sshSettings = useSettingsStore((s) => s.settings.ssh);
   const appendTerminalOutput = useSessionsStore((s) => s.appendTerminalOutput);
   const [pendingFingerprint, setPendingFingerprint] = useState<string | null>(null);
+  const rightClickBehaviorRef = useRef(terminalSettings.rightClickBehavior);
+  useEffect(() => {
+    rightClickBehaviorRef.current = terminalSettings.rightClickBehavior;
+  }, [terminalSettings.rightClickBehavior]);
 
   const clearConnectionBindings = useCallback(() => {
     cancelRef.current?.();
@@ -160,25 +164,14 @@ export function TerminalPane({
     if (!xterm) return;
 
     xterm.focus();
-    const selectedText = xterm.getSelection();
-    if (selectedText) {
-      void writeClipboardText(selectedText).then(() => {
-        xterm.clearSelection();
-      }).catch((error) => {
-        logFrontendError("terminal.copySelection", "Falha ao copiar seleção do terminal", error);
-      });
-      return;
-    }
-
     void readClipboardText().then((text) => {
       const pasteText = normalizeTerminalPasteText(text);
       if (!pasteText) return;
-      const inputCommand = protocol === "telnet" ? "telnet_send_input" : "ssh_send_input";
-      return invoke(inputCommand, { tabId: paneId, data: pasteText });
+      xterm.paste(pasteText);
     }).catch((error) => {
       logFrontendError("terminal.pasteClipboard", "Falha ao colar clipboard no terminal", error);
     });
-  }, [paneId, protocol, terminalSettings.rightClickBehavior]);
+  }, [terminalSettings.rightClickBehavior]);
 
   const connect = useCallback(async () => {
     if (!termRef.current) return;
@@ -230,6 +223,17 @@ export function TerminalPane({
       xterm.attachCustomKeyEventHandler((ev: KeyboardEvent) => {
         if (ev.getModifierState("AltGraph") || (ev.altKey && ev.ctrlKey)) return false;
         return true;
+      });
+
+      // Cópia automática ao selecionar (estilo PuTTY): quando rightClickBehavior é
+      // "copyPaste", qualquer seleção já vai para o clipboard sem precisar de clique.
+      xterm.onSelectionChange(() => {
+        if (rightClickBehaviorRef.current !== "copyPaste") return;
+        const selected = xtermRef.current?.getSelection();
+        if (!selected) return;
+        void writeClipboardText(selected).catch((error) => {
+          logFrontendError("terminal.copyOnSelect", "Falha ao copiar seleção automática", error);
+        });
       });
     }
 

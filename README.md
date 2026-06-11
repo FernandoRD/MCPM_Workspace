@@ -13,6 +13,9 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 - Campos de senha baseados no componente `Input` agora exibem um botão de visibilidade com ícone de olho, cobrindo credenciais, chaves SSH, senha de deploy, copy-id e confirmação de senha mestra
 - `Quick Connect` ganhou o mesmo controle de visibilidade para senhas `SSH`, `RDP`, `VNC` e passphrase de chave privada
 - O botão de visibilidade preserva o foco do campo e alterna corretamente entre senha oculta e texto visível
+- No modo copiar/colar rápido, a seleção de texto no terminal copia automaticamente para o clipboard (comportamento PuTTY), sem precisar do clique direito para copiar
+- Clique direito em modo copiar/colar rápido sempre cola o clipboard na sessão, sem mais verificar se há seleção
+- Colagem de texto com múltiplas linhas em editores remotos (`nano`, `vim`, etc.) passou a usar `xterm.paste()` com suporte a bracketed paste, impedindo que as linhas coladas se misturem com o conteúdo existente no editor
 
 ## Novidades da 0.4.5
 
@@ -132,7 +135,7 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 - Cadastro de hosts com protocolo `SSH`, `Telnet`, `RDP` ou `VNC`, além de `grupos`, `tags`, `notas`, `cores`, `jump host` e presets de compatibilidade SSH
 - Credenciais reutilizáveis separadas dos hosts
 - Chaves SSH próprias, com geração de fingerprint e vínculo por credencial
-- Terminal integrado com `xterm.js`, múltiplas abas com reorganização por drag and drop, split panes redimensionáveis, reconexão manual, links clicáveis, comportamento configurável para botão direito e fechamento automático em encerramento limpo
+- Terminal integrado com `xterm.js`, múltiplas abas com reorganização por drag and drop, split panes redimensionáveis, reconexão manual, links clicáveis, comportamento configurável para botão direito (incluindo cópia automática ao selecionar no modo PuTTY e bracketed paste para editores remotos) e fechamento automático em encerramento limpo
 - Página dedicada para sessões `RDP` e `VNC`, com monitoramento completo para clientes gerenciados pelo app e comportamento explícito quando a sessão é repassada para um launcher externo
 - SFTP integrado para hosts `SSH`, com navegação remota, upload, download, rename, delete e mkdir; pode abrir em aba própria ou lado a lado com o terminal SSH conforme preferência do usuário
 - `Quick Connect` na command palette para conexões temporárias `SSH`, `Telnet`, `RDP` e `VNC` sem salvar host
