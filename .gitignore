@@ -34,4 +34,10 @@ clients/internal-rdp-client/out/
 /.vscode/
 /.github/
 
-
+# Arquivos .md de controle
+AGENTS.md
+AI_INTEGRATION_IDEAS.md
+ANDROID_PORT_ANALYSIS.md
+CLAUDE.md
+GITHUB_RELEASE_CLI.md
+RDP_VIEWER_AS_LAUNCHER_PLAN.md
