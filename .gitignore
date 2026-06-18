@@ -32,7 +32,6 @@ clients/internal-rdp-client/out/
 *IMPLEMENTATION*
 /.claude/
 /.vscode/
-/.github/
 
 # Arquivos .md de controle
 AGENTS.md
