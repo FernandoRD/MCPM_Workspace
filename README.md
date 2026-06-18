@@ -367,6 +367,8 @@ Gatilhos:
 - **push de tag `v*`** (ex: `v0.4.8`): compila todas as plataformas e publica uma GitHub Release com os artefatos.
 - **execução manual** (`workflow_dispatch`, na aba *Actions*): compila e disponibiliza os artefatos, sem criar Release.
 
+A cada release publicada, o workflow mantém apenas as **2 releases mais recentes** no GitHub — as anteriores são apagadas junto com suas tags.
+
 Artefatos gerados por plataforma:
 
 | Plataforma | Formatos |

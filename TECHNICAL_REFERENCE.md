@@ -1052,6 +1052,8 @@ Diferença em relação aos instaladores: o standalone depende do **WebView2 Run
 
 O job `release` roda apenas para tags `v*` (`if: startsWith(github.ref, 'refs/tags/v')`), baixa os artefatos das três plataformas e publica via `softprops/action-gh-release@v2` com `generate_release_notes: true`.
 
+**Retenção:** após publicar, o passo *Prune old releases* usa `gh release list` ordenado por data e mantém apenas as **2 releases mais recentes**; as anteriores são apagadas com `gh release delete --cleanup-tag` (remove release e tag no GitHub). A poda só afeta o GitHub — tags no remote `origin` (Gitea) não são tocadas.
+
 ### Aviso de nova versão no app
 
 Módulo [src-tauri/src/updates.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/updates.rs) expõe o comando `check_for_updates`, que consulta `https://api.github.com/repos/FernandoRD/MPCM_Workspace/releases/latest` via `reqwest` (a checagem precisa rodar no backend porque o CSP do webview bloqueia `connect-src` externo). O comando compara `tag_name` com `CARGO_PKG_VERSION` (`is_newer`, comparação numérica `MAJOR.MINOR.PATCH`) e retorna `UpdateInfo` (camelCase) com `updateAvailable`, `releaseUrl`, etc.
