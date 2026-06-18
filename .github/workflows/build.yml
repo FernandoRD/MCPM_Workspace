@@ -126,3 +126,21 @@ jobs:
             release-artifacts/**/*.exe
             release-artifacts/**/*.msi
             release-artifacts/**/*.dmg
+
+      - name: Prune old releases (keep latest 2)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          KEEP=2
+          # Releases ordenadas da mais nova para a mais antiga; descarta as KEEP primeiras.
+          old_tags=$(gh release list --repo "${{ github.repository }}" --limit 100 \
+            --json tagName,createdAt \
+            --jq "sort_by(.createdAt) | reverse | .[${KEEP}:] | .[].tagName")
+          if [ -z "$old_tags" ]; then
+            echo "Nada a apagar (<= ${KEEP} releases)."
+            exit 0
+          fi
+          for tag in $old_tags; do
+            echo "Apagando release e tag $tag"
+            gh release delete "$tag" --repo "${{ github.repository }}" --yes --cleanup-tag
+          done
