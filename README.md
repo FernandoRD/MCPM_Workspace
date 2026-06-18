@@ -358,6 +358,25 @@ npm run build
 npm run tauri build
 ```
 
+### Distribuição automatizada (GitHub Actions)
+
+O workflow [.github/workflows/build.yml](/home/fernando/Documentos/ssh_vault/.github/workflows/build.yml) compila o app nas três plataformas em paralelo (`ubuntu-22.04`, `windows-latest`, `macos-latest`).
+
+Gatilhos:
+
+- **push de tag `v*`** (ex: `v0.4.8`): compila todas as plataformas e publica uma GitHub Release com os artefatos.
+- **execução manual** (`workflow_dispatch`, na aba *Actions*): compila e disponibiliza os artefatos, sem criar Release.
+
+Artefatos gerados por plataforma:
+
+| Plataforma | Formatos |
+| --- | --- |
+| Linux | `.deb`, `.rpm`, `.AppImage` |
+| Windows | `.msi` (instalador), `-setup.exe` (instalador NSIS), `-standalone.exe` (executável standalone) |
+| macOS | `.dmg`, `.app` |
+
+> O `-standalone.exe` é o binário direto do app (sem instalador). Ele depende do **WebView2 Runtime** já presente no sistema (padrão no Windows 10/11 atualizados). Os instaladores `.msi` e `-setup.exe` embutem o WebView2 offline e funcionam mesmo sem o runtime instalado.
+
 ## Versionamento
 
 O projeto agora usa o [package.json](/home/fernando/Documentos/ssh_vault/package.json) como fonte principal da versão da aplicação.

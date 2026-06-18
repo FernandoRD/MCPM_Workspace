@@ -17,7 +17,8 @@ Documento de referência para desenvolvimento e manutenção do MPCM Workspace n
 11. Fluxos importantes
 12. Laboratório RDP interno
 13. Empacotamento Linux
-14. Versionamento
+14. Distribuição e CI (GitHub Actions)
+15. Versionamento
 
 ## 1. Visão geral
 
@@ -1012,7 +1013,46 @@ sudo pacman -S --needed nodejs npm rust base-devel pkgconf curl wget file openss
 
 O viewer RDP interno empacotado em `src-tauri/resources/internal-rdp-client/viewer_mvp` tem dependências dinâmicas mínimas no Linux (`libgcc_s`, `libm`, `libc` e o loader ELF), então não adiciona uma cadeia gráfica externa além do que o app Tauri já carrega.
 
-## 14. Versionamento
+## 14. Distribuição e CI (GitHub Actions)
+
+Workflow: [.github/workflows/build.yml](/home/fernando/Documentos/ssh_vault/.github/workflows/build.yml)
+
+### Gatilhos
+
+- `push` de tag `v*` — compila as três plataformas e publica uma GitHub Release com os artefatos.
+- `workflow_dispatch` — execução manual pela aba *Actions*; compila e sobe artefatos, sem criar Release.
+
+### Matriz de build
+
+Os três runners rodam em paralelo:
+
+| Runner | Plataforma |
+| --- | --- |
+| `ubuntu-22.04` | Linux |
+| `windows-latest` | Windows |
+| `macos-latest` | macOS |
+
+No Linux a compilação usa `NO_STRIP=1 APPIMAGE_EXTRACT_AND_RUN=1 npm run tauri build` e instala as dependências nativas (`libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev`, `patchelf`). Assinatura de updater via segredos `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
+
+### Artefatos por plataforma
+
+| Plataforma | Formatos | Origem |
+| --- | --- | --- |
+| Linux | `.deb`, `.rpm`, `.AppImage` | `src-tauri/target/release/bundle/{deb,rpm,appimage}/` |
+| Windows | `.msi`, `-setup.exe` (NSIS), `-standalone.exe` | `bundle/msi/`, `bundle/nsis/` e o binário cru `src-tauri/target/release/` |
+| macOS | `.dmg`, `.app` | `src-tauri/target/release/bundle/{dmg,macos}/` |
+
+### Executável standalone do Windows
+
+O passo *Prepare standalone executable (Windows)* copia o binário cru `src-tauri/target/release/ssh-vault.exe` (nome vindo do `[package] name` em `Cargo.toml`) para `MPCM-Workspace_<versão>_x64-standalone.exe`, lendo a versão do `package.json` via PowerShell. Esse arquivo entra no upload de artefatos e, em builds de tag, na Release.
+
+Diferença em relação aos instaladores: o standalone depende do **WebView2 Runtime** já instalado no host (padrão no Windows 10/11 atualizados). Os instaladores `.msi` e `-setup.exe` usam `webviewInstallMode: offlineInstaller` no [tauri.conf.json](/home/fernando/Documentos/ssh_vault/src-tauri/tauri.conf.json), embutindo o runtime offline. Não existe `.exe` único com o WebView2 embarcado; a única forma autossuficiente seria distribuir o *fixed version runtime* numa pasta ao lado do binário.
+
+### Release
+
+O job `release` roda apenas para tags `v*` (`if: startsWith(github.ref, 'refs/tags/v')`), baixa os artefatos das três plataformas e publica via `softprops/action-gh-release@v2` com `generate_release_notes: true`.
+
+## 15. Versionamento
 
 Arquivos principais:
 
