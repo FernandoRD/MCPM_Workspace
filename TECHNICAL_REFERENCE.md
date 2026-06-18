@@ -1052,6 +1052,12 @@ Diferença em relação aos instaladores: o standalone depende do **WebView2 Run
 
 O job `release` roda apenas para tags `v*` (`if: startsWith(github.ref, 'refs/tags/v')`), baixa os artefatos das três plataformas e publica via `softprops/action-gh-release@v2` com `generate_release_notes: true`.
 
+### Aviso de nova versão no app
+
+Módulo [src-tauri/src/updates.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/updates.rs) expõe o comando `check_for_updates`, que consulta `https://api.github.com/repos/FernandoRD/MPCM_Workspace/releases/latest` via `reqwest` (a checagem precisa rodar no backend porque o CSP do webview bloqueia `connect-src` externo). O comando compara `tag_name` com `CARGO_PKG_VERSION` (`is_newer`, comparação numérica `MAJOR.MINOR.PATCH`) e retorna `UpdateInfo` (camelCase) com `updateAvailable`, `releaseUrl`, etc.
+
+No frontend, [src/components/UpdateBanner.tsx](/home/fernando/Documentos/ssh_vault/src/components/UpdateBanner.tsx) chama o comando uma vez na montagem e, havendo versão nova, mostra um cartão discreto no canto inferior direito (estado em [src/store/updateStore.ts](/home/fernando/Documentos/ssh_vault/src/store/updateStore.ts)). O banner é renderizado pelo [AppLayout](/home/fernando/Documentos/ssh_vault/src/components/Layout/AppLayout.tsx) apenas na janela principal (`!standalone`); falhas de rede são silenciosas e a dispensa vale por sessão.
+
 ## 15. Versionamento
 
 Arquivos principais:

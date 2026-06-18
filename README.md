@@ -377,6 +377,10 @@ Artefatos gerados por plataforma:
 
 > O `-standalone.exe` é o binário direto do app (sem instalador). Ele depende do **WebView2 Runtime** já presente no sistema (padrão no Windows 10/11 atualizados). Os instaladores `.msi` e `-setup.exe` embutem o WebView2 offline e funcionam mesmo sem o runtime instalado.
 
+### Aviso de nova versão no app
+
+Ao abrir a janela principal, o app consulta a última release publicada no GitHub (`/releases/latest`) e, se houver versão mais nova, exibe um aviso **discreto** no canto inferior direito com link para as novidades. A checagem roda no backend (Rust + `reqwest`), falha silenciosamente sem rede e pode ser dispensada por sessão.
+
 ## Versionamento
 
 O projeto agora usa o [package.json](/home/fernando/Documentos/ssh_vault/package.json) como fonte principal da versão da aplicação.
