@@ -15,6 +15,7 @@ mod sync;
 mod system_terminal;
 mod telnet;
 mod totp;
+mod updates;
 mod vnc;
 
 use database::Database;
@@ -155,6 +156,7 @@ pub fn run() {
             sync::sync_s3_pull,
             sync::sync_custom_push,
             sync::sync_custom_pull,
+            updates::check_for_updates,
         ])
         .run(tauri::generate_context!())
         .expect("Erro ao inicializar MPCM Workspace");

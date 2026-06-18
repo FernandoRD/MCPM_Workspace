@@ -3,6 +3,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import { CommandPalette } from "@/components/CommandPalette";
 import { Sidebar } from "@/components/Sidebar/Sidebar";
 import { TabBar } from "@/components/TabBar/TabBar";
+import { UpdateBanner } from "@/components/UpdateBanner";
 import { isStandaloneWindow } from "@/lib/windowMode";
 import { useUIStore } from "@/store/uiStore";
 
@@ -55,6 +56,7 @@ export function AppLayout() {
         </main>
       </div>
       <CommandPalette open={commandPaletteOpen} onClose={closeCommandPalette} />
+      {!standalone && <UpdateBanner />}
     </div>
   );
 }

@@ -1075,6 +1075,12 @@
     "syncPullSuccess": "Dados importados com sucesso",
     "syncError": "Erro na sincronização"
   },
+  "updates": {
+    "available": "Nova versão {{version}} disponível",
+    "current": "Você está na {{version}}",
+    "viewRelease": "Ver novidades",
+    "dismiss": "Dispensar"
+  },
   "rdp": {
     "loadingSession": "Carregando sessão RDP...",
     "sessionNotFound": "Sessão RDP não encontrada",
