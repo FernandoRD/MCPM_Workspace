@@ -45,6 +45,14 @@ pub struct AppState {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // WebKitGTK: o DMABUF renderer renderiza tela branca em drivers/Mesa recentes
+    // quando combinado com versões antigas do WebKit (caso do AppImage gerado no CI
+    // sobre ubuntu-22.04). Desabilitar evita o problema; respeita override do usuário.
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
+
     let storage = Storage::new().expect("Falha ao inicializar storage");
     let log_path = app_logging::init(&storage.data_dir)
         .expect("Falha ao inicializar logging persistente");
