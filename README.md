@@ -6,7 +6,14 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 
 ## Versão atual
 
-`0.4.7`
+`0.4.8`
+
+## Novidades da 0.4.8
+
+- Aviso discreto de nova versão: ao abrir a janela principal, o app consulta a última release no GitHub e mostra um cartão no canto inferior direito quando há atualização disponível
+- Distribuição automatizada via GitHub Actions: push de tag `v*` compila Linux, Windows e macOS e publica a release com todos os artefatos
+- Windows passou a ter três formatos: instalador `.msi`, instalador `-setup.exe` (NSIS) e executável `-standalone.exe`
+- O GitHub mantém apenas as duas releases mais recentes; as anteriores são removidas junto com suas tags
 
 ## Novidades da 0.4.7
 
@@ -428,6 +435,8 @@ O projeto já cobre o núcleo operacional multi-protocolo atual e inclui:
 - sync/backup alinhados com hosts, credenciais, chaves SSH, protocolo e settings portáveis
 - localização aplicada em `pt-BR` e `en-US` nos fluxos principais de UI, sync, backup e sessão
 - página `About` com identidade e posicionamento do produto
+- aviso discreto de nova versão consultando as releases do GitHub
+- build e releases automatizados por GitHub Actions (Linux, Windows e macOS), com executável standalone no Windows
 
 ## Licença
 
