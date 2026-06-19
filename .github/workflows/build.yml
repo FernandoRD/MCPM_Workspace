@@ -130,7 +130,8 @@ jobs:
             release-artifacts/**/*.deb
             release-artifacts/**/*.rpm
             release-artifacts/**/*.AppImage
-            release-artifacts/**/*.exe
+            release-artifacts/**/*-setup.exe
+            release-artifacts/**/*-standalone.exe
             release-artifacts/**/*.msi
             release-artifacts/**/*.dmg
 
