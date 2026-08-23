@@ -420,6 +420,7 @@
     "disconnected": "Desconectado",
     "errorPrefix": "Erro: {{error}}",
     "reconnect": "Reconectar",
+    "reconnectAll": "Reconectar todas",
     "close": "Fechar aba",
     "copy": "Copiar",
     "paste": "Colar",

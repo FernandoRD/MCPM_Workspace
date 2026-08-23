@@ -61,6 +61,7 @@ export function VncPage() {
   const ensureSession = useSessionsStore((s) => s.ensureSession);
   const updateTabStatus = useSessionsStore((s) => s.updateTabStatus);
   const closeSession = useSessionsStore((s) => s.closeSession);
+  const requestReconnect = useSessionsStore((s) => s.requestReconnect);
 
   const getHost = useHostsStore((s) => s.getHost);
   const setLastConnected = useHostsStore((s) => s.setLastConnected);
@@ -75,6 +76,7 @@ export function VncPage() {
   const bootstrap = readSessionBootstrap(location.search);
   const autoConnectRef = useRef(false);
   const logIdRef = useRef<string | null>(null);
+  const lifecyclePollErrorLoggedRef = useRef(false);
 
   const tab = tabs.find((entry) => entry.id === tabId);
   const sessionConnection = tab?.connection;
@@ -230,7 +232,9 @@ export function VncPage() {
   const disconnect = useCallback(async (status: "disconnected" | "error" = "disconnected") => {
     if (!tabId) return;
 
-    await invoke("vnc_disconnect", { sessionId: tabId }).catch(() => {});
+    await invoke("vnc_disconnect", { sessionId: tabId }).catch((error) => {
+      logFrontendError("vnc.disconnect", "Falha ao desconectar sessão VNC", error, { sessionId: tabId });
+    });
     updateTabStatus(tabId, status);
 
     if (logIdRef.current) {
@@ -261,11 +265,11 @@ export function VncPage() {
   }, [canDisconnectClient, closeCurrentSessionView, disconnect, tab]);
 
   useEffect(() => {
-    if (!tabId || (!host && !sessionConnection) || tab?.status === "connected" || launching) return;
+    if (!tabId || (!host && !sessionConnection) || tab?.status === "connected" || launching || tab?.requiresExplicitReconnect) return;
     if (autoConnectRef.current) return;
     autoConnectRef.current = true;
     void connect();
-  }, [connect, host, launching, sessionConnection, tab?.status, tabId]);
+  }, [connect, host, launching, sessionConnection, tab?.requiresExplicitReconnect, tab?.status, tabId]);
 
   useEffect(() => {
     if (!tabId || tab?.status !== "connected" || !canMonitorLifecycle) return;
@@ -273,11 +277,18 @@ export function VncPage() {
     const timer = window.setInterval(() => {
       void invoke<VncSessionExistsResult>("vnc_session_exists", { sessionId: tabId })
         .then((result) => {
+          lifecyclePollErrorLoggedRef.current = false;
           if (result.canMonitorLifecycle && !result.exists) {
             void disconnect("disconnected");
           }
         })
-        .catch(() => {});
+        .catch((error) => {
+          if (lifecyclePollErrorLoggedRef.current) return;
+          lifecyclePollErrorLoggedRef.current = true;
+          logFrontendError("vnc.sessionExists", "Falha ao consultar estado da sessão VNC", error, {
+            sessionId: tabId,
+          });
+        });
     }, 2000);
 
     return () => window.clearInterval(timer);
@@ -369,7 +380,7 @@ export function VncPage() {
             <p className="mt-1 text-sm text-[var(--text-muted)]">{targetHost}:{targetPort}</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="secondary" size="sm" onClick={() => void connect()} disabled={launching}>
+            <Button variant="secondary" size="sm" onClick={() => { requestReconnect(tab.id); void connect(); }} disabled={launching}>
               {launching ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
               {t("vnc.reconnect")}
             </Button>

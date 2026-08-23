@@ -4,22 +4,24 @@ import { useTranslation } from "react-i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useLocation, useNavigate } from "react-router-dom";
-import { X, Plus, Wifi, WifiOff, Loader2, FolderOpen, Monitor } from "lucide-react";
+import { X, Plus, Wifi, WifiOff, Loader2, FolderOpen, Monitor, RotateCcw } from "lucide-react";
 import { useSessionsStore } from "@/store/sessions";
 import { useHostsStore } from "@/store/hosts";
 import { cn } from "@/lib/utils";
 import { SessionTab } from "@/types";
 import { buildSessionRoute, isStandaloneWindow, withStandaloneQuery } from "@/lib/windowMode";
+import { logFrontendError } from "@/lib/logger";
 
 export function TabBar() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
-  const { tabs, activeTabId, closeSession, setActiveTab, moveTab } = useSessionsStore();
+  const { tabs, activeTabId, closeSession, setActiveTab, moveTab, requestReconnect, requestReconnectAll } = useSessionsStore();
   const getHost = useHostsStore((s) => s.getHost);
   const standalone = isStandaloneWindow(location.search);
   const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ tabId: string; position: "before" | "after" } | null>(null);
+  const hasPendingReconnect = tabs.some((tab) => tab.requiresExplicitReconnect);
 
   if (tabs.length === 0) return null;
 
@@ -38,6 +40,12 @@ export function TabBar() {
   const handleTabClick = (tab: SessionTab) => {
     setActiveTab(tab.id);
     navigate(tabRoute(tab));
+  };
+
+  const handleReconnectTab = (event: MouseEvent, tab: SessionTab) => {
+    event.stopPropagation();
+    requestReconnect(tab.id);
+    handleTabClick(tab);
   };
 
   const handleDragStart = (event: DragEvent<HTMLButtonElement>, tabId: string) => {
@@ -95,15 +103,26 @@ export function TabBar() {
     if (tab.type === "terminal") {
       await Promise.all(
         tab.panes.map((pane) =>
-          invoke(protocol === "telnet" ? "telnet_disconnect" : "ssh_disconnect", { tabId: pane.id }).catch(() => {})
+          invoke(protocol === "telnet" ? "telnet_disconnect" : "ssh_disconnect", { tabId: pane.id }).catch((error) => {
+            logFrontendError("tabs.disconnectTerminal", "Falha ao desconectar terminal ao fechar aba", error, {
+              paneId: pane.id,
+              protocol,
+            });
+          })
         )
       );
     } else if (tab.type === "sftp") {
-      await invoke("sftp_disconnect", { sessionId: tab.id }).catch(() => {});
+      await invoke("sftp_disconnect", { sessionId: tab.id }).catch((error) => {
+        logFrontendError("tabs.disconnectSftp", "Falha ao desconectar SFTP ao fechar aba", error, { tabId: tab.id });
+      });
     } else if (tab.type === "rdp") {
-      await invoke("rdp_disconnect", { sessionId: tab.id }).catch(() => {});
+      await invoke("rdp_disconnect", { sessionId: tab.id }).catch((error) => {
+        logFrontendError("tabs.disconnectRdp", "Falha ao desconectar RDP ao fechar aba", error, { tabId: tab.id });
+      });
     } else {
-      await invoke("vnc_disconnect", { sessionId: tab.id }).catch(() => {});
+      await invoke("vnc_disconnect", { sessionId: tab.id }).catch((error) => {
+        logFrontendError("tabs.disconnectVnc", "Falha ao desconectar VNC ao fechar aba", error, { tabId: tab.id });
+      });
     }
 
     closeSession(tab.id);
@@ -145,6 +164,16 @@ export function TabBar() {
           {tab.type === "sftp" && <FolderOpen size={10} className="text-[var(--accent)] shrink-0" />}
           {(tab.type === "rdp" || tab.type === "vnc") && <Monitor size={10} className="text-[var(--accent)] shrink-0" />}
           <span className="truncate">{tab.hostLabel}</span>
+          {tab.requiresExplicitReconnect && (
+            <span
+              role="button"
+              onClick={(event) => handleReconnectTab(event, tab)}
+              title={t("terminal.reconnect")}
+              className="ml-auto flex h-4 w-4 items-center justify-center rounded text-[var(--accent)] hover:bg-[var(--bg-hover)]"
+            >
+              <RotateCcw size={10} />
+            </span>
+          )}
           <span
             onClick={(e) => void handleClose(e, tab)}
             className="ml-1 flex h-4 w-4 items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-[var(--bg-hover)] transition-opacity"
@@ -154,6 +183,17 @@ export function TabBar() {
           </span>
         </button>
       ))}
+
+      {hasPendingReconnect && (
+        <button
+          onClick={() => requestReconnectAll()}
+          className="flex h-full items-center gap-1 px-2 text-[var(--accent)] hover:bg-[var(--bg-hover)] transition-colors"
+          title={t("terminal.reconnectAll")}
+        >
+          <RotateCcw size={12} />
+          <span className="hidden lg:inline text-[10px]">{t("terminal.reconnectAll")}</span>
+        </button>
+      )}
 
       <button
         onClick={() => navigate(withStandaloneQuery("/", standalone))}

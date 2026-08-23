@@ -17,6 +17,7 @@ import { SftpPage } from "@/pages/SftpPage";
 import { ConnectionProtocol, SessionConnection } from "@/types";
 import { buildSessionRoute, readSessionBootstrap, withStandaloneQuery } from "@/lib/windowMode";
 import { APP_NAME } from "@/lib/appInfo";
+import { logFrontendError } from "@/lib/logger";
 
 export function TerminalPage() {
   const { t } = useTranslation();
@@ -32,6 +33,7 @@ export function TerminalPage() {
   const closeSession = useSessionsStore((s) => s.closeSession);
   const openSftpTab = useSessionsStore((s) => s.openSftpTab);
   const clearTerminalSnapshot = useSessionsStore((s) => s.clearTerminalSnapshot);
+  const requestReconnect = useSessionsStore((s) => s.requestReconnect);
   const sftpOpenMode = useSettingsStore((s) => s.settings.ssh.sftpOpenMode);
 
   const getHost = useHostsStore((s) => s.getHost);
@@ -246,7 +248,12 @@ export function TerminalPage() {
 
   const reconnectPane = async (paneId: string) => {
     const disconnectCommand = protocol === "telnet" ? "telnet_disconnect" : "ssh_disconnect";
-    await invoke(disconnectCommand, { tabId: paneId }).catch(() => {});
+    await invoke(disconnectCommand, { tabId: paneId }).catch((error) => {
+      logFrontendError("terminal.reconnect", "Falha ao desconectar antes da reconexão", error, {
+        paneId,
+        protocol,
+      });
+    });
     clearTerminalSnapshot(paneId);
     updatePaneStatus(paneId, "connecting");
     setReconnectNonces((current) => ({
@@ -256,6 +263,7 @@ export function TerminalPage() {
   };
 
   const handleReconnect = () => {
+    requestReconnect(tab.id);
     const reconnectablePanes = tab.panes.filter((pane) => pane.status === "disconnected" || pane.status === "error");
     const targets = reconnectablePanes.length > 0 ? reconnectablePanes : [tab.panes[0]].filter(Boolean);
     targets.forEach((pane) => void reconnectPane(pane.id));
@@ -280,7 +288,12 @@ export function TerminalPage() {
 
   const handleClosePane = async (targetPaneId: string) => {
     const disconnectCommand = protocol === "telnet" ? "telnet_disconnect" : "ssh_disconnect";
-    await invoke(disconnectCommand, { tabId: targetPaneId }).catch(() => {});
+    await invoke(disconnectCommand, { tabId: targetPaneId }).catch((error) => {
+      logFrontendError("terminal.closePane", "Falha ao desconectar painel do terminal", error, {
+        paneId: targetPaneId,
+        protocol,
+      });
+    });
     closePane(tab.id, targetPaneId);
   };
 
@@ -462,6 +475,7 @@ export function TerminalPage() {
                 passphrase={passphrase}
                 sshCompatPreset={targetCompatPreset}
                 reconnectNonce={reconnectNonces[pane.id] ?? 0}
+                autoConnect={!tab.requiresExplicitReconnect}
                 onStatusChange={(pid, status) => updatePaneStatus(pid, status)}
                 onConnected={pane.id === tab.id ? handleConnected : () => { if (host) setLastConnected(host.id); }}
                 onDisconnected={(status) => handleDisconnected(pane.id, status)}

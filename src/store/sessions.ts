@@ -1,6 +1,12 @@
 import { create } from "zustand";
 import { SessionConnection, SessionTab, SplitDirection, SftpTabSnapshot, TabType, TerminalPaneSnapshot } from "@/types";
 import { v4 as uuidv4 } from "uuid";
+import {
+  SESSION_PERSISTENCE_KEY,
+  readPersistedSessionTabs,
+  serializeSessionState,
+} from "@/lib/sessionPersistence";
+import { isStandaloneWindow } from "@/lib/windowMode";
 
 interface SessionsStore {
   tabs: SessionTab[];
@@ -24,6 +30,12 @@ interface SessionsStore {
   openVncTab: (hostId: string, hostLabel: string, hostAddress: string) => string;
   /** Garante que um tab exista na store atual. Útil para janelas dedicadas. */
   ensureSession: (tab: SessionTab) => void;
+  /** Restaura somente abas de hosts salvos, sem iniciar conexões. */
+  restorePersistedTabs: (availableHostIds?: Iterable<string>) => void;
+  /** Libera uma aba restaurada para que sua página conecte explicitamente. */
+  requestReconnect: (tabId: string) => void;
+  /** Libera todas as abas restauradas. */
+  requestReconnectAll: () => void;
   closeSession: (tabId: string) => void;
   setActiveTab: (tabId: string) => void;
   moveTab: (tabId: string, targetTabId: string, position: "before" | "after") => void;
@@ -143,6 +155,35 @@ export const useSessionsStore = create<SessionsStore>()((set, get) => ({
       return { tabs: [...s.tabs, tab], activeTabId: tab.id };
     }),
 
+  restorePersistedTabs: (availableHostIds) => {
+    if (typeof window === "undefined" || get().tabs.length > 0) return;
+    try {
+      const restored = readPersistedSessionTabs(
+        window.localStorage.getItem(SESSION_PERSISTENCE_KEY),
+        availableHostIds,
+      );
+      if (restored.tabs.length > 0) {
+        set({ tabs: restored.tabs, activeTabId: restored.activeTabId });
+      }
+    } catch {
+      // Storage bloqueado/corrompido não deve impedir o app de iniciar.
+    }
+  },
+
+  requestReconnect: (tabId) =>
+    set((s) => ({
+      tabs: s.tabs.map((tab) =>
+        tab.id === tabId ? { ...tab, requiresExplicitReconnect: false } : tab
+      ),
+    })),
+
+  requestReconnectAll: () =>
+    set((s) => ({
+      tabs: s.tabs.map((tab) =>
+        tab.requiresExplicitReconnect ? { ...tab, requiresExplicitReconnect: false } : tab
+      ),
+    })),
+
   closeSession: (tabId) => {
     const { tabs, activeTabId } = get();
     const closingTab = tabs.find((t) => t.id === tabId);
@@ -209,7 +250,13 @@ export const useSessionsStore = create<SessionsStore>()((set, get) => ({
         return {
           ...tab,
           splitDirection: direction,
-          panes: [...tab.panes, { id: newPaneId, status: "connecting" }],
+          panes: [
+            ...tab.panes,
+            {
+              id: newPaneId,
+              status: tab.requiresExplicitReconnect ? "disconnected" : "connecting",
+            },
+          ],
         };
       }),
     }));
@@ -282,3 +329,16 @@ export const useSessionsStore = create<SessionsStore>()((set, get) => ({
       ),
     })),
 }));
+
+// O serializer é a barreira de segurança: snapshots e connection nunca são gravados.
+useSessionsStore.subscribe((state) => {
+  if (typeof window === "undefined" || isStandaloneWindow(window.location.search)) return;
+  try {
+    window.localStorage.setItem(
+      SESSION_PERSISTENCE_KEY,
+      serializeSessionState(state.tabs, state.activeTabId),
+    );
+  } catch {
+    // localStorage pode estar indisponível (quota, modo privado ou WebView).
+  }
+});

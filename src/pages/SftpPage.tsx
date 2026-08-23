@@ -98,6 +98,7 @@ export function SftpPage({
   const closeSession = useSessionsStore((s) => s.closeSession);
   const sftpSnapshot = useSessionsStore((s) => (tabId ? s.sftpSnapshots[tabId] : undefined));
   const updateSftpSnapshot = useSessionsStore((s) => s.updateSftpSnapshot);
+  const requestReconnect = useSessionsStore((s) => s.requestReconnect);
   const openSession = useSessionsStore((s) => s.openSession);
   const getHost = useHostsStore((s) => s.getHost);
   const setLastConnected = useHostsStore((s) => s.setLastConnected);
@@ -131,7 +132,7 @@ export function SftpPage({
     });
   }, [bootstrap.hostAddress, bootstrap.hostId, bootstrap.hostLabel, bootstrap.standalone, embedded, ensureSession, tab, tabId]);
 
-  const [status, setStatus] = useState<Status>("connecting");
+  const [status, setStatus] = useState<Status>(tab?.requiresExplicitReconnect ? "disconnected" : "connecting");
   const [currentPath, setCurrentPath] = useState(sftpSnapshot?.currentPath ?? "/");
   const [entries, setEntries] = useState<SftpEntry[]>(sftpSnapshot?.entries ?? []);
   const [loading, setLoading] = useState(false);
@@ -277,13 +278,21 @@ export function SftpPage({
 
   // Conecta ao montar; ao desmontar apenas remove a UI local.
   useEffect(() => {
+    if (tab?.requiresExplicitReconnect) {
+      setStatus("disconnected");
+      return;
+    }
     void connect();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tabId]);
+  }, [tab?.requiresExplicitReconnect, tabId]);
 
   useEffect(() => {
     const handleBeforeUnload = () => {
-      void invoke("sftp_disconnect", { sessionId }).catch(() => {});
+      void invoke("sftp_disconnect", { sessionId }).catch((error) => {
+        logFrontendError("sftp.disconnectBeforeUnload", "Falha ao desconectar SFTP ao fechar janela", error, {
+          sessionId,
+        });
+      });
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
@@ -441,6 +450,7 @@ export function SftpPage({
   }, [bootstrap.standalone, closeLog, closeSession, embedded, navigate, onClose, sessionId]);
 
   const handleReconnect = useCallback(async () => {
+    requestReconnect(sessionId);
     setError(null);
     setStatus("connecting");
     updateSftpStatus("connecting");
@@ -456,7 +466,7 @@ export function SftpPage({
       logIdRef.current = null;
     }
     await connect();
-  }, [closeLog, connect, sessionId, updateSftpStatus]);
+  }, [closeLog, connect, requestReconnect, sessionId, updateSftpStatus]);
 
   const handleRename = async (entry: SftpEntry) => {
     if (!renameValue.trim() || renameValue === entry.name) {

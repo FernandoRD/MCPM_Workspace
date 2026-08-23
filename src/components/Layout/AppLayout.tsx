@@ -1,11 +1,12 @@
 import { useEffect } from "react";
-import { Outlet, useLocation } from "react-router-dom";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { CommandPalette } from "@/components/CommandPalette";
 import { Sidebar } from "@/components/Sidebar/Sidebar";
 import { TabBar } from "@/components/TabBar/TabBar";
 import { UpdateBanner } from "@/components/UpdateBanner";
-import { isStandaloneWindow } from "@/lib/windowMode";
+import { buildSessionRoute, isStandaloneWindow } from "@/lib/windowMode";
 import { useUIStore } from "@/store/uiStore";
+import { useSessionsStore } from "@/store/sessions";
 
 function shouldIgnoreCommandPaletteShortcut(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -23,10 +24,19 @@ function shouldIgnoreCommandPaletteShortcut(target: EventTarget | null): boolean
 
 export function AppLayout() {
   const location = useLocation();
+  const navigate = useNavigate();
   const standalone = isStandaloneWindow(location.search);
+  const tabs = useSessionsStore((s) => s.tabs);
+  const activeTabId = useSessionsStore((s) => s.activeTabId);
   const commandPaletteOpen = useUIStore((s) => s.commandPaletteOpen);
   const openCommandPalette = useUIStore((s) => s.openCommandPalette);
   const closeCommandPalette = useUIStore((s) => s.closeCommandPalette);
+
+  useEffect(() => {
+    if (standalone || location.pathname !== "/" || !activeTabId) return;
+    const activeTab = tabs.find((tab) => tab.id === activeTabId);
+    if (activeTab) navigate(buildSessionRoute(activeTab.type, activeTab.id), { replace: true });
+  }, [activeTabId, location.pathname, navigate, standalone, tabs]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

@@ -67,6 +67,7 @@ export function RdpPage() {
   const ensureSession = useSessionsStore((s) => s.ensureSession);
   const updateTabStatus = useSessionsStore((s) => s.updateTabStatus);
   const closeSession = useSessionsStore((s) => s.closeSession);
+  const requestReconnect = useSessionsStore((s) => s.requestReconnect);
 
   const getHost = useHostsStore((s) => s.getHost);
   const setLastConnected = useHostsStore((s) => s.setLastConnected);
@@ -90,6 +91,7 @@ export function RdpPage() {
   const targetHost = sessionConnection?.host ?? host?.host ?? "";
   const targetPort = sessionConnection?.port ?? host?.port ?? 3389;
   const logIdRef = useRef<string | null>(null);
+  const lifecyclePollErrorLoggedRef = useRef(false);
   const internalViewerDisplaySize = useMemo(() => {
     if (!rdpSettings.fullscreen) {
       return {
@@ -324,7 +326,9 @@ export function RdpPage() {
   const disconnect = useCallback(async (status: "disconnected" | "error" = "disconnected") => {
     if (!tabId) return;
 
-    await invoke("rdp_disconnect", { sessionId: tabId }).catch(() => {});
+    await invoke("rdp_disconnect", { sessionId: tabId }).catch((error) => {
+      logFrontendError("rdp.disconnect", "Falha ao desconectar sessão RDP", error, { sessionId: tabId });
+    });
     updateTabStatus(tabId, status);
 
     if (logIdRef.current) {
@@ -334,11 +338,11 @@ export function RdpPage() {
   }, [closeLog, tabId, updateTabStatus]);
 
   useEffect(() => {
-    if (!tabId || (!host && !sessionConnection) || tab?.status === "connected" || launching) return;
+    if (!tabId || (!host && !sessionConnection) || tab?.status === "connected" || launching || tab?.requiresExplicitReconnect) return;
     if (autoConnectRef.current) return;
     autoConnectRef.current = true;
     void connect();
-  }, [connect, host, launching, sessionConnection, tab?.status, tabId]);
+  }, [connect, host, launching, sessionConnection, tab?.requiresExplicitReconnect, tab?.status, tabId]);
 
   useEffect(() => {
     if (!tabId || tab?.status !== "connected") return;
@@ -346,11 +350,18 @@ export function RdpPage() {
     const timer = window.setInterval(() => {
       void invoke<boolean>("rdp_session_exists", { sessionId: tabId })
         .then((exists) => {
+          lifecyclePollErrorLoggedRef.current = false;
           if (!exists) {
             void disconnect("disconnected");
           }
         })
-        .catch(() => {});
+        .catch((error) => {
+          if (lifecyclePollErrorLoggedRef.current) return;
+          lifecyclePollErrorLoggedRef.current = true;
+          logFrontendError("rdp.sessionExists", "Falha ao consultar estado da sessão RDP", error, {
+            sessionId: tabId,
+          });
+        });
     }, 2000);
 
     return () => window.clearInterval(timer);
@@ -411,7 +422,7 @@ export function RdpPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="secondary" size="sm" onClick={() => void connect()} disabled={launching}>
+            <Button variant="secondary" size="sm" onClick={() => { requestReconnect(tab.id); void connect(); }} disabled={launching}>
               {launching ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
               {t("rdp.reconnect")}
             </Button>
