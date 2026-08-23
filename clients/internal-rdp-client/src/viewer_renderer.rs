@@ -95,7 +95,7 @@ impl ViewerBuffer {
     }
 
     fn write_full(&mut self, rgba: &[u8]) {
-        for (index, pixel) in rgba.chunks_exact(4).enumerate() {
+        for (index, pixel) in rgba.as_chunks::<4>().0.iter().enumerate() {
             let red = u32::from(pixel[0]);
             let green = u32::from(pixel[1]);
             let blue = u32::from(pixel[2]);
@@ -117,7 +117,7 @@ impl ViewerBuffer {
             let dst_row_start = local_y * self.width;
             let src_row = &full_rgba[src_row_start..src_row_start + self.width * 4];
             let dst_row = &mut self.pixels[dst_row_start..dst_row_start + self.width];
-            for (dst, src) in dst_row.iter_mut().zip(src_row.chunks_exact(4)) {
+            for (dst, src) in dst_row.iter_mut().zip(src_row.as_chunks::<4>().0.iter()) {
                 *dst = (u32::from(src[0]) << 16) | (u32::from(src[1]) << 8) | u32::from(src[2]);
             }
         }
@@ -163,7 +163,7 @@ impl ViewerBuffer {
             let dst_start = local_y * self.width + local_x;
             let src_row = &full_rgba[src_start..src_start + row_width * 4];
             let dst_row = &mut self.pixels[dst_start..dst_start + row_width];
-            for (dst, src) in dst_row.iter_mut().zip(src_row.chunks_exact(4)) {
+            for (dst, src) in dst_row.iter_mut().zip(src_row.as_chunks::<4>().0.iter()) {
                 *dst = (u32::from(src[0]) << 16) | (u32::from(src[1]) << 8) | u32::from(src[2]);
             }
         }
