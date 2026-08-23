@@ -192,7 +192,9 @@ fn build_system_open_args(host: &str, port: u16) -> Vec<String> {
     vec![build_vnc_uri(host, port)]
 }
 
-fn preference_support_for_client(client_key: VncClientKey) -> (VncPreferenceSupport, VncPreferenceSupport) {
+fn preference_support_for_client(
+    client_key: VncClientKey,
+) -> (VncPreferenceSupport, VncPreferenceSupport) {
     match client_key {
         VncClientKey::TigerVnc => (
             VncPreferenceSupport::Preferred,
@@ -264,7 +266,13 @@ fn spawn_linux_client_aliases(
     client_key: VncClientKey,
 ) -> Result<LaunchOutcome, String> {
     for command in commands {
-        match spawn_linux_client(command, args, preview_args, success_message(command), client_key) {
+        match spawn_linux_client(
+            command,
+            args,
+            preview_args,
+            success_message(command),
+            client_key,
+        ) {
             Ok(result) => return Ok(result),
             Err(err) if err.starts_with("__NOT_FOUND__") => continue,
             Err(err) => return Err(err),
@@ -474,7 +482,9 @@ pub async fn vnc_connect(
         session_id,
         host,
         port,
-        password.as_deref().is_some_and(|value| !value.trim().is_empty()),
+        password
+            .as_deref()
+            .is_some_and(|value| !value.trim().is_empty()),
         options
             .as_ref()
             .map(|opts| opts.preferred_linux_client().to_string())
@@ -494,12 +504,17 @@ pub async fn vnc_connect(
     let launch = launch_vnc_client(
         &host,
         port,
-        password.as_deref().is_some_and(|value| !value.trim().is_empty()),
+        password
+            .as_deref()
+            .is_some_and(|value| !value.trim().is_empty()),
         &options,
     )
     .map_err(|error| {
         vnc_log_error(
-            format!("vnc: falha ao iniciar cliente session={} host={} port={}", session_id, host, port),
+            format!(
+                "vnc: falha ao iniciar cliente session={} host={} port={}",
+                session_id, host, port
+            ),
             error,
         )
     })?;
@@ -536,16 +551,16 @@ pub async fn vnc_connect(
 }
 
 #[tauri::command]
-pub async fn vnc_disconnect(
-    state: State<'_, AppState>,
-    session_id: String,
-) -> Result<(), String> {
+pub async fn vnc_disconnect(state: State<'_, AppState>, session_id: String) -> Result<(), String> {
     log::info!("vnc: disconnect solicitado session={}", session_id);
     let mut manager = state.vnc.lock().await;
     if let Some(mut session) = manager.sessions.remove(&session_id) {
         cleanup_session(&mut session);
     } else {
-        log::warn!("vnc: disconnect para sessão inexistente session={}", session_id);
+        log::warn!(
+            "vnc: disconnect para sessão inexistente session={}",
+            session_id
+        );
     }
     Ok(())
 }
@@ -572,8 +587,11 @@ pub async fn vnc_session_exists(
             return match child.try_wait() {
                 Ok(Some(_)) => {
                     log::info!("vnc: processo encerrado session={}", session_id);
-                    let mut finished = manager.sessions.remove(&session_id).unwrap();
-                    cleanup_session(&mut finished);
+                    if let Some(mut finished) = manager.sessions.remove(&session_id) {
+                        cleanup_session(&mut finished);
+                    } else {
+                        log::warn!("vnc: sessão {} já removida antes do cleanup", session_id);
+                    }
                     Ok(VncSessionExistsResult {
                         exists: false,
                         can_monitor_lifecycle: true,
@@ -621,12 +639,18 @@ mod tests {
 
     #[test]
     fn builds_vnc_uri_with_host_and_port() {
-        assert_eq!(build_vnc_uri("192.168.1.40", 5901), "vnc://192.168.1.40:5901");
+        assert_eq!(
+            build_vnc_uri("192.168.1.40", 5901),
+            "vnc://192.168.1.40:5901"
+        );
     }
 
     #[test]
     fn builds_vncviewer_target_using_tcp_port_syntax() {
-        assert_eq!(build_vncviewer_target("server.internal", 5900), "server.internal::5900");
+        assert_eq!(
+            build_vncviewer_target("server.internal", 5900),
+            "server.internal::5900"
+        );
     }
 
     #[test]
@@ -648,7 +672,10 @@ mod tests {
     fn builds_remmina_args_using_connection_uri() {
         let args = build_remmina_args("server.internal", 5901);
 
-        assert_eq!(args, vec!["-c".to_string(), "vnc://server.internal:5901".to_string()]);
+        assert_eq!(
+            args,
+            vec!["-c".to_string(), "vnc://server.internal:5901".to_string()]
+        );
     }
 
     #[test]
