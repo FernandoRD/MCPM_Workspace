@@ -37,8 +37,7 @@ fn prepare_command(command: &mut Command) {
 }
 
 #[cfg(not(target_os = "windows"))]
-fn prepare_command(_command: &mut Command) {
-}
+fn prepare_command(_command: &mut Command) {}
 
 fn run_with_stdin(command: &str, args: &[&str], input: &str) -> Result<(), String> {
     let mut cmd = Command::new(command);
@@ -48,9 +47,7 @@ fn run_with_stdin(command: &str, args: &[&str], input: &str) -> Result<(), Strin
         .stderr(Stdio::null());
     prepare_command(&mut cmd);
 
-    let mut child = cmd
-        .spawn()
-        .map_err(|e| format!("{command}: {e}"))?;
+    let mut child = cmd.spawn().map_err(|e| format!("{command}: {e}"))?;
 
     if let Some(stdin) = child.stdin.as_mut() {
         stdin
@@ -80,9 +77,7 @@ fn run_capture(command: &str, args: &[&str]) -> Result<String, String> {
     cmd.args(args).stdout(Stdio::piped()).stderr(Stdio::piped());
     prepare_command(&mut cmd);
 
-    let mut child = cmd
-        .spawn()
-        .map_err(|e| format!("{command}: {e}"))?;
+    let mut child = cmd.spawn().map_err(|e| format!("{command}: {e}"))?;
 
     let started_at = Instant::now();
     loop {
@@ -133,7 +128,8 @@ fn write_clipboard(text: &str) -> Result<(), String> {
     }
 
     Err(if errors.is_empty() {
-        "Nenhum utilitário de clipboard encontrado. Instale wl-clipboard, xclip ou xsel.".to_string()
+        "Nenhum utilitário de clipboard encontrado. Instale wl-clipboard, xclip ou xsel."
+            .to_string()
     } else {
         errors.join("; ")
     })
@@ -159,7 +155,8 @@ fn read_clipboard() -> Result<String, String> {
     }
 
     Err(if errors.is_empty() {
-        "Nenhum utilitário de clipboard encontrado. Instale wl-clipboard, xclip ou xsel.".to_string()
+        "Nenhum utilitário de clipboard encontrado. Instale wl-clipboard, xclip ou xsel."
+            .to_string()
     } else {
         errors.join("; ")
     })

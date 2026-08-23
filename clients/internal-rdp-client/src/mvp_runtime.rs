@@ -2,7 +2,7 @@ use core::time::Duration;
 use std::io::Write as _;
 use std::net::{TcpStream, ToSocketAddrs as _};
 
-use anyhow::{Context, bail};
+use anyhow::{bail, Context};
 use ironrdp::connector;
 use ironrdp::connector::BitmapConfig;
 use ironrdp::connector::{ConnectionResult, Credentials};
@@ -35,15 +35,20 @@ impl MonitorLayout {
     /// Calcula o bounding box (largura, altura) que cobre todos os monitores.
     /// Retorna a resolução do desktop virtual a ser negociada com o servidor.
     pub fn desktop_size(monitors: &[MonitorLayout]) -> (u16, u16) {
-        let right = monitors.iter()
+        let right = monitors
+            .iter()
             .map(|m| m.left + m.width)
             .max()
             .unwrap_or(1280);
-        let bottom = monitors.iter()
+        let bottom = monitors
+            .iter()
             .map(|m| m.top + m.height)
             .max()
             .unwrap_or(720);
-        (right.min(u16::MAX as u32) as u16, bottom.min(u16::MAX as u32) as u16)
+        (
+            right.min(u16::MAX as u32) as u16,
+            bottom.min(u16::MAX as u32) as u16,
+        )
     }
 }
 
@@ -129,6 +134,7 @@ pub struct ActiveStageDrainSummary {
     pub dirty_region: Option<InclusiveRectangle>,
 }
 
+#[allow(clippy::too_many_arguments)] // Parâmetros explícitos do handshake e dos timeouts RDP.
 pub fn connect_with_password(
     server_name: String,
     port: u16,
@@ -140,7 +146,13 @@ pub fn connect_with_password(
     active_read_timeout: Duration,
 ) -> anyhow::Result<(ConnectionResult, UpgradedFramed)> {
     let config = build_config(username, password, domain, profile);
-    connect(config, server_name, port, handshake_timeout, active_read_timeout)
+    connect(
+        config,
+        server_name,
+        port,
+        handshake_timeout,
+        active_read_timeout,
+    )
 }
 
 fn build_config(
@@ -167,7 +179,8 @@ fn build_config(
         bitmap: Some(BitmapConfig {
             lossy_compression: profile.lossy_compression,
             color_depth: profile.color_depth,
-            codecs: client_codecs_capabilities(&[]).expect("default codec capability list is always valid"),
+            codecs: client_codecs_capabilities(&[])
+                .expect("default codec capability list is always valid"),
         }),
         client_build: 0,
         client_name: "internal-rdp-client-mvp".to_owned(),
@@ -220,7 +233,9 @@ fn connect(
         .set_read_timeout(Some(handshake_timeout))
         .context("set read timeout")?;
 
-    let client_addr = tcp_stream.local_addr().context("get local socket address")?;
+    let client_addr = tcp_stream
+        .local_addr()
+        .context("get local socket address")?;
 
     let mut framed = ironrdp_blocking::Framed::new(tcp_stream);
     let mut connector = connector::ClientConnector::new(config, client_addr);
@@ -262,7 +277,9 @@ pub fn flush_active_stage_once(
     framed: &mut UpgradedFramed,
     image: &mut ironrdp::session::image::DecodedImage,
 ) -> anyhow::Result<bool> {
-    Ok(poll_active_stage_once(active_stage, framed, image)?.dirty_region.is_some())
+    Ok(poll_active_stage_once(active_stage, framed, image)?
+        .dirty_region
+        .is_some())
 }
 
 pub fn drain_active_stage(
@@ -320,8 +337,9 @@ fn poll_active_stage_once(
         Ok((action, payload)) => (action, payload),
         // On Linux, SO_RCVTIMEO fires as WouldBlock (EAGAIN); on Windows it fires as
         // TimedOut (WSAETIMEDOUT = 10060). Both mean "no data yet" — treat identically.
-        Err(error) if error.kind() == std::io::ErrorKind::WouldBlock
-            || error.kind() == std::io::ErrorKind::TimedOut =>
+        Err(error)
+            if error.kind() == std::io::ErrorKind::WouldBlock
+                || error.kind() == std::io::ErrorKind::TimedOut =>
         {
             return Ok(ActiveStageDrainSummary::default())
         }
@@ -396,7 +414,10 @@ mod tests {
 fn tls_upgrade(
     stream: TcpStream,
     server_name: String,
-) -> anyhow::Result<(rustls::StreamOwned<rustls::ClientConnection, TcpStream>, Vec<u8>)> {
+) -> anyhow::Result<(
+    rustls::StreamOwned<rustls::ClientConnection, TcpStream>,
+    Vec<u8>,
+)> {
     let mut config = rustls::client::ClientConfig::builder()
         .dangerous()
         .with_custom_certificate_verifier(std::sync::Arc::new(danger::NoCertificateVerification))
@@ -438,7 +459,9 @@ fn extract_tls_server_public_key(cert: &[u8]) -> anyhow::Result<Vec<u8>> {
 }
 
 mod danger {
-    use tokio_rustls::rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
+    use tokio_rustls::rustls::client::danger::{
+        HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier,
+    };
     use tokio_rustls::rustls::{pki_types, DigitallySignedStruct, Error, SignatureScheme};
 
     #[derive(Debug)]

@@ -140,7 +140,7 @@ fn encode_openssh_ed25519(signing_key: &ed25519_dalek::SigningKey) -> String {
 
     // Padding até múltiplo de 8 (OpenSSH exige isso mesmo sem cifração)
     let mut pad = 1u8;
-    while priv_blob.len() % 8 != 0 {
+    while !priv_blob.len().is_multiple_of(8) {
         priv_blob.push(pad);
         pad += 1;
     }
@@ -148,10 +148,10 @@ fn encode_openssh_ed25519(signing_key: &ed25519_dalek::SigningKey) -> String {
     // Blob completo
     let mut blob = Vec::<u8>::new();
     blob.extend_from_slice(b"openssh-key-v1\0"); // magic
-    write_ssh_string(&mut blob, b"none");          // ciphername
-    write_ssh_string(&mut blob, b"none");          // kdfname
-    write_ssh_string(&mut blob, b"");              // kdfoptions
-    write_ssh_u32(&mut blob, 1);                   // nkeys = 1
+    write_ssh_string(&mut blob, b"none"); // ciphername
+    write_ssh_string(&mut blob, b"none"); // kdfname
+    write_ssh_string(&mut blob, b""); // kdfoptions
+    write_ssh_u32(&mut blob, 1); // nkeys = 1
     write_ssh_string(&mut blob, &pub_blob);
     write_ssh_string(&mut blob, &priv_blob);
 

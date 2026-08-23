@@ -23,7 +23,11 @@ impl ViewerBuffer {
     }
 
     /// Atualiza o buffer a partir de uma imagem que cobre exatamente este buffer (single-monitor).
-    pub fn apply_rgba_update(&mut self, rgba: &[u8], dirty_region: Option<&InclusiveRectangle>) -> bool {
+    pub fn apply_rgba_update(
+        &mut self,
+        rgba: &[u8],
+        dirty_region: Option<&InclusiveRectangle>,
+    ) -> bool {
         if !self.initialized {
             self.write_full(rgba);
         } else if let Some(region) = dirty_region {
@@ -73,9 +77,14 @@ impl ViewerBuffer {
             let clip_bottom = r_bottom.min(mon_bottom - 1);
 
             self.write_region_from_slice(
-                full_rgba, full_width,
-                mon_x, mon_y,
-                clip_left, clip_top, clip_right, clip_bottom,
+                full_rgba,
+                full_width,
+                mon_x,
+                mon_y,
+                clip_left,
+                clip_top,
+                clip_right,
+                clip_bottom,
             );
         } else {
             return false;

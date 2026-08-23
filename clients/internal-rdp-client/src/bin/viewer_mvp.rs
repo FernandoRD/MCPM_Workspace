@@ -1,7 +1,7 @@
-use std::time::{Duration, Instant};
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
 
-use anyhow::{Context, bail};
+use anyhow::{bail, Context};
 use internal_rdp_client::mvp_runtime::{
     connect_with_password, drain_active_stage, MonitorLayout, SessionProfile, UpgradedFramed,
 };
@@ -141,18 +141,32 @@ fn parse_args() -> anyhow::Result<Action> {
 
         match flag.as_str() {
             "--host" => host = Some(next_value(&mut args, "--host")?),
-            "--port" => port = next_value(&mut args, "--port")?.parse().context("invalid --port value")?,
+            "--port" => {
+                port = next_value(&mut args, "--port")?
+                    .parse()
+                    .context("invalid --port value")?
+            }
             "--username" | "-u" => username = Some(next_value(&mut args, "--username")?),
             "--password" | "-p" => password = Some(next_value(&mut args, "--password")?),
             "--domain" | "-d" => domain = Some(next_value(&mut args, "--domain")?),
-            "--settings-file" => settings_file = Some(PathBuf::from(next_value(&mut args, "--settings-file")?)),
+            "--settings-file" => {
+                settings_file = Some(PathBuf::from(next_value(&mut args, "--settings-file")?))
+            }
             "--fullscreen" => fullscreen_override = Some(true),
             "--windowed" => fullscreen_override = Some(false),
             "--width" => {
-                width_override = Some(next_value(&mut args, "--width")?.parse().context("invalid --width value")?)
+                width_override = Some(
+                    next_value(&mut args, "--width")?
+                        .parse()
+                        .context("invalid --width value")?,
+                )
             }
             "--height" => {
-                height_override = Some(next_value(&mut args, "--height")?.parse().context("invalid --height value")?)
+                height_override = Some(
+                    next_value(&mut args, "--height")?
+                        .parse()
+                        .context("invalid --height value")?,
+                )
             }
             "--color-depth" => {
                 color_depth = next_value(&mut args, "--color-depth")?
@@ -188,9 +202,11 @@ fn parse_args() -> anyhow::Result<Action> {
 }
 
 fn next_value(args: &mut impl Iterator<Item = String>, flag: &str) -> anyhow::Result<String> {
-    args.next().with_context(|| format!("missing value for {flag}"))
+    args.next()
+        .with_context(|| format!("missing value for {flag}"))
 }
 
+#[allow(clippy::too_many_arguments)] // Opções explícitas recebidas da CLI do viewer.
 fn run(
     host: String,
     port: u16,
@@ -250,7 +266,10 @@ fn run(
         let oh = height_override.map(|h| h as f64).unwrap_or(bb_h);
         // Keep aspect ratio: scale uniformly so display fits within the override box
         let scale = (ow / bb_w).min(oh / bb_h).min(1.0);
-        ((bb_w * scale).round() as usize, (bb_h * scale).round() as usize)
+        (
+            (bb_w * scale).round() as usize,
+            (bb_h * scale).round() as usize,
+        )
     } else {
         (width as usize, height as usize)
     };
@@ -278,9 +297,17 @@ fn run(
 
     let desktop_width = usize::from(connection_result.desktop_size.width);
     let desktop_height = usize::from(connection_result.desktop_size.height);
-    eprintln!("[viewer] desktop_size={}x{} monitors={}", desktop_width, desktop_height, monitors.len());
+    eprintln!(
+        "[viewer] desktop_size={}x{} monitors={}",
+        desktop_width,
+        desktop_height,
+        monitors.len()
+    );
     for (i, m) in monitors.iter().enumerate() {
-        eprintln!("[viewer] monitor[{i}]: left={} top={} width={} height={} primary={}", m.left, m.top, m.width, m.height, m.is_primary);
+        eprintln!(
+            "[viewer] monitor[{i}]: left={} top={} width={} height={} primary={}",
+            m.left, m.top, m.width, m.height, m.is_primary
+        );
     }
     let image = DecodedImage::new(
         PixelFormat::RgbA32,
@@ -291,10 +318,30 @@ fn run(
 
     if monitors.is_empty() || !fullscreen {
         // Single window: either single-monitor, or non-fullscreen multimon (show bounding box scaled).
-        run_single_window(host, port, fullscreen, desktop_width, desktop_height, display_w, display_h, image, active_stage, framed)
+        run_single_window(
+            host,
+            port,
+            fullscreen,
+            desktop_width,
+            desktop_height,
+            display_w,
+            display_h,
+            image,
+            active_stage,
+            framed,
+        )
     } else {
         // Fullscreen multimon: one dedicated window per monitor.
-        run_multi_window(host, port, desktop_width, desktop_height, monitors, image, active_stage, framed)
+        run_multi_window(
+            host,
+            port,
+            desktop_width,
+            desktop_height,
+            monitors,
+            image,
+            active_stage,
+            framed,
+        )
     }
 }
 
@@ -314,6 +361,7 @@ fn make_window_options(fullscreen: bool) -> WindowOptions {
     }
 }
 
+#[allow(clippy::too_many_arguments)] // Estado gráfico e transporte da janela única.
 fn run_single_window(
     host: String,
     port: u16,
@@ -345,7 +393,16 @@ fn run_single_window(
     let mut mouse_state = MouseInputState::default();
 
     while window.is_open() {
-        let input_events = collect_window_input(&window, display_w, display_h, buf_w, buf_h, &mut mouse_state, 0, 0);
+        let input_events = collect_window_input(
+            &window,
+            display_w,
+            display_h,
+            buf_w,
+            buf_h,
+            &mut mouse_state,
+            0,
+            0,
+        );
         let input_dirty_region = if input_events.is_empty() {
             None
         } else {
@@ -400,6 +457,7 @@ struct MonitorWindow {
 /// compositor's default position and the user should move + fullscreen each one manually
 /// (e.g. Super+↑ or F11 on KDE).
 /// Only called when `fullscreen == true`; in windowed mode `run_single_window` is used instead.
+#[allow(clippy::too_many_arguments)] // Estado gráfico e transporte do modo multimonitor.
 fn run_multi_window(
     host: String,
     port: u16,
@@ -439,7 +497,7 @@ fn run_multi_window(
 
         let primary_label = if m.is_primary { " [primário]" } else { "" };
         let title = format!("Internal RDP - {host}:{port} — Monitor {} ({effective_w}×{effective_h}){primary_label}", i + 1);
-        let mut win = Window::new(&title, effective_w, effective_h, window_opts.clone())
+        let mut win = Window::new(&title, effective_w, effective_h, window_opts)
             .with_context(|| format!("create window for monitor {i}"))?;
         win.set_target_fps(VIEWER_TARGET_FPS);
         win.set_cursor_visibility(false);
@@ -449,7 +507,9 @@ fn run_multi_window(
             win.topmost(true);
         }
 
-        eprintln!("[viewer] janela[{i}] criada: {effective_w}x{effective_h} offset=({mon_x},{mon_y})");
+        eprintln!(
+            "[viewer] janela[{i}] criada: {effective_w}x{effective_h} offset=({mon_x},{mon_y})"
+        );
         mon_windows.push(MonitorWindow {
             window: win,
             buffer: ViewerBuffer::new(effective_w, effective_h),
@@ -464,10 +524,7 @@ fn run_multi_window(
     }
 
     let mut last_redraw = Instant::now();
-    let mut frame_count = 0u64;
-
     loop {
-        frame_count += 1;
         let any_open = mon_windows.iter().any(|mw| mw.window.is_open());
         if !any_open {
             break;
@@ -521,8 +578,17 @@ fn run_multi_window(
             if !mw.window.is_open() {
                 continue;
             }
-            if mw.buffer.apply_rgba_update_from_full(rgba, desktop_width, mw.mon_x, mw.mon_y, dirty_region.as_ref()) {
-                if let Err(e) = mw.window.update_with_buffer(mw.buffer.pixels(), mw.width, mw.height) {
+            if mw.buffer.apply_rgba_update_from_full(
+                rgba,
+                desktop_width,
+                mw.mon_x,
+                mw.mon_y,
+                dirty_region.as_ref(),
+            ) {
+                if let Err(e) =
+                    mw.window
+                        .update_with_buffer(mw.buffer.pixels(), mw.width, mw.height)
+                {
                     eprintln!("[viewer] update_with_buffer falhou: {e}");
                     break;
                 }
@@ -532,9 +598,7 @@ fn run_multi_window(
             }
         }
 
-        if any_updated {
-            last_redraw = Instant::now();
-        } else if last_redraw.elapsed() >= Duration::from_millis(IDLE_PUMP_INTERVAL_MS) {
+        if any_updated || last_redraw.elapsed() >= Duration::from_millis(IDLE_PUMP_INTERVAL_MS) {
             last_redraw = Instant::now();
         }
     }
@@ -554,7 +618,9 @@ fn parse_monitor_spec(spec: &str) -> anyhow::Result<MonitorLayout> {
         bail!("--monitor expects left,top,width,height,primary,scale — got: {spec}");
     }
     let parse_u32 = |s: &str, name: &str| -> anyhow::Result<u32> {
-        s.trim().parse::<u32>().with_context(|| format!("invalid {name} in --monitor: {spec}"))
+        s.trim()
+            .parse::<u32>()
+            .with_context(|| format!("invalid {name} in --monitor: {spec}"))
     };
     let left = parse_u32(parts[0], "left")?;
     let top = parse_u32(parts[1], "top")?;
@@ -567,7 +633,14 @@ fn parse_monitor_spec(spec: &str) -> anyhow::Result<MonitorLayout> {
         bail!("--monitor width and height must be > 0: {spec}");
     }
 
-    Ok(MonitorLayout { left, top, width, height, is_primary, scale_factor })
+    Ok(MonitorLayout {
+        left,
+        top,
+        width,
+        height,
+        is_primary,
+        scale_factor,
+    })
 }
 
 fn validate_color_depth(color_depth: u32) -> anyhow::Result<()> {

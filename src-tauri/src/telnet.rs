@@ -98,11 +98,7 @@ struct TelnetParseResult {
 }
 
 impl TelnetParser {
-    fn consume(
-        &mut self,
-        bytes: &[u8],
-        negotiation: &mut TelnetNegotiation,
-    ) -> TelnetParseResult {
+    fn consume(&mut self, bytes: &[u8], negotiation: &mut TelnetNegotiation) -> TelnetParseResult {
         let mut output = Vec::new();
         let mut responses = Vec::new();
 
@@ -313,6 +309,7 @@ fn telnet_log_error(context: String, error: impl std::fmt::Display) -> String {
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // Contrato IPC Tauri: argumentos serializados individualmente.
 pub async fn telnet_connect(
     state: tauri::State<'_, crate::AppState>,
     app: AppHandle,
@@ -359,7 +356,9 @@ pub async fn telnet_connect(
             log::error!("{message}");
             message
         })?
-        .map_err(|e| telnet_log_error(format!("telnet: erro ao conectar ({connect_context})"), e))?;
+        .map_err(|e| {
+            telnet_log_error(format!("telnet: erro ao conectar ({connect_context})"), e)
+        })?;
 
     let (tx, mut rx) = mpsc::channel::<TelnetCommand>(64);
     {
@@ -481,7 +480,9 @@ pub async fn telnet_send_input(
             .tx
             .send(TelnetCommand::Data(normalize_telnet_input(data)))
             .await
-            .map_err(|e| telnet_log_error(format!("telnet: falha ao enviar input tab={tab_id}"), e))?;
+            .map_err(|e| {
+                telnet_log_error(format!("telnet: falha ao enviar input tab={tab_id}"), e)
+            })?;
     } else {
         log::warn!("telnet: send_input para sessão inexistente tab={}", tab_id);
     }

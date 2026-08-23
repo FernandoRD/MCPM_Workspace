@@ -16,14 +16,14 @@ use russh_sftp::client::SftpSession;
 use serde::Serialize;
 use serde_json::Value;
 use tauri::{AppHandle, Emitter};
-use zeroize::Zeroizing;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::mpsc;
 use tokio::time::{sleep, timeout};
+use zeroize::Zeroizing;
 
 use crate::ssh_common::{
-    build_ssh_config, format_host_key, load_known_hosts, save_known_hosts,
-    trim_optional_owned, trim_owned, KnownHostsHandler,
+    build_ssh_config, format_host_key, load_known_hosts, save_known_hosts, trim_optional_owned,
+    trim_owned, KnownHostsHandler,
 };
 
 // ─── Eventos emitidos ao frontend ─────────────────────────────────────────────
@@ -159,7 +159,12 @@ async fn fetch_server_fingerprint(
 pub fn ssh_list_known_hosts(
     state: tauri::State<'_, crate::AppState>,
 ) -> Result<Vec<KnownHostEntry>, String> {
-    let data_dir = state.storage.lock().map_err(|e| e.to_string())?.data_dir.clone();
+    let data_dir = state
+        .storage
+        .lock()
+        .map_err(|e| e.to_string())?
+        .data_dir
+        .clone();
     let mut entries = load_known_hosts(&data_dir)
         .into_iter()
         .map(|(host_key, fingerprint)| KnownHostEntry {
@@ -189,7 +194,12 @@ pub fn ssh_set_known_host(
         return Err("Fingerprint não pode ficar vazia".to_string());
     }
 
-    let data_dir = state.storage.lock().map_err(|e| e.to_string())?.data_dir.clone();
+    let data_dir = state
+        .storage
+        .lock()
+        .map_err(|e| e.to_string())?
+        .data_dir
+        .clone();
     let mut known_hosts = load_known_hosts(&data_dir);
 
     if let Some(previous_host_key) = previous_host_key.filter(|value| value != &host_key) {
@@ -211,7 +221,12 @@ pub fn ssh_delete_known_host(
         return Err("Host key não pode ficar vazia".to_string());
     }
 
-    let data_dir = state.storage.lock().map_err(|e| e.to_string())?.data_dir.clone();
+    let data_dir = state
+        .storage
+        .lock()
+        .map_err(|e| e.to_string())?
+        .data_dir
+        .clone();
     let mut known_hosts = load_known_hosts(&data_dir);
     known_hosts.remove(&host_key);
     save_known_hosts(&data_dir, &known_hosts);
@@ -228,7 +243,12 @@ pub fn ssh_trust_host(
     fingerprint: String,
 ) -> Result<(), String> {
     let host = trim_owned(host);
-    let data_dir = state.storage.lock().map_err(|e| e.to_string())?.data_dir.clone();
+    let data_dir = state
+        .storage
+        .lock()
+        .map_err(|e| e.to_string())?
+        .data_dir
+        .clone();
     let mut known_hosts = load_known_hosts(&data_dir);
     known_hosts.insert(format_host_key(&host, port), fingerprint);
     save_known_hosts(&data_dir, &known_hosts);
@@ -246,16 +266,29 @@ pub async fn ssh_health_check(
     let host = trim_owned(host);
     let timeout_duration = Duration::from_millis(timeout_ms.unwrap_or(4000));
     let host_key = format_host_key(&host, port);
-    let data_dir = state.storage.lock().map_err(|e| e.to_string())?.data_dir.clone();
+    let data_dir = state
+        .storage
+        .lock()
+        .map_err(|e| e.to_string())?
+        .data_dir
+        .clone();
     let known_hosts = load_known_hosts(&data_dir);
     let stored_fingerprint = known_hosts.get(&host_key).cloned();
 
     let started = std::time::Instant::now();
-    let tcp_result = timeout(timeout_duration, tokio::net::TcpStream::connect((host.as_str(), port))).await;
+    let tcp_result = timeout(
+        timeout_duration,
+        tokio::net::TcpStream::connect((host.as_str(), port)),
+    )
+    .await;
     let (reachable, latency_ms, tcp_error) = match tcp_result {
         Ok(Ok(_)) => (true, Some(started.elapsed().as_millis() as u64), None),
         Ok(Err(err)) => (false, None, Some(err.to_string())),
-        Err(_) => (false, None, Some("Tempo esgotado ao conectar na porta SSH".to_string())),
+        Err(_) => (
+            false,
+            None,
+            Some("Tempo esgotado ao conectar na porta SSH".to_string()),
+        ),
     };
 
     if !reachable {
@@ -270,7 +303,9 @@ pub async fn ssh_health_check(
         });
     }
 
-    match fetch_server_fingerprint(&host, port, ssh_compat_preset.as_deref(), timeout_duration).await {
+    match fetch_server_fingerprint(&host, port, ssh_compat_preset.as_deref(), timeout_duration)
+        .await
+    {
         Ok(fingerprint) => {
             let fingerprint_status = match stored_fingerprint.as_deref() {
                 Some(stored) if stored == fingerprint => "match",
@@ -321,16 +356,13 @@ where
         .map_err(|e| e.to_string())?;
 
     if identities.is_empty() {
-        return Err(
-            "O agente SSH não possui identidades carregadas.\n\
+        return Err("O agente SSH não possui identidades carregadas.\n\
              Execute: ssh-add ~/.ssh/id_rsa  (ou o caminho da sua chave)"
-                .into(),
-        );
+            .into());
     }
 
     for identity in identities {
-        let (returned_agent, result) =
-            session.authenticate_future(username, identity, agent).await;
+        let (returned_agent, result) = session.authenticate_future(username, identity, agent).await;
         agent = returned_agent;
         match result {
             Ok(true) => return Ok(true),
@@ -351,6 +383,7 @@ fn ssh_log_error(context: String, error: impl std::fmt::Display) -> String {
 // ─── Comandos Tauri ───────────────────────────────────────────────────────────
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // Contrato IPC Tauri: argumentos serializados individualmente.
 pub async fn ssh_connect(
     state: tauri::State<'_, crate::AppState>,
     app: AppHandle,
@@ -386,7 +419,11 @@ pub async fn ssh_connect(
     // Rate limit por host: evita flood de tentativas de conexão a um único alvo.
     state
         .rate_limiter
-        .check(&format!("ssh_connect:{host}"), 5, std::time::Duration::from_secs(60))
+        .check(
+            &format!("ssh_connect:{host}"),
+            5,
+            std::time::Duration::from_secs(60),
+        )
         .map_err(|error| {
             log::warn!("ssh: conexão bloqueada por rate limit {connect_context}: {error}");
             error
@@ -406,7 +443,12 @@ pub async fn ssh_connect(
     let timeout = connection_timeout.unwrap_or(30);
     let config = build_ssh_config(preset, keepalive, timeout);
 
-    let data_dir = state.storage.lock().map_err(|e| e.to_string())?.data_dir.clone();
+    let data_dir = state
+        .storage
+        .lock()
+        .map_err(|e| e.to_string())?
+        .data_dir
+        .clone();
     let known_hosts_map = load_known_hosts(&data_dir);
 
     // Antes de conectar: se o host não está nos known_hosts, busca a fingerprint
@@ -415,12 +457,13 @@ pub async fn ssh_connect(
     let host_key_id = format_host_key(&host, port);
     if !known_hosts_map.contains_key(&host_key_id) {
         let timeout_dur = Duration::from_secs(10);
-        let fingerprint = fetch_server_fingerprint(&host, port, ssh_compat_preset.as_deref(), timeout_dur)
-            .await
-            .map_err(|e| {
-                log::error!("ssh: falha ao obter fingerprint {connect_context}: {e}");
-                e
-            })?;
+        let fingerprint =
+            fetch_server_fingerprint(&host, port, ssh_compat_preset.as_deref(), timeout_dur)
+                .await
+                .map_err(|e| {
+                    log::error!("ssh: falha ao obter fingerprint {connect_context}: {e}");
+                    e
+                })?;
         log::warn!("ssh: host desconhecido requer confirmação {connect_context}");
         return Err(format!("HOST_KEY_UNKNOWN:{fingerprint}"));
     }
@@ -448,21 +491,24 @@ pub async fn ssh_connect(
             session
                 .authenticate_password(&username, pwd.as_str())
                 .await
-                .map_err(|e| ssh_log_error(format!("ssh: erro ao autenticar com senha ({connect_context})"), e))?
+                .map_err(|e| {
+                    ssh_log_error(
+                        format!("ssh: erro ao autenticar com senha ({connect_context})"),
+                        e,
+                    )
+                })?
         }
 
         "privateKey" => {
             log::info!("ssh: autenticando com chave privada {connect_context}");
             let content = private_key_content.ok_or("Conteúdo da chave privada não informado")?;
             let passphrase = private_key_passphrase.as_ref().map(|z| z.as_str());
-            let key =
-                russh_keys::decode_secret_key(content.as_str(), passphrase)
-                    .map_err(|e| {
-                        ssh_log_error(
-                            format!("ssh: falha ao decodificar a chave privada ({connect_context})"),
-                            e,
-                        )
-                    })?;
+            let key = russh_keys::decode_secret_key(content.as_str(), passphrase).map_err(|e| {
+                ssh_log_error(
+                    format!("ssh: falha ao decodificar a chave privada ({connect_context})"),
+                    e,
+                )
+            })?;
             session
                 .authenticate_publickey(&username, Arc::new(key))
                 .await
@@ -509,7 +555,11 @@ pub async fn ssh_connect(
             }
         }
 
-        _ => return Err(format!("Método de autenticação desconhecido: {auth_method}")),
+        _ => {
+            return Err(format!(
+                "Método de autenticação desconhecido: {auth_method}"
+            ))
+        }
     };
 
     if !ok {
@@ -526,10 +576,7 @@ pub async fn ssh_connect(
     }
 
     // Persiste known_hosts atualizados após autenticação bem-sucedida
-    save_known_hosts(
-        &data_dir,
-        &*known_hosts.lock().map_err(|e| e.to_string())?,
-    );
+    save_known_hosts(&data_dir, &*known_hosts.lock().map_err(|e| e.to_string())?);
     log::info!("ssh: known_hosts persistido {connect_context}");
 
     let mut channel = session
@@ -538,22 +585,16 @@ pub async fn ssh_connect(
         .map_err(|e| ssh_log_error(format!("ssh: erro ao abrir canal ({connect_context})"), e))?;
 
     channel
-        .request_pty(
-            false,
-            "xterm-256color",
-            cols as u32,
-            rows as u32,
-            0,
-            0,
-            &[],
-        )
+        .request_pty(false, "xterm-256color", cols as u32, rows as u32, 0, 0, &[])
         .await
         .map_err(|e| ssh_log_error(format!("ssh: erro ao solicitar PTY ({connect_context})"), e))?;
 
-    channel
-        .request_shell(false)
-        .await
-        .map_err(|e| ssh_log_error(format!("ssh: erro ao solicitar shell ({connect_context})"), e))?;
+    channel.request_shell(false).await.map_err(|e| {
+        ssh_log_error(
+            format!("ssh: erro ao solicitar shell ({connect_context})"),
+            e,
+        )
+    })?;
 
     let (tx, mut rx) = mpsc::channel::<SshCommand>(64);
 
@@ -724,19 +765,25 @@ pub async fn ssh_copy_id(
 ) -> Result<(), String> {
     let host = trim_owned(host);
     let username = trim_owned(username);
-    state.rate_limiter.check("ssh_copy_id", 5, std::time::Duration::from_secs(60))?;
+    state
+        .rate_limiter
+        .check("ssh_copy_id", 5, std::time::Duration::from_secs(60))?;
     // Zeroiza credenciais sensíveis ao sair de escopo
     let password = Zeroizing::new(password);
 
-    let data_dir = state.storage.lock().map_err(|e| e.to_string())?.data_dir.clone();
+    let data_dir = state
+        .storage
+        .lock()
+        .map_err(|e| e.to_string())?
+        .data_dir
+        .clone();
     let known_hosts_map = load_known_hosts(&data_dir);
 
     // Rejeita host desconhecido — o usuário deve confirmar a fingerprint primeiro
     let host_key_id = format_host_key(&host, port);
     if !known_hosts_map.contains_key(&host_key_id) {
-        let fingerprint = fetch_server_fingerprint(&host, port, None, Duration::from_secs(10))
-            .await
-            .map_err(|e| e)?;
+        let fingerprint =
+            fetch_server_fingerprint(&host, port, None, Duration::from_secs(10)).await?;
         return Err(format!("HOST_KEY_UNKNOWN:{fingerprint}"));
     }
 
@@ -792,9 +839,7 @@ pub async fn ssh_copy_id(
 
     // Verifica se a chave já está presente (linha exata)
     let key_trimmed = public_key_content.trim();
-    let already_present = existing
-        .lines()
-        .any(|line| line.trim() == key_trimmed);
+    let already_present = existing.lines().any(|line| line.trim() == key_trimmed);
 
     if already_present {
         return Ok(());
@@ -867,7 +912,9 @@ async fn authenticate_session(
                 }
             }
         }
-        _ => Err(format!("Método de autenticação desconhecido: {auth_method}")),
+        _ => Err(format!(
+            "Método de autenticação desconhecido: {auth_method}"
+        )),
     }
 }
 
@@ -923,20 +970,29 @@ async fn socks5_handshake(
 ) -> Result<(String, u16, tokio::net::TcpStream), String> {
     // 1. Saudação do cliente
     let mut header = [0u8; 2];
-    stream.read_exact(&mut header).await.map_err(|e| e.to_string())?;
+    stream
+        .read_exact(&mut header)
+        .await
+        .map_err(|e| e.to_string())?;
     if header[0] != 5 {
         return Err("Protocolo não é SOCKS5".into());
     }
     let nmethods = header[1] as usize;
     let mut methods = vec![0u8; nmethods];
-    stream.read_exact(&mut methods).await.map_err(|e| e.to_string())?;
+    stream
+        .read_exact(&mut methods)
+        .await
+        .map_err(|e| e.to_string())?;
 
     // Aceita sem autenticação (método 0)
     stream.write_all(&[5, 0]).await.map_err(|e| e.to_string())?;
 
     // 2. Requisição de conexão
     let mut req = [0u8; 4];
-    stream.read_exact(&mut req).await.map_err(|e| e.to_string())?;
+    stream
+        .read_exact(&mut req)
+        .await
+        .map_err(|e| e.to_string())?;
     if req[0] != 5 || req[1] != 1 {
         return Err("Comando SOCKS5 não suportado (somente CONNECT)".into());
     }
@@ -945,21 +1001,33 @@ async fn socks5_handshake(
         1 => {
             // IPv4
             let mut addr = [0u8; 4];
-            stream.read_exact(&mut addr).await.map_err(|e| e.to_string())?;
+            stream
+                .read_exact(&mut addr)
+                .await
+                .map_err(|e| e.to_string())?;
             format!("{}.{}.{}.{}", addr[0], addr[1], addr[2], addr[3])
         }
         3 => {
             // Nome de domínio
             let len = stream.read_u8().await.map_err(|e| e.to_string())?;
             let mut domain = vec![0u8; len as usize];
-            stream.read_exact(&mut domain).await.map_err(|e| e.to_string())?;
+            stream
+                .read_exact(&mut domain)
+                .await
+                .map_err(|e| e.to_string())?;
             String::from_utf8_lossy(&domain).to_string()
         }
         4 => {
             // IPv6
             let mut addr = [0u8; 16];
-            stream.read_exact(&mut addr).await.map_err(|e| e.to_string())?;
-            let parts: Vec<String> = addr.chunks(2).map(|c| format!("{:02x}{:02x}", c[0], c[1])).collect();
+            stream
+                .read_exact(&mut addr)
+                .await
+                .map_err(|e| e.to_string())?;
+            let parts: Vec<String> = addr
+                .chunks(2)
+                .map(|c| format!("{:02x}{:02x}", c[0], c[1]))
+                .collect();
             parts.join(":")
         }
         t => return Err(format!("Tipo de endereço SOCKS5 não suportado: {t}")),
@@ -991,7 +1059,9 @@ fn load_db_value_by_id(conn: &Connection, table: &str, id: &str) -> Result<Optio
     let result: Result<String, _> = conn.query_row(&sql, params![id], |row| row.get(0));
 
     match result {
-        Ok(data) => serde_json::from_str(&data).map(Some).map_err(|e| e.to_string()),
+        Ok(data) => serde_json::from_str(&data)
+            .map(Some)
+            .map_err(|e| e.to_string()),
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
         Err(e) => Err(e.to_string()),
     }
@@ -1005,7 +1075,9 @@ fn load_app_settings(conn: &Connection) -> Result<Option<Value>, String> {
     );
 
     match result {
-        Ok(data) => serde_json::from_str(&data).map(Some).map_err(|e| e.to_string()),
+        Ok(data) => serde_json::from_str(&data)
+            .map(Some)
+            .map_err(|e| e.to_string()),
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
         Err(e) => Err(e.to_string()),
     }
@@ -1057,7 +1129,9 @@ pub async fn ssh_exec(
     snippet_id: String,
     cwd: Option<String>,
 ) -> Result<RemoteExecResult, String> {
-    state.rate_limiter.check("ssh_exec", 30, std::time::Duration::from_secs(60))?;
+    state
+        .rate_limiter
+        .check("ssh_exec", 30, std::time::Duration::from_secs(60))?;
     let (host, credential, ssh_key, settings, command) = {
         let conn = state
             .database
@@ -1143,24 +1217,41 @@ pub async fn ssh_exec(
     let keepalive_interval = host["keepAliveInterval"]
         .as_u64()
         .map(|value| value as u32)
-        .or_else(|| settings["ssh"]["keepAliveInterval"].as_u64().map(|value| value as u32))
+        .or_else(|| {
+            settings["ssh"]["keepAliveInterval"]
+                .as_u64()
+                .map(|value| value as u32)
+        })
         .unwrap_or(0);
     let connection_timeout = host["connectionTimeout"]
         .as_u64()
         .map(|value| value as u32)
-        .or_else(|| settings["ssh"]["inactivityTimeout"].as_u64().map(|value| value as u32))
+        .or_else(|| {
+            settings["ssh"]["inactivityTimeout"]
+                .as_u64()
+                .map(|value| value as u32)
+        })
         .unwrap_or(30);
 
     let config = build_ssh_config(preset, keepalive_interval, connection_timeout);
 
-    let data_dir = state.storage.lock().map_err(|e| e.to_string())?.data_dir.clone();
+    let data_dir = state
+        .storage
+        .lock()
+        .map_err(|e| e.to_string())?
+        .data_dir
+        .clone();
     let known_hosts_map = load_known_hosts(&data_dir);
     let known_hosts = Arc::new(std::sync::Mutex::new(known_hosts_map));
 
     let addr = format!("{}:{}", host_name, port);
-    let mut session = client::connect(config, addr, KnownHostsHandler::new(&host_name, port, known_hosts.clone()))
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut session = client::connect(
+        config,
+        addr,
+        KnownHostsHandler::new(&host_name, port, known_hosts.clone()),
+    )
+    .await
+    .map_err(|e| e.to_string())?;
 
     let ok = authenticate_session(
         &mut session,
@@ -1177,9 +1268,15 @@ pub async fn ssh_exec(
     }
     save_known_hosts(&data_dir, &*known_hosts.lock().map_err(|e| e.to_string())?);
 
-    let mut channel = session.channel_open_session().await.map_err(|e| e.to_string())?;
+    let mut channel = session
+        .channel_open_session()
+        .await
+        .map_err(|e| e.to_string())?;
     let start = std::time::Instant::now();
-    channel.exec(true, command.as_str()).await.map_err(|e| e.to_string())?;
+    channel
+        .exec(true, command.as_str())
+        .await
+        .map_err(|e| e.to_string())?;
 
     let mut stdout_buf = Vec::new();
     let mut stderr_buf = Vec::new();
@@ -1188,7 +1285,9 @@ pub async fn ssh_exec(
     loop {
         match channel.wait().await {
             Some(ChannelMsg::Data { ref data }) => stdout_buf.extend_from_slice(data.as_ref()),
-            Some(ChannelMsg::ExtendedData { ref data, .. }) => stderr_buf.extend_from_slice(data.as_ref()),
+            Some(ChannelMsg::ExtendedData { ref data, .. }) => {
+                stderr_buf.extend_from_slice(data.as_ref())
+            }
             Some(ChannelMsg::ExitStatus { exit_status: s }) => exit_status = s,
             Some(ChannelMsg::Close) | None => break,
             _ => {}
@@ -1220,6 +1319,7 @@ pub struct TunnelSpec {
 // ─── ssh_start_tunnel ─────────────────────────────────────────────────────────
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // Contrato IPC Tauri: argumentos serializados individualmente.
 pub async fn ssh_start_tunnel(
     state: tauri::State<'_, crate::AppState>,
     tunnel_id: String,
@@ -1257,16 +1357,29 @@ pub async fn ssh_start_tunnel(
     }
 
     let preset = ssh_compat_preset.as_deref().unwrap_or("modern");
-    let config = build_ssh_config(preset, keepalive_interval.unwrap_or(0), connection_timeout.unwrap_or(30));
+    let config = build_ssh_config(
+        preset,
+        keepalive_interval.unwrap_or(0),
+        connection_timeout.unwrap_or(30),
+    );
 
-    let data_dir = state.storage.lock().map_err(|e| e.to_string())?.data_dir.clone();
+    let data_dir = state
+        .storage
+        .lock()
+        .map_err(|e| e.to_string())?
+        .data_dir
+        .clone();
     let known_hosts_map = load_known_hosts(&data_dir);
     let known_hosts = Arc::new(std::sync::Mutex::new(known_hosts_map));
 
     let addr = format!("{}:{}", host, port);
-    let mut session = client::connect(config, addr, KnownHostsHandler::new(&host, port, known_hosts.clone()))
-        .await
-        .map_err(|e| e.to_string())?;
+    let mut session = client::connect(
+        config,
+        addr,
+        KnownHostsHandler::new(&host, port, known_hosts.clone()),
+    )
+    .await
+    .map_err(|e| e.to_string())?;
 
     let ok = authenticate_session(
         &mut session,
@@ -1287,7 +1400,8 @@ pub async fn ssh_start_tunnel(
 
     {
         let mut mgr = state.ssh.lock().await;
-        mgr.tunnels.insert(tunnel_id.clone(), LiveTunnel { shutdown_tx });
+        mgr.tunnels
+            .insert(tunnel_id.clone(), LiveTunnel { shutdown_tx });
     }
 
     let session_arc = Arc::new(tokio::sync::Mutex::new(session));
@@ -1421,8 +1535,7 @@ pub fn ssh_generate_key(
     use russh_keys::key::{KeyPair, SignatureHash};
 
     let pair: KeyPair = match key_type.as_str() {
-        "ed25519" => KeyPair::generate_ed25519()
-            .ok_or("Falha ao gerar chave Ed25519")?,
+        "ed25519" => KeyPair::generate_ed25519().ok_or("Falha ao gerar chave Ed25519")?,
         "ecdsa" => {
             use rand::rngs::OsRng;
             let signing_key = p256::ecdsa::SigningKey::random(&mut OsRng);
@@ -1471,4 +1584,111 @@ pub fn ssh_generate_key(
         public_key,
         fingerprint,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn snippet_scope_matches_global_host_and_exact_group() {
+        let host = json!({ "id": "host-1", "group": "Produção/Linux" });
+
+        assert!(snippet_applies_to_host(
+            &json!({ "scopeType": "global" }),
+            &host
+        ));
+        assert!(snippet_applies_to_host(
+            &json!({ "scopeType": "host", "scopeValue": "host-1" }),
+            &host
+        ));
+        assert!(!snippet_applies_to_host(
+            &json!({ "scopeType": "host", "scopeValue": "host-2" }),
+            &host
+        ));
+        assert!(snippet_applies_to_host(
+            &json!({ "scopeType": "group", "scopeValue": " Produção/Linux " }),
+            &host
+        ));
+        assert!(!snippet_applies_to_host(
+            &json!({ "scopeType": "group", "scopeValue": "Produção" }),
+            &host
+        ));
+        assert!(!snippet_applies_to_host(
+            &json!({ "scopeType": "desconhecido" }),
+            &host
+        ));
+    }
+
+    #[test]
+    fn renders_all_supported_snippet_tokens() {
+        let host = json!({
+            "host": "server.internal",
+            "port": 2222,
+            "username": "host-user",
+            "label": "Servidor Web",
+            "group": "Produção/Linux"
+        });
+        let credential = json!({ "username": "credential-user" });
+
+        let rendered = render_snippet_command(
+            "ssh -p ${port} ${user}@${host} # ${label} ${group} ${cwd}",
+            &host,
+            Some(&credential),
+            "/srv/app",
+        );
+
+        assert_eq!(
+            rendered,
+            "ssh -p 2222 credential-user@server.internal # Servidor Web Produção/Linux /srv/app"
+        );
+    }
+
+    #[test]
+    fn snippet_render_falls_back_to_host_user_and_default_port() {
+        let host = json!({ "host": "server.internal", "username": "ubuntu" });
+
+        assert_eq!(
+            render_snippet_command("${user}@${host}:${port}", &host, None, ""),
+            "ubuntu@server.internal:22"
+        );
+    }
+
+    #[test]
+    fn database_value_helpers_handle_found_missing_and_invalid_json() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE hosts (id TEXT PRIMARY KEY, data TEXT NOT NULL);\
+             CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);",
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO hosts (id, data) VALUES (?1, ?2)",
+            params!["host-1", r#"{"id":"host-1"}"#],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES ('app_settings', ?1)",
+            [r#"{"themeId":"dark"}"#],
+        )
+        .unwrap();
+
+        assert_eq!(
+            load_db_value_by_id(&conn, "hosts", "host-1").unwrap(),
+            Some(json!({ "id": "host-1" }))
+        );
+        assert_eq!(
+            load_db_value_by_id(&conn, "hosts", "missing").unwrap(),
+            None
+        );
+        assert_eq!(
+            load_app_settings(&conn).unwrap(),
+            Some(json!({ "themeId": "dark" }))
+        );
+
+        conn.execute("UPDATE hosts SET data = 'invalid' WHERE id = 'host-1'", [])
+            .unwrap();
+        assert!(load_db_value_by_id(&conn, "hosts", "host-1").is_err());
+    }
 }

@@ -2,7 +2,7 @@ use keyring::{Entry, Error as KeyringError};
 use rand::Rng;
 use rusqlite::{params, Connection};
 use serde_json::{json, Value};
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::Mutex;
 use tauri::State;
 
@@ -20,7 +20,7 @@ impl Database {
         &self.conn
     }
 
-    pub fn open(data_dir: &PathBuf) -> Result<Self, String> {
+    pub fn open(data_dir: &Path) -> Result<Self, String> {
         let key = Self::get_or_create_key(data_dir)?;
         let db_path = data_dir.join("vault.db");
 
@@ -40,15 +40,12 @@ impl Database {
     }
 
     fn try_open(db_path: &std::path::Path, key: &str) -> Result<Self, String> {
-        let conn = Connection::open(db_path)
-            .map_err(|e| format!("Falha ao abrir banco de dados: {e}"))?;
+        let conn =
+            Connection::open(db_path).map_err(|e| format!("Falha ao abrir banco de dados: {e}"))?;
 
         // Define a chave de criptografia do SQLCipher
-        conn.execute_batch(&format!(
-            "PRAGMA key = '{}';",
-            key.replace('\'', "''")
-        ))
-        .map_err(|e| format!("Falha ao definir chave do banco: {e}"))?;
+        conn.execute_batch(&format!("PRAGMA key = '{}';", key.replace('\'', "''")))
+            .map_err(|e| format!("Falha ao definir chave do banco: {e}"))?;
 
         // WAL para melhor performance em leituras concorrentes
         conn.execute_batch("PRAGMA journal_mode = WAL;")
@@ -61,7 +58,7 @@ impl Database {
         })
     }
 
-    fn get_or_create_key(data_dir: &PathBuf) -> Result<String, String> {
+    fn get_or_create_key(data_dir: &Path) -> Result<String, String> {
         let key_path = data_dir.join(".db_key");
         let db_path = data_dir.join("vault.db");
         let entry = Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_DB_KEY_ACCOUNT)
@@ -319,7 +316,8 @@ fn mirror_internal_rdp_settings(state: &State<AppState>, settings: &Value) -> Re
 #[tauri::command]
 pub fn db_clear_hosts(state: State<AppState>) -> Result<(), String> {
     let conn = state.database.conn.lock().map_err(|e| e.to_string())?;
-    conn.execute("DELETE FROM hosts", []).map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM hosts", [])
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -372,7 +370,8 @@ pub fn db_delete_credential(state: State<AppState>, id: String) -> Result<(), St
 #[tauri::command]
 pub fn db_clear_credentials(state: State<AppState>) -> Result<(), String> {
     let conn = state.database.conn.lock().map_err(|e| e.to_string())?;
-    conn.execute("DELETE FROM credentials", []).map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM credentials", [])
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -425,7 +424,8 @@ pub fn db_delete_ssh_key(state: State<AppState>, id: String) -> Result<(), Strin
 #[tauri::command]
 pub fn db_clear_ssh_keys(state: State<AppState>) -> Result<(), String> {
     let conn = state.database.conn.lock().map_err(|e| e.to_string())?;
-    conn.execute("DELETE FROM ssh_keys", []).map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM ssh_keys", [])
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -433,16 +433,16 @@ pub fn db_clear_ssh_keys(state: State<AppState>) -> Result<(), String> {
 
 #[tauri::command]
 pub fn db_add_connection_log(state: State<AppState>, log: Value) -> Result<(), String> {
-    let id           = log["id"].as_str().ok_or("log sem id")?;
-    let host_id      = log["hostId"].as_str().unwrap_or("");
-    let host_label   = log["hostLabel"].as_str().unwrap_or("");
+    let id = log["id"].as_str().ok_or("log sem id")?;
+    let host_id = log["hostId"].as_str().unwrap_or("");
+    let host_label = log["hostLabel"].as_str().unwrap_or("");
     let host_address = log["hostAddress"].as_str().unwrap_or("");
     let session_type = log["sessionType"].as_str().unwrap_or("terminal");
     let connected_at = log["connectedAt"].as_str().unwrap_or("");
     let disconnected_at = log["disconnectedAt"].as_str();
-    let duration_secs   = log["durationSecs"].as_i64();
-    let status          = log["status"].as_str().unwrap_or("connected");
-    let message         = log["message"].as_str();
+    let duration_secs = log["durationSecs"].as_i64();
+    let status = log["status"].as_str().unwrap_or("connected");
+    let message = log["message"].as_str();
 
     let conn = state.database.conn.lock().map_err(|e| e.to_string())?;
     conn.execute(
@@ -467,7 +467,10 @@ pub fn db_add_connection_log(state: State<AppState>, log: Value) -> Result<(), S
 }
 
 #[tauri::command]
-pub fn db_get_connection_logs(state: State<AppState>, limit: Option<i64>) -> Result<Vec<Value>, String> {
+pub fn db_get_connection_logs(
+    state: State<AppState>,
+    limit: Option<i64>,
+) -> Result<Vec<Value>, String> {
     let limit = limit.unwrap_or(200);
     let conn = state.database.conn.lock().map_err(|e| e.to_string())?;
     let mut stmt = conn
@@ -505,6 +508,111 @@ pub fn db_get_connection_logs(state: State<AppState>, limit: Option<i64>) -> Res
 #[tauri::command]
 pub fn db_clear_connection_logs(state: State<AppState>) -> Result<(), String> {
     let conn = state.database.conn.lock().map_err(|e| e.to_string())?;
-    conn.execute("DELETE FROM connection_logs", []).map_err(|e| e.to_string())?;
+    conn.execute("DELETE FROM connection_logs", [])
+        .map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn table_columns(conn: &Connection, table: &str) -> Vec<String> {
+        let mut statement = conn
+            .prepare(&format!("PRAGMA table_info({table})"))
+            .unwrap();
+        statement
+            .query_map([], |row| row.get::<_, String>(1))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap()
+    }
+
+    #[test]
+    fn migration_creates_all_tables_and_connection_log_index() {
+        let conn = Connection::open_in_memory().unwrap();
+
+        Database::migrate(&conn).unwrap();
+
+        for table in [
+            "hosts",
+            "settings",
+            "credentials",
+            "ssh_keys",
+            "connection_logs",
+        ] {
+            let exists: bool = conn
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name=?1)",
+                    [table],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert!(exists, "tabela {table} deveria existir");
+        }
+
+        let index_exists: bool = conn
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_connection_logs_connected_at')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(index_exists);
+        assert!(table_columns(&conn, "connection_logs").contains(&"message".to_string()));
+    }
+
+    #[test]
+    fn migration_is_idempotent() {
+        let conn = Connection::open_in_memory().unwrap();
+
+        Database::migrate(&conn).unwrap();
+        Database::migrate(&conn).unwrap();
+
+        assert_eq!(
+            table_columns(&conn, "connection_logs")
+                .iter()
+                .filter(|column| column.as_str() == "message")
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn migration_adds_message_column_to_legacy_schema() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE connection_logs (\
+                id TEXT PRIMARY KEY,\
+                host_id TEXT NOT NULL,\
+                host_label TEXT NOT NULL,\
+                host_address TEXT NOT NULL,\
+                session_type TEXT NOT NULL,\
+                connected_at TEXT NOT NULL,\
+                disconnected_at TEXT,\
+                duration_secs INTEGER,\
+                status TEXT NOT NULL\
+            );",
+        )
+        .unwrap();
+
+        Database::migrate(&conn).unwrap();
+
+        assert!(table_columns(&conn, "connection_logs").contains(&"message".to_string()));
+    }
+
+    #[test]
+    fn legacy_key_file_removal_is_idempotent() {
+        let base =
+            std::env::temp_dir().join(format!("mpcm-database-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&base).unwrap();
+        let key_path = base.join(".db_key");
+        std::fs::write(&key_path, "legacy-secret").unwrap();
+
+        Database::remove_legacy_key_file(&key_path).unwrap();
+        Database::remove_legacy_key_file(&key_path).unwrap();
+
+        assert!(!key_path.exists());
+        let _ = std::fs::remove_dir_all(base);
+    }
 }

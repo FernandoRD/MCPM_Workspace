@@ -1,5 +1,5 @@
-mod app_logging;
 mod app_clipboard;
+mod app_logging;
 mod credentials;
 mod crypto;
 mod database;
@@ -19,15 +19,15 @@ mod updates;
 mod vnc;
 
 use database::Database;
-use session_bootstrap::QuickConnectBootstrapPayload;
 use rdp::RdpManager;
+use session_bootstrap::QuickConnectBootstrapPayload;
 use sftp::SftpManager;
 use ssh::SshManager;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use storage::Storage;
 use telnet::TelnetManager;
 use vnc::VncManager;
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 
 pub struct AppState {
     pub storage: Mutex<Storage>,
@@ -46,11 +46,10 @@ pub struct AppState {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let storage = Storage::new().expect("Falha ao inicializar storage");
-    let log_path = app_logging::init(&storage.data_dir)
-        .expect("Falha ao inicializar logging persistente");
+    let log_path =
+        app_logging::init(&storage.data_dir).expect("Falha ao inicializar logging persistente");
     log::info!("logging inicializado em {}", log_path.display());
-    let database =
-        Database::open(&storage.data_dir).expect("Falha ao inicializar banco de dados");
+    let database = Database::open(&storage.data_dir).expect("Falha ao inicializar banco de dados");
 
     system_terminal::cleanup_old_temp_keys();
 

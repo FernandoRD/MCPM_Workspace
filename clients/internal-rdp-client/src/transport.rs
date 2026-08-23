@@ -67,7 +67,11 @@ impl MemoryTransport {
 }
 
 impl Transport for MemoryTransport {
-    fn connect(&mut self, endpoint: &RdpEndpoint, _timeout: Duration) -> Result<(), TransportError> {
+    fn connect(
+        &mut self,
+        endpoint: &RdpEndpoint,
+        _timeout: Duration,
+    ) -> Result<(), TransportError> {
         self.connected = true;
         self.endpoint = Some(endpoint.clone());
         Ok(())
@@ -123,9 +127,9 @@ impl Transport for TcpTransport {
             }
         }
 
-        Err(TransportError::ConnectFailed(
-            last_error.unwrap_or_else(|| "nenhum endereço resolvido para conexão".to_string()),
-        ))
+        Err(TransportError::ConnectFailed(last_error.unwrap_or_else(
+            || "nenhum endereço resolvido para conexão".to_string(),
+        )))
     }
 
     fn send(&mut self, bytes: &[u8]) -> Result<(), TransportError> {
@@ -143,9 +147,7 @@ impl Transport for TcpTransport {
 
 fn read_tpkt_packet(stream: &mut TcpStream) -> Result<Vec<u8>, TransportError> {
     let mut header = [0u8; 4];
-    stream
-        .read_exact(&mut header)
-        .map_err(map_receive_error)?;
+    stream.read_exact(&mut header).map_err(map_receive_error)?;
 
     if header[0] != 3 {
         return Err(TransportError::ReceiveFailed(
@@ -163,9 +165,7 @@ fn read_tpkt_packet(stream: &mut TcpStream) -> Result<Vec<u8>, TransportError> {
     let mut packet = header.to_vec();
     let remaining_length = declared_length - 4;
     let mut payload = vec![0u8; remaining_length];
-    stream
-        .read_exact(&mut payload)
-        .map_err(map_receive_error)?;
+    stream.read_exact(&mut payload).map_err(map_receive_error)?;
     packet.extend_from_slice(&payload);
 
     Ok(packet)
@@ -199,7 +199,8 @@ mod tests {
 
             let mut request_header = [0u8; 4];
             socket.read_exact(&mut request_header).unwrap();
-            let request_length = u16::from_be_bytes([request_header[2], request_header[3]]) as usize;
+            let request_length =
+                u16::from_be_bytes([request_header[2], request_header[3]]) as usize;
             let mut request_payload = vec![0u8; request_length - 4];
             socket.read_exact(&mut request_payload).unwrap();
 
@@ -207,10 +208,8 @@ mod tests {
             full_request.extend_from_slice(&request_payload);
 
             let confirm_packet = vec![
-                0x03, 0x00, 0x00, 0x13,
-                0x0e, 0xd0, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x02, 0x00, 0x08, 0x00,
-                0x01, 0x00, 0x00, 0x00,
+                0x03, 0x00, 0x00, 0x13, 0x0e, 0xd0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x08,
+                0x00, 0x01, 0x00, 0x00, 0x00,
             ];
             socket.write_all(&confirm_packet).unwrap();
 
@@ -224,19 +223,22 @@ mod tests {
                 Duration::from_secs(2),
             )
             .unwrap();
-        transport.send(&[0x03, 0x00, 0x00, 0x08, 0xAA, 0xBB, 0xCC, 0xDD]).unwrap();
+        transport
+            .send(&[0x03, 0x00, 0x00, 0x08, 0xAA, 0xBB, 0xCC, 0xDD])
+            .unwrap();
 
         let received = transport.receive().unwrap();
         let sent_request = server.join().unwrap();
 
-        assert_eq!(sent_request, vec![0x03, 0x00, 0x00, 0x08, 0xAA, 0xBB, 0xCC, 0xDD]);
+        assert_eq!(
+            sent_request,
+            vec![0x03, 0x00, 0x00, 0x08, 0xAA, 0xBB, 0xCC, 0xDD]
+        );
         assert_eq!(
             received,
             vec![
-                0x03, 0x00, 0x00, 0x13,
-                0x0e, 0xd0, 0x00, 0x00, 0x00, 0x00, 0x00,
-                0x02, 0x00, 0x08, 0x00,
-                0x01, 0x00, 0x00, 0x00,
+                0x03, 0x00, 0x00, 0x13, 0x0e, 0xd0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x08,
+                0x00, 0x01, 0x00, 0x00, 0x00,
             ]
         );
     }

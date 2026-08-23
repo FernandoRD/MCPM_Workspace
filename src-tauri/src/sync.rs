@@ -51,9 +51,8 @@ fn s3_auth_headers(
     let canonical_headers = format!(
         "content-type:application/json\nhost:{host}\nx-amz-content-sha256:{payload_hash}\nx-amz-date:{datetime}\n"
     );
-    let canonical_request = format!(
-        "{method}\n{path}\n\n{canonical_headers}\n{signed_headers}\n{payload_hash}"
-    );
+    let canonical_request =
+        format!("{method}\n{path}\n\n{canonical_headers}\n{signed_headers}\n{payload_hash}");
 
     // String to sign
     let scope = format!("{date}/{region}/s3/aws4_request");
@@ -80,11 +79,12 @@ pub async fn sync_gist_push(
     gist_id: Option<String>,
     payload_json: String,
 ) -> Result<String, String> {
-    state.rate_limiter.check("sync_gist_push", 5, std::time::Duration::from_secs(60))?;
-    let _sync_guard = state
-        .sync_lock
-        .try_lock()
-        .map_err(|_| "Sincronização já em andamento. Aguarde a operação anterior terminar.".to_string())?;
+    state
+        .rate_limiter
+        .check("sync_gist_push", 5, std::time::Duration::from_secs(60))?;
+    let _sync_guard = state.sync_lock.try_lock().map_err(|_| {
+        "Sincronização já em andamento. Aguarde a operação anterior terminar.".to_string()
+    })?;
     log::info!("sync: gist_push iniciado");
     validate_encrypted_payload(&payload_json)?;
     let client = build_client()?;
@@ -100,7 +100,10 @@ pub async fn sync_gist_push(
     };
 
     let (url, req) = match &gist_id {
-        None => ("https://api.github.com/gists".to_string(), client.post("https://api.github.com/gists")),
+        None => (
+            "https://api.github.com/gists".to_string(),
+            client.post("https://api.github.com/gists"),
+        ),
         Some(id) => {
             let u = format!("https://api.github.com/gists/{id}");
             (u.clone(), client.patch(&u))
@@ -134,12 +137,17 @@ pub async fn sync_gist_push(
 }
 
 #[tauri::command]
-pub async fn sync_gist_pull(state: State<'_, AppState>, token: String, gist_id: String) -> Result<String, String> {
-    state.rate_limiter.check("sync_gist_pull", 5, std::time::Duration::from_secs(60))?;
-    let _sync_guard = state
-        .sync_lock
-        .try_lock()
-        .map_err(|_| "Sincronização já em andamento. Aguarde a operação anterior terminar.".to_string())?;
+pub async fn sync_gist_pull(
+    state: State<'_, AppState>,
+    token: String,
+    gist_id: String,
+) -> Result<String, String> {
+    state
+        .rate_limiter
+        .check("sync_gist_pull", 5, std::time::Duration::from_secs(60))?;
+    let _sync_guard = state.sync_lock.try_lock().map_err(|_| {
+        "Sincronização já em andamento. Aguarde a operação anterior terminar.".to_string()
+    })?;
     log::info!("sync: gist_pull iniciado");
     let client = build_client()?;
     let url = format!("https://api.github.com/gists/{gist_id}");
@@ -212,11 +220,12 @@ pub async fn sync_webdav_push(
     path: String,
     payload_json: String,
 ) -> Result<(), String> {
-    state.rate_limiter.check("sync_webdav_push", 5, std::time::Duration::from_secs(60))?;
-    let _sync_guard = state
-        .sync_lock
-        .try_lock()
-        .map_err(|_| "Sincronização já em andamento. Aguarde a operação anterior terminar.".to_string())?;
+    state
+        .rate_limiter
+        .check("sync_webdav_push", 5, std::time::Duration::from_secs(60))?;
+    let _sync_guard = state.sync_lock.try_lock().map_err(|_| {
+        "Sincronização já em andamento. Aguarde a operação anterior terminar.".to_string()
+    })?;
     log::info!("sync: webdav_push iniciado");
     validate_encrypted_payload(&payload_json)?;
     let client = build_client()?;
@@ -253,11 +262,12 @@ pub async fn sync_webdav_pull(
     password: String,
     path: String,
 ) -> Result<String, String> {
-    state.rate_limiter.check("sync_webdav_pull", 5, std::time::Duration::from_secs(60))?;
-    let _sync_guard = state
-        .sync_lock
-        .try_lock()
-        .map_err(|_| "Sincronização já em andamento. Aguarde a operação anterior terminar.".to_string())?;
+    state
+        .rate_limiter
+        .check("sync_webdav_pull", 5, std::time::Duration::from_secs(60))?;
+    let _sync_guard = state.sync_lock.try_lock().map_err(|_| {
+        "Sincronização já em andamento. Aguarde a operação anterior terminar.".to_string()
+    })?;
     log::info!("sync: webdav_pull iniciado");
     let client = build_client()?;
     let base_url = ensure_https_url(&url, "WebDAV")?;
@@ -318,11 +328,12 @@ pub async fn sync_s3_push(
     secret_key: String,
     payload_json: String,
 ) -> Result<(), String> {
-    state.rate_limiter.check("sync_s3_push", 5, std::time::Duration::from_secs(60))?;
-    let _sync_guard = state
-        .sync_lock
-        .try_lock()
-        .map_err(|_| "Sincronização já em andamento. Aguarde a operação anterior terminar.".to_string())?;
+    state
+        .rate_limiter
+        .check("sync_s3_push", 5, std::time::Duration::from_secs(60))?;
+    let _sync_guard = state.sync_lock.try_lock().map_err(|_| {
+        "Sincronização já em andamento. Aguarde a operação anterior terminar.".to_string()
+    })?;
     log::info!("sync: s3_push iniciado");
     validate_encrypted_payload(&payload_json)?;
     let client = build_client()?;
@@ -330,8 +341,15 @@ pub async fn sync_s3_push(
     let (host, url) = s3_url(&endpoint, &bucket, &region)?;
     let path = format!("/{bucket}/{S3_OBJECT_KEY}");
 
-    let (auth, amz_date, content_sha256) =
-        s3_auth_headers("PUT", &host, &path, &region, &access_key, &secret_key, payload);
+    let (auth, amz_date, content_sha256) = s3_auth_headers(
+        "PUT",
+        &host,
+        &path,
+        &region,
+        &access_key,
+        &secret_key,
+        payload,
+    );
 
     let resp = client
         .put(&url)
@@ -362,11 +380,12 @@ pub async fn sync_s3_pull(
     access_key: String,
     secret_key: String,
 ) -> Result<String, String> {
-    state.rate_limiter.check("sync_s3_pull", 5, std::time::Duration::from_secs(60))?;
-    let _sync_guard = state
-        .sync_lock
-        .try_lock()
-        .map_err(|_| "Sincronização já em andamento. Aguarde a operação anterior terminar.".to_string())?;
+    state
+        .rate_limiter
+        .check("sync_s3_pull", 5, std::time::Duration::from_secs(60))?;
+    let _sync_guard = state.sync_lock.try_lock().map_err(|_| {
+        "Sincronização já em andamento. Aguarde a operação anterior terminar.".to_string()
+    })?;
     log::info!("sync: s3_pull iniciado");
     let client = build_client()?;
     let (host, url) = s3_url(&endpoint, &bucket, &region)?;
@@ -399,12 +418,17 @@ pub async fn sync_s3_pull(
 // ── Endpoint Customizado ──────────────────────────────────────────────────────
 
 #[tauri::command]
-pub async fn sync_custom_push(state: State<'_, AppState>, url: String, payload_json: String) -> Result<(), String> {
-    state.rate_limiter.check("sync_custom_push", 5, std::time::Duration::from_secs(60))?;
-    let _sync_guard = state
-        .sync_lock
-        .try_lock()
-        .map_err(|_| "Sincronização já em andamento. Aguarde a operação anterior terminar.".to_string())?;
+pub async fn sync_custom_push(
+    state: State<'_, AppState>,
+    url: String,
+    payload_json: String,
+) -> Result<(), String> {
+    state
+        .rate_limiter
+        .check("sync_custom_push", 5, std::time::Duration::from_secs(60))?;
+    let _sync_guard = state.sync_lock.try_lock().map_err(|_| {
+        "Sincronização já em andamento. Aguarde a operação anterior terminar.".to_string()
+    })?;
     log::info!("sync: custom_push iniciado");
     validate_encrypted_payload(&payload_json)?;
     let client = build_client()?;
@@ -429,11 +453,12 @@ pub async fn sync_custom_push(state: State<'_, AppState>, url: String, payload_j
 
 #[tauri::command]
 pub async fn sync_custom_pull(state: State<'_, AppState>, url: String) -> Result<String, String> {
-    state.rate_limiter.check("sync_custom_pull", 5, std::time::Duration::from_secs(60))?;
-    let _sync_guard = state
-        .sync_lock
-        .try_lock()
-        .map_err(|_| "Sincronização já em andamento. Aguarde a operação anterior terminar.".to_string())?;
+    state
+        .rate_limiter
+        .check("sync_custom_pull", 5, std::time::Duration::from_secs(60))?;
+    let _sync_guard = state.sync_lock.try_lock().map_err(|_| {
+        "Sincronização já em andamento. Aguarde a operação anterior terminar.".to_string()
+    })?;
     log::info!("sync: custom_pull iniciado");
     let client = build_client()?;
     let validated_url = ensure_https_url(&url, "endpoint customizado")?;
@@ -479,8 +504,7 @@ fn validate_encrypted_payload(payload: &str) -> Result<(), String> {
 }
 
 fn ensure_https_url(raw_url: &str, label: &str) -> Result<reqwest::Url, String> {
-    let url = reqwest::Url::parse(raw_url.trim())
-        .map_err(|e| format!("{label} inválido: {e}"))?;
+    let url = reqwest::Url::parse(raw_url.trim()).map_err(|e| format!("{label} inválido: {e}"))?;
 
     if url.scheme() != "https" {
         return Err(format!(
@@ -496,4 +520,152 @@ fn build_client() -> Result<Client, String> {
         .timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|e| format!("Falha ao criar cliente HTTP: {e}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── validate_encrypted_payload ────────────────────────────────────────────
+
+    #[test]
+    fn accepts_payload_with_app_marker() {
+        let payload = r#"{"app":"ssh-vault","version":1,"hosts":[],"credentials":[],"sshKeys":[]}"#;
+        assert!(validate_encrypted_payload(payload).is_ok());
+    }
+
+    #[test]
+    fn rejects_payload_that_is_not_json() {
+        let err = validate_encrypted_payload("isso nao é json").unwrap_err();
+        assert!(err.contains("não é um JSON válido"));
+    }
+
+    #[test]
+    fn rejects_payload_without_app_marker() {
+        let err = validate_encrypted_payload(r#"{"hosts":[]}"#).unwrap_err();
+        assert!(err.contains("campo 'app' ausente ou incorreto"));
+    }
+
+    #[test]
+    fn rejects_payload_with_wrong_app_marker() {
+        let err = validate_encrypted_payload(r#"{"app":"outro-app"}"#).unwrap_err();
+        assert!(err.contains("campo 'app' ausente ou incorreto"));
+    }
+
+    // ── ensure_https_url ──────────────────────────────────────────────────────
+
+    #[test]
+    fn accepts_https_url_and_trims_whitespace() {
+        let url = ensure_https_url("  https://example.com/dav  ", "WebDAV").unwrap();
+        assert_eq!(url.as_str(), "https://example.com/dav");
+    }
+
+    #[test]
+    fn rejects_http_url() {
+        let err = ensure_https_url("http://example.com/dav", "WebDAV").unwrap_err();
+        assert!(err.contains("deve usar HTTPS"));
+    }
+
+    #[test]
+    fn rejects_malformed_url() {
+        let err = ensure_https_url("não é uma url", "WebDAV").unwrap_err();
+        assert!(err.contains("WebDAV inválido"));
+    }
+
+    // ── s3_url ────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn s3_url_uses_regional_aws_endpoint_when_empty() {
+        let (host, url) = s3_url("", "meu-bucket", "us-east-1").unwrap();
+        assert_eq!(host, "s3.us-east-1.amazonaws.com");
+        assert_eq!(
+            url,
+            "https://s3.us-east-1.amazonaws.com/meu-bucket/vault.json"
+        );
+    }
+
+    #[test]
+    fn s3_url_uses_custom_endpoint_and_strips_trailing_slash() {
+        let (host, url) = s3_url("https://minio.local:9000/", "backups", "us-east-1").unwrap();
+        assert_eq!(host, "minio.local");
+        assert_eq!(url, "https://minio.local:9000/backups/vault.json");
+    }
+
+    #[test]
+    fn s3_url_rejects_http_endpoint() {
+        let err = s3_url("http://minio.local:9000", "backups", "us-east-1").unwrap_err();
+        assert!(err.contains("deve usar HTTPS"));
+    }
+
+    // ── Assinatura AWS V4 ─────────────────────────────────────────────────────
+
+    #[test]
+    fn sha256_hex_matches_known_digest() {
+        // Digest SHA-256 da string vazia (vetor conhecido)
+        assert_eq!(
+            sha256_hex(b""),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+    }
+
+    #[test]
+    fn hmac_sha256_matches_rfc4231_style_vector() {
+        // Vetor conhecido: HMAC-SHA256("key", "The quick brown fox ...")
+        let result = hmac_sha256(b"key", "The quick brown fox jumps over the lazy dog");
+        assert_eq!(
+            hex::encode(result),
+            "f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8"
+        );
+    }
+
+    #[test]
+    fn aws_signing_key_is_deterministic_and_32_bytes() {
+        let k1 = aws_signing_key("segredo", "20240101", "us-east-1");
+        let k2 = aws_signing_key("segredo", "20240101", "us-east-1");
+        let k3 = aws_signing_key("segredo", "20240102", "us-east-1");
+
+        assert_eq!(k1.len(), 32);
+        assert_eq!(k1, k2);
+        assert_ne!(k1, k3);
+    }
+
+    #[test]
+    fn s3_auth_headers_produces_verifiable_signature() {
+        let host = "s3.us-east-1.amazonaws.com";
+        let path = "/meu-bucket/vault.json";
+        let region = "us-east-1";
+        let access_key = "AKIAEXEMPLO";
+        let secret_key = "segredo-exemplo";
+        let payload = br#"{"app":"ssh-vault"}"#;
+
+        let (auth, amz_date, content_sha256) =
+            s3_auth_headers("PUT", host, path, region, access_key, secret_key, payload);
+
+        // O payload hash retornado deve ser o SHA-256 do corpo
+        assert_eq!(content_sha256, sha256_hex(payload));
+        // Formato do x-amz-date: YYYYMMDDTHHMMSSZ
+        assert_eq!(amz_date.len(), 16);
+        assert!(amz_date.ends_with('Z'));
+
+        // Recomputa a assinatura a partir do amz_date retornado e compara
+        let date = &amz_date[..8];
+        let signed_headers = "content-type;host;x-amz-content-sha256;x-amz-date";
+        let canonical_headers = format!(
+            "content-type:application/json\nhost:{host}\nx-amz-content-sha256:{content_sha256}\nx-amz-date:{amz_date}\n"
+        );
+        let canonical_request =
+            format!("PUT\n{path}\n\n{canonical_headers}\n{signed_headers}\n{content_sha256}");
+        let scope = format!("{date}/{region}/s3/aws4_request");
+        let string_to_sign = format!(
+            "AWS4-HMAC-SHA256\n{amz_date}\n{scope}\n{}",
+            sha256_hex(canonical_request.as_bytes())
+        );
+        let signing_key = aws_signing_key(secret_key, date, region);
+        let expected_signature = hex::encode(hmac_sha256(&signing_key, &string_to_sign));
+        let expected_auth = format!(
+            "AWS4-HMAC-SHA256 Credential={access_key}/{scope}, SignedHeaders={signed_headers}, Signature={expected_signature}"
+        );
+
+        assert_eq!(auth, expected_auth);
+    }
 }

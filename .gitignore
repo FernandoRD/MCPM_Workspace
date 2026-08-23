@@ -11,6 +11,7 @@ melhorias.txt*
 node_modules
 dist
 dist-ssr
+coverage
 *.local
 
 # Rust build artifacts

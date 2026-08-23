@@ -8,7 +8,6 @@
 ///   5. Na importação: mesma senha → mesma chave → decifra
 ///
 /// A senha mestra NUNCA sai do dispositivo.
-
 use aes_gcm::{
     aead::{Aead, KeyInit},
     Aes256Gcm, Key, Nonce,
@@ -131,7 +130,10 @@ pub fn verify_password(payload: &EncryptedPayload, password: &str) -> bool {
 /// Cifra um JSON de credenciais com a senha mestra.
 /// Retorna o `EncryptedPayload` serializado como JSON.
 #[tauri::command]
-pub fn encrypt_credentials(credentials_json: String, master_password: String) -> Result<String, String> {
+pub fn encrypt_credentials(
+    credentials_json: String,
+    master_password: String,
+) -> Result<String, String> {
     let payload = encrypt(&credentials_json, &master_password)?;
     serde_json::to_string(&payload).map_err(|e| e.to_string())
 }

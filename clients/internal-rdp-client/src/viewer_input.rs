@@ -14,6 +14,7 @@ pub struct MouseInputState {
 /// `display_w` / `display_h` — tamanho da janela minifb (coordenadas do mouse vindas da janela).
 /// `buf_w`     / `buf_h`     — tamanho do buffer RDP (usado para mapear coordenadas globais).
 /// Quando display == buffer não há escala.
+#[allow(clippy::too_many_arguments)] // Dimensões e offsets pertencem ao mapeamento gráfico.
 pub fn collect_window_input(
     window: &Window,
     display_w: usize,
@@ -38,11 +39,22 @@ pub fn collect_window_input(
         }
     }
 
-    collect_mouse_input(window, display_w, display_h, buf_w, buf_h, mouse_state, &mut events, offset_x, offset_y);
+    collect_mouse_input(
+        window,
+        display_w,
+        display_h,
+        buf_w,
+        buf_h,
+        mouse_state,
+        &mut events,
+        offset_x,
+        offset_y,
+    );
 
     events
 }
 
+#[allow(clippy::too_many_arguments)] // Dimensões e offsets pertencem ao mapeamento gráfico.
 fn collect_mouse_input(
     window: &Window,
     display_w: usize,
@@ -57,22 +69,27 @@ fn collect_mouse_input(
     let left_down = window.get_mouse_down(MouseButton::Left);
     let middle_down = window.get_mouse_down(MouseButton::Middle);
     let right_down = window.get_mouse_down(MouseButton::Right);
-    let current_position = window
-        .get_mouse_pos(MouseMode::Discard)
-        .map(|(x, y)| normalize_mouse_position(x, y, display_w, display_h, buf_w, buf_h, offset_x, offset_y));
+    let current_position = window.get_mouse_pos(MouseMode::Discard).map(|(x, y)| {
+        normalize_mouse_position(x, y, display_w, display_h, buf_w, buf_h, offset_x, offset_y)
+    });
 
     if let Some(position) = current_position {
         if mouse_state.last_position != Some(position) {
-            events.push(mouse_event(current_move_flags(left_down, middle_down, right_down), position));
+            events.push(mouse_event(
+                current_move_flags(left_down, middle_down, right_down),
+                position,
+            ));
             mouse_state.last_position = Some(position);
         }
     }
 
     let button_position = current_position
         .or_else(|| {
-            window
-                .get_mouse_pos(MouseMode::Clamp)
-                .map(|(x, y)| normalize_mouse_position(x, y, display_w, display_h, buf_w, buf_h, offset_x, offset_y))
+            window.get_mouse_pos(MouseMode::Clamp).map(|(x, y)| {
+                normalize_mouse_position(
+                    x, y, display_w, display_h, buf_w, buf_h, offset_x, offset_y,
+                )
+            })
         })
         .or(mouse_state.last_position)
         .unwrap_or((0, 0));
@@ -203,6 +220,7 @@ fn current_move_flags(left_down: bool, middle_down: bool, right_down: bool) -> P
     flags
 }
 
+#[allow(clippy::too_many_arguments)] // Dimensões e offsets pertencem ao mapeamento gráfico.
 fn normalize_mouse_position(
     x: f32,
     y: f32,
@@ -382,8 +400,8 @@ fn key_to_scan_code(key: Key) -> Option<(u8, bool)> {
 #[cfg(test)]
 mod tests {
     use super::{
-        clamp_mouse_coordinate, current_move_flags, key_press_event, key_release_event, key_to_scan_code,
-        normalize_scroll_delta,
+        clamp_mouse_coordinate, current_move_flags, key_press_event, key_release_event,
+        key_to_scan_code, normalize_scroll_delta,
     };
     use ironrdp::pdu::input::fast_path::{FastPathInputEvent, KeyboardFlags};
     use ironrdp::pdu::input::mouse::PointerFlags;
@@ -405,7 +423,10 @@ mod tests {
     fn creates_press_and_release_events() {
         assert_eq!(
             key_press_event(Key::Enter),
-            Some(FastPathInputEvent::KeyboardEvent(KeyboardFlags::empty(), 0x1C))
+            Some(FastPathInputEvent::KeyboardEvent(
+                KeyboardFlags::empty(),
+                0x1C
+            ))
         );
         assert_eq!(
             key_release_event(Key::RightAlt),

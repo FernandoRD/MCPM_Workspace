@@ -158,7 +158,7 @@ export async function importBackup(
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function parseBackupFile(raw: string): BackupFile {
+export function parseBackupFile(raw: string): BackupFile {
   let data: unknown;
   try {
     data = JSON.parse(raw);

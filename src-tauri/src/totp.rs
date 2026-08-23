@@ -2,7 +2,6 @@
 ///
 /// Compatível com Google Authenticator, Authy, Bitwarden, etc.
 /// Segredos são sempre armazenados cifrados via crypto.rs.
-
 use serde::{Deserialize, Serialize};
 use totp_rs::{Algorithm, Secret, TOTP};
 
@@ -49,7 +48,10 @@ fn build_totp(secret_base32: &str, algorithm: Option<&str>) -> Result<TOTP, Stri
 
 /// Gera o código TOTP atual para o segredo fornecido (Base32).
 #[tauri::command]
-pub fn generate_totp_code(secret_base32: String, totp_algorithm: Option<String>) -> Result<TotpCode, String> {
+pub fn generate_totp_code(
+    secret_base32: String,
+    totp_algorithm: Option<String>,
+) -> Result<TotpCode, String> {
     let totp = build_totp(&secret_base32, totp_algorithm.as_deref())?;
 
     let now = std::time::SystemTime::now()
@@ -57,9 +59,7 @@ pub fn generate_totp_code(secret_base32: String, totp_algorithm: Option<String>)
         .map_err(|e| e.to_string())?
         .as_secs();
 
-    let code = totp
-        .generate(now)
-        ;
+    let code = totp.generate(now);
 
     let valid_from = (now / STEP) * STEP;
     let remaining_seconds = STEP - (now % STEP);
@@ -74,7 +74,11 @@ pub fn generate_totp_code(secret_base32: String, totp_algorithm: Option<String>)
 /// Valida se um código TOTP de 6 dígitos está correto para o segredo.
 /// Aceita a janela atual ± 1 (tolerância de clock).
 #[tauri::command]
-pub fn verify_totp_code(secret_base32: String, code: String, totp_algorithm: Option<String>) -> Result<bool, String> {
+pub fn verify_totp_code(
+    secret_base32: String,
+    code: String,
+    totp_algorithm: Option<String>,
+) -> Result<bool, String> {
     let totp = build_totp(&secret_base32, totp_algorithm.as_deref())?;
     Ok(totp.check_current(&code).unwrap_or(false))
 }
@@ -82,10 +86,7 @@ pub fn verify_totp_code(secret_base32: String, code: String, totp_algorithm: Opt
 /// Gera um novo segredo TOTP aleatório e retorna o segredo Base32
 /// junto com a URI otpauth:// para exibição de QR code.
 #[tauri::command]
-pub fn generate_totp_secret(
-    issuer: String,
-    account_name: String,
-) -> Result<TotpSetup, String> {
+pub fn generate_totp_secret(issuer: String, account_name: String) -> Result<TotpSetup, String> {
     // Gera 20 bytes aleatórios (160 bits — padrão RFC 4226)
     let secret_bytes = Secret::generate_secret();
     let secret_base32 = secret_bytes.to_encoded().to_string();
@@ -104,8 +105,7 @@ pub fn generate_totp_secret(
         account_name.clone(),
     );
 
-    let otpauth_url = totp
-        .get_url();
+    let otpauth_url = totp.get_url();
 
     Ok(TotpSetup {
         secret: secret_base32,
@@ -120,8 +120,8 @@ mod tests {
 
     #[test]
     fn test_generate_and_verify() {
-        // Segredo de teste em Base32
-        let secret = "JBSWY3DPEHPK3PXP";
+        // 160 bits em Base32; totp-rs rejeita segredos menores que 128 bits.
+        let secret = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP";
         let result = generate_totp_code(secret.to_string(), None).expect("deve gerar código");
         assert_eq!(result.code.len(), 6);
         assert!(result.remaining_seconds <= 30);
@@ -136,18 +136,16 @@ mod tests {
 
     #[test]
     fn test_generate_secret() {
-        let setup = generate_totp_secret(
-            "MPCM Workspace".to_string(),
-            "user@server".to_string(),
-        )
-        .expect("deve gerar segredo");
+        let setup = generate_totp_secret("MPCM Workspace".to_string(), "user@server".to_string())
+            .expect("deve gerar segredo");
 
         assert!(!setup.secret.is_empty());
         assert!(setup.otpauth_url.starts_with("otpauth://totp/"));
         assert!(setup.otpauth_url.contains("algorithm=SHA256"));
         assert_eq!(setup.algorithm, "SHA256");
         // Segredo gerado deve ser utilizável
-        let code = generate_totp_code(setup.secret, Some(setup.algorithm)).expect("deve gerar código do segredo novo");
+        let code = generate_totp_code(setup.secret, Some(setup.algorithm))
+            .expect("deve gerar código do segredo novo");
         assert_eq!(code.code.len(), 6);
     }
 }
