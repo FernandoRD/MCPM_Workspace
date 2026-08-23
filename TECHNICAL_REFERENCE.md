@@ -190,7 +190,7 @@ clients/
 
 ## 4. Modelo de dados
 
-Arquivo-base: [index.ts](/home/fernando/Documentos/ssh_vault/src/types/index.ts)
+Arquivo-base: [index.ts](src/types/index.ts)
 
 ### Entidades principais
 
@@ -234,7 +234,7 @@ Arquivo-base: [index.ts](/home/fernando/Documentos/ssh_vault/src/types/index.ts)
 
 ### Estado portátil
 
-Arquivo-chave: [portableState.ts](/home/fernando/Documentos/ssh_vault/src/lib/portableState.ts)
+Arquivo-chave: [portableState.ts](src/lib/portableState.ts)
 
 Esse módulo centraliza a conversão entre:
 
@@ -257,29 +257,29 @@ As preferências `dashboard.cardMode`, `ssh.sftpOpenMode` e `terminal.rightClick
 
 ### Persistidos
 
-- [hosts.ts](/home/fernando/Documentos/ssh_vault/src/store/hosts.ts)
+- [hosts.ts](src/store/hosts.ts)
   CRUD de hosts e `replaceHosts`.
-- [credentials.ts](/home/fernando/Documentos/ssh_vault/src/store/credentials.ts)
+- [credentials.ts](src/store/credentials.ts)
   CRUD de credenciais e `replaceCredentials`.
-- [sshKeys.ts](/home/fernando/Documentos/ssh_vault/src/store/sshKeys.ts)
+- [sshKeys.ts](src/store/sshKeys.ts)
   CRUD de chaves e `replaceSshKeys`.
-- [settings.ts](/home/fernando/Documentos/ssh_vault/src/store/settings.ts)
+- [settings.ts](src/store/settings.ts)
   Inicialização, normalização, updates parciais e `replaceSettings`. Também aplica `i18n.changeLanguage` em `init`, `setLocale`, `replaceSettings` e `resetSettings`.
-- [connectionLogs.ts](/home/fernando/Documentos/ssh_vault/src/store/connectionLogs.ts)
+- [connectionLogs.ts](src/store/connectionLogs.ts)
   Histórico local de conexões.
 
 ### Voláteis
 
-- [sessions.ts](/home/fernando/Documentos/ssh_vault/src/store/sessions.ts)
+- [sessions.ts](src/store/sessions.ts)
   Abas/sessões abertas na janela atual, incluindo a ordem visual usada pela `TabBar`, a ação de reordenação manual, snapshots de terminal e snapshots de SFTP.
-- [uiStore.ts](/home/fernando/Documentos/ssh_vault/src/store/uiStore.ts)
+- [uiStore.ts](src/store/uiStore.ts)
   Busca, filtros do dashboard, ordenação e estado da command palette. Preferências portáveis do dashboard, como `cardMode`, vivem em `settings`.
-- [tunnelRuntime.ts](/home/fernando/Documentos/ssh_vault/src/store/tunnelRuntime.ts)
+- [tunnelRuntime.ts](src/store/tunnelRuntime.ts)
   Estado de túneis ativos em runtime.
 
 ## 6. Rotas React
 
-Arquivo-base: [App.tsx](/home/fernando/Documentos/ssh_vault/src/App.tsx)
+Arquivo-base: [App.tsx](src/App.tsx)
 
 Rotas atuais:
 
@@ -311,21 +311,21 @@ Rotas atuais:
 
 ### Sessões e janelas
 
-- [sessionLauncher.ts](/home/fernando/Documentos/ssh_vault/src/lib/sessionLauncher.ts)
+- [sessionLauncher.ts](src/lib/sessionLauncher.ts)
   Decide entre abrir em aba ou janela dedicada para sessões de terminal, RDP e VNC. Mensagens de fallback usam o catálogo de i18n.
-- [windowMode.ts](/home/fernando/Documentos/ssh_vault/src/lib/windowMode.ts)
+- [windowMode.ts](src/lib/windowMode.ts)
   Helpers para rotas e bootstrap de janelas standalone.
-- [TerminalPage.tsx](/home/fernando/Documentos/ssh_vault/src/pages/TerminalPage.tsx)
+- [TerminalPage.tsx](src/pages/TerminalPage.tsx)
   Orquestra sessões `SSH`/`Telnet`, splits redimensionáveis, reconexão manual, fechamento em encerramento limpo e painel SFTP embutido quando `ssh.sftpOpenMode = "sameTab"`.
-- [TerminalPane.tsx](/home/fernando/Documentos/ssh_vault/src/components/Terminal/TerminalPane.tsx)
+- [TerminalPane.tsx](src/components/Terminal/TerminalPane.tsx)
   Encapsula `xterm.js`, reanexação de saída, resize no backend, diálogo TOFU de fingerprint e reconexão controlada por `reconnectNonce`.
-- [SftpPage.tsx](/home/fernando/Documentos/ssh_vault/src/pages/SftpPage.tsx)
+- [SftpPage.tsx](src/pages/SftpPage.tsx)
   Pode operar como rota independente (`/sftp/:tabId`) ou como painel embutido ao lado de uma sessão `SSH`.
-- [RdpPage.tsx](/home/fernando/Documentos/ssh_vault/src/pages/RdpPage.tsx)
+- [RdpPage.tsx](src/pages/RdpPage.tsx)
   Orquestra a conexão RDP, exibe diagnósticos de launcher e acompanha o ciclo de vida da sessão.
-- [VncPage.tsx](/home/fernando/Documentos/ssh_vault/src/pages/VncPage.tsx)
+- [VncPage.tsx](src/pages/VncPage.tsx)
   Orquestra a conexão VNC, exibe o contrato de capacidade da sessão e diferencia cliente gerenciado de launcher externo.
-- [LogsPage.tsx](/home/fernando/Documentos/ssh_vault/src/pages/LogsPage.tsx)
+- [LogsPage.tsx](src/pages/LogsPage.tsx)
   Exibe os arquivos de diagnóstico, permite trocar o diretório de saída e facilita leitura sem sair da aplicação. A visualização do arquivo carregado tem filtros locais por texto, nível (`error`, `warn`, `info`, `debug`, `trace`) e sensibilidade a maiúsculas/minúsculas, sem alterar o arquivo em disco.
 
 ### Branding e identidade
@@ -337,80 +337,80 @@ Rotas atuais:
 
 ### Consciência de protocolo
 
-- [productivity.ts](/home/fernando/Documentos/ssh_vault/src/lib/productivity.ts)
+- [productivity.ts](src/lib/productivity.ts)
   Centraliza capacidades por protocolo para snippets, workspaces, batch execution e túneis.
-- [portableState.ts](/home/fernando/Documentos/ssh_vault/src/lib/portableState.ts)
+- [portableState.ts](src/lib/portableState.ts)
   Normaliza e preserva `protocol` durante import/export e sync.
-- [sessionLauncher.ts](/home/fernando/Documentos/ssh_vault/src/lib/sessionLauncher.ts)
+- [sessionLauncher.ts](src/lib/sessionLauncher.ts)
   Lança janelas dedicadas de sessão usando fluxo compartilhado para terminal e RDP.
-- [csvHostImport.ts](/home/fernando/Documentos/ssh_vault/src/lib/csvHostImport.ts)
+- [csvHostImport.ts](src/lib/csvHostImport.ts)
   Centraliza parsing, validação, matching, template e plano de aplicação para importação em massa por `.csv`.
-- [logger.ts](/home/fernando/Documentos/ssh_vault/src/lib/logger.ts)
+- [logger.ts](src/lib/logger.ts)
   Centraliza logging persistente do frontend, incluindo erros globais de runtime e falhas das stores e páginas principais.
-- [groups.ts](/home/fernando/Documentos/ssh_vault/src/lib/groups.ts)
+- [groups.ts](src/lib/groups.ts)
   Centraliza normalização, árvore hierárquica, flatten para UI e operações de rename/delete em cascata para grupos e subgrupos.
-- [masterPasswordSession.ts](/home/fernando/Documentos/ssh_vault/src/lib/masterPasswordSession.ts)
+- [masterPasswordSession.ts](src/lib/masterPasswordSession.ts)
   Mantém a senha mestra somente em memória durante a sessão atual para fluxos que precisam cifrar segredos sem persistir a senha.
 
 ### RDP no app principal
 
-- [rdp.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/rdp.rs)
+- [rdp.rs](src-tauri/src/rdp.rs)
   Gera arquivos `.rdp` temporários, aplica opções de sessão, traduz preferências visuais para launchers compatíveis, aciona o launcher nativo apropriado por plataforma e também expõe o comando `rdp_launch_internal_viewer` para o modo experimental.
-- [RdpPage.tsx](/home/fernando/Documentos/ssh_vault/src/pages/RdpPage.tsx)
+- [RdpPage.tsx](src/pages/RdpPage.tsx)
   Conecta a aba RDP ao backend, escolhe entre launcher nativo e viewer interno experimental conforme `launchMode`, e mostra launcher escolhido, preview dos argumentos e estado da sessão.
-- [Settings.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Settings.tsx)
+- [Settings.tsx](src/pages/Settings.tsx)
   Expõe preferências globais de `launchMode`, cliente Linux, resolução, fullscreen, multimonitor, clipboard, áudio, certificado e preferências visuais da sessão com indicação de compatibilidade.
-- [internalRdpViewer.ts](/home/fernando/Documentos/ssh_vault/src/lib/internalRdpViewer.ts)
+- [internalRdpViewer.ts](src/lib/internalRdpViewer.ts)
   Ponte do frontend para o comando Tauri que abre o viewer interno.
 
 ### Base técnica do viewer RDP interno
 
-- [clients/internal-rdp-client/README.md](/home/fernando/Documentos/ssh_vault/clients/internal-rdp-client/README.md)
+- [clients/internal-rdp-client/README.md](clients/internal-rdp-client/README.md)
   Documento-base do cliente RDP interno, que serve como base técnica do viewer usado pelo app principal.
-- [clients/internal-rdp-client/src/mvp_runtime.rs](/home/fernando/Documentos/ssh_vault/clients/internal-rdp-client/src/mvp_runtime.rs)
+- [clients/internal-rdp-client/src/mvp_runtime.rs](clients/internal-rdp-client/src/mvp_runtime.rs)
   Contrato atual de conexão, perfil de sessão, loop ativo e coleta de regiões alteradas.
-- [clients/internal-rdp-client/src/viewer_input.rs](/home/fernando/Documentos/ssh_vault/clients/internal-rdp-client/src/viewer_input.rs)
+- [clients/internal-rdp-client/src/viewer_input.rs](clients/internal-rdp-client/src/viewer_input.rs)
   Tradutor de input local do `minifb` para eventos FastPath do RDP.
-- [clients/internal-rdp-client/src/viewer_renderer.rs](/home/fernando/Documentos/ssh_vault/clients/internal-rdp-client/src/viewer_renderer.rs)
+- [clients/internal-rdp-client/src/viewer_renderer.rs](clients/internal-rdp-client/src/viewer_renderer.rs)
   Buffer local e redraw parcial do viewer.
-- [clients/internal-rdp-client/src/settings_bridge.rs](/home/fernando/Documentos/ssh_vault/clients/internal-rdp-client/src/settings_bridge.rs)
+- [clients/internal-rdp-client/src/settings_bridge.rs](clients/internal-rdp-client/src/settings_bridge.rs)
   Ponte entre o payload vindo do app principal e as configurações efetivamente consumidas pelo viewer interno.
-- [clients/internal-rdp-client/src/bin/viewer_mvp.rs](/home/fernando/Documentos/ssh_vault/clients/internal-rdp-client/src/bin/viewer_mvp.rs)
+- [clients/internal-rdp-client/src/bin/viewer_mvp.rs](clients/internal-rdp-client/src/bin/viewer_mvp.rs)
   Viewer MVP para conexão real.
-- [clients/internal-rdp-client/src/bin/screenshot_mvp.rs](/home/fernando/Documentos/ssh_vault/clients/internal-rdp-client/src/bin/screenshot_mvp.rs)
+- [clients/internal-rdp-client/src/bin/screenshot_mvp.rs](clients/internal-rdp-client/src/bin/screenshot_mvp.rs)
   Captura de screenshot remoto.
 
 ### Sync / backup / estado portátil
 
-- [sync.ts](/home/fernando/Documentos/ssh_vault/src/lib/sync.ts)
+- [sync.ts](src/lib/sync.ts)
   `buildSyncPayload`, `parseSyncFile`, `applySyncPayload`.
-- [syncProviders.ts](/home/fernando/Documentos/ssh_vault/src/lib/syncProviders.ts)
+- [syncProviders.ts](src/lib/syncProviders.ts)
   Push/pull por provider.
-- [backup.ts](/home/fernando/Documentos/ssh_vault/src/lib/backup.ts)
+- [backup.ts](src/lib/backup.ts)
   Export/import `.sshvault`.
-- [portableState.ts](/home/fernando/Documentos/ssh_vault/src/lib/portableState.ts)
+- [portableState.ts](src/lib/portableState.ts)
   Sanitização, merge e reidratação.
 
 As mensagens de erro dos helpers de sync/backup são resolvidas pelo i18n no frontend antes de chegar à UI, evitando textos fixos em português quando a aplicação está em `en-US`.
 
 ### Operações auxiliares
 
-- [health.ts](/home/fernando/Documentos/ssh_vault/src/lib/health.ts)
+- [health.ts](src/lib/health.ts)
   Wrapper frontend para health check e inventário de fingerprints.
-- [sshConfigImport.ts](/home/fernando/Documentos/ssh_vault/src/lib/sshConfigImport.ts)
+- [sshConfigImport.ts](src/lib/sshConfigImport.ts)
   Importação de `~/.ssh/config` e probe TCP simples.
-- [csvHostImport.ts](/home/fernando/Documentos/ssh_vault/src/lib/csvHostImport.ts)
+- [csvHostImport.ts](src/lib/csvHostImport.ts)
   Importação de hosts via `.csv`, geração de template/exemplo e definição do comportamento de `add` vs `merge`.
-- [productivity.ts](/home/fernando/Documentos/ssh_vault/src/lib/productivity.ts)
+- [productivity.ts](src/lib/productivity.ts)
   Resolução de snippets e lançamento de túneis.
-- [tagColors.ts](/home/fernando/Documentos/ssh_vault/src/lib/tagColors.ts)
+- [tagColors.ts](src/lib/tagColors.ts)
   Cores consistentes para tags.
-- [hostSearch.ts](/home/fernando/Documentos/ssh_vault/src/lib/hostSearch.ts)
+- [hostSearch.ts](src/lib/hostSearch.ts)
   Busca e utilitários de ordenação/último acesso.
 
 ## 8. Comandos Tauri
 
-Arquivo-base: [lib.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/lib.rs)
+Arquivo-base: [lib.rs](src-tauri/src/lib.rs)
 
 ### Storage / crypto / TOTP
 
@@ -523,9 +523,9 @@ Arquivo-base: [lib.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/lib.rs)
 
 Arquivos principais:
 
-- [Sync.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Sync.tsx)
-- [sync.ts](/home/fernando/Documentos/ssh_vault/src/lib/sync.ts)
-- [syncProviders.ts](/home/fernando/Documentos/ssh_vault/src/lib/syncProviders.ts)
+- [Sync.tsx](src/pages/Sync.tsx)
+- [sync.ts](src/lib/sync.ts)
+- [syncProviders.ts](src/lib/syncProviders.ts)
 
 O pacote de sync atual inclui:
 
@@ -548,14 +548,14 @@ Observações:
 - `autoSync` não executa push inicial quando `lastSyncAt` ainda está vazio; uma instalação nova precisa de uma primeira ação manual para definir se deve importar ou enviar dados
 - `autoSync` fica bloqueado se nenhuma senha mestra estiver configurada
 - segredos cifrados dependem da senha mestra informada no fluxo manual
-- quando o sync de credenciais está ativo, a senha mestra validada no sync manual fica apenas em memória da sessão via [masterPasswordSession.ts](/home/fernando/Documentos/ssh_vault/src/lib/masterPasswordSession.ts) e pode ser reutilizada pelo auto-sync para gerar `encryptedSecrets`
+- quando o sync de credenciais está ativo, a senha mestra validada no sync manual fica apenas em memória da sessão via [masterPasswordSession.ts](src/lib/masterPasswordSession.ts) e pode ser reutilizada pelo auto-sync para gerar `encryptedSecrets`
 
 ### Backup
 
 Arquivos principais:
 
-- [Backup.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Backup.tsx)
-- [backup.ts](/home/fernando/Documentos/ssh_vault/src/lib/backup.ts)
+- [Backup.tsx](src/pages/Backup.tsx)
+- [backup.ts](src/lib/backup.ts)
 
 O arquivo `.sshvault` hoje pode transportar:
 
@@ -596,11 +596,11 @@ Esse `known_hosts.json` é interno da aplicação e não substitui nem edita o a
 Esse fluxo continua sendo específico de `SSH`; hosts `Telnet` ficam fora do inventário e do health check de fingerprint.
 Hosts `RDP` também ficam fora desse escopo.
 
-Arquivo principal: [ssh.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/ssh.rs)
+Arquivo principal: [ssh.rs](src-tauri/src/ssh.rs)
 
 ### Módulo compartilhado SSH/SFTP
 
-[ssh_common.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/ssh_common.rs) centraliza o código compartilhado entre `ssh.rs` e `sftp.rs`:
+[ssh_common.rs](src-tauri/src/ssh_common.rs) centraliza o código compartilhado entre `ssh.rs` e `sftp.rs`:
 
 - constantes de algoritmos legados (`LEGACY_KEX`, `LEGACY_CIPHER`, `LEGACY_MAC`, `LEGACY_KEY`, `LEGACY_COMPRESSION`)
 - `build_ssh_config` — constrói a configuração `russh` por preset
@@ -610,13 +610,13 @@ Arquivo principal: [ssh.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/ss
 
 ### Rate limiting
 
-[rate_limit.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/rate_limit.rs) implementa um rate limiter de janela deslizante por chave dinâmica. A chave aceita qualquer `&str`, permitindo granularidade por operação e alvo — por exemplo, `"ssh_connect:192.168.1.1"` limita tentativas por host individualmente.
+[rate_limit.rs](src-tauri/src/rate_limit.rs) implementa um rate limiter de janela deslizante por chave dinâmica. A chave aceita qualquer `&str`, permitindo granularidade por operação e alvo — por exemplo, `"ssh_connect:192.168.1.1"` limita tentativas por host individualmente.
 
 ## 11. Fluxos importantes
 
 ### Quick Connect
 
-- UI: [CommandPalette.tsx](/home/fernando/Documentos/ssh_vault/src/components/CommandPalette.tsx)
+- UI: [CommandPalette.tsx](src/components/CommandPalette.tsx)
 - Abre sessão temporária para `SSH`, `Telnet`, `RDP` e `VNC`
 - Não cria host salvo
 - Campos sensíveis do Quick Connect usam um controle local de visibilidade (`QuickConnectPasswordInput`) para senhas `SSH`, `RDP`, `VNC` e passphrase de chave privada.
@@ -633,7 +633,7 @@ A configuração `sessionOpenMode` aceita `"tab"` ou `"window"`. O comportamento
 
 Ao invés de abrir uma `WebviewWindow` com a aplicação React completa, o app detecta o emulador de terminal instalado e lança um processo externo com o comando `ssh` ou `telnet` correto. Isso elimina os problemas anteriores de rota dupla (Dashboard aparecendo no logout) e de sessão reiniciada ao digitar `exit`.
 
-- Módulo Rust: [system_terminal.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/system_terminal.rs)
+- Módulo Rust: [system_terminal.rs](src-tauri/src/system_terminal.rs)
 - Comando Tauri: `ssh_launch_system_terminal`
 - Emuladores detectados (Linux): `$TERMINAL` env, `gnome-terminal`, `konsole`, `xfce4-terminal`, `alacritty`, `wezterm`, `kitty`, `xterm`
 - Emuladores detectados (macOS): `Terminal.app` via AppleScript
@@ -645,7 +645,7 @@ Ao invés de abrir uma `WebviewWindow` com a aplicação React completa, o app d
 
 ### Terminal integrado: links e botão direito
 
-- UI: [TerminalPane.tsx](/home/fernando/Documentos/ssh_vault/src/components/Terminal/TerminalPane.tsx)
+- UI: [TerminalPane.tsx](src/components/Terminal/TerminalPane.tsx)
 - Links: `@xterm/addon-web-links` detecta URLs; o handler customizado chama `openUrl` de `@tauri-apps/plugin-opener`, evitando dependência de `window.open` dentro do WebView.
 - Preferência: `terminal.rightClickBehavior` aceita `"contextMenu"` ou `"copyPaste"`.
 - Modo `"contextMenu"` preserva o menu nativo/contextual do WebView.
@@ -653,29 +653,29 @@ Ao invés de abrir uma `WebviewWindow` com a aplicação React completa, o app d
   - `onSelectionChange` do xterm copia automaticamente qualquer seleção para o clipboard sem precisar de clique direito. O handler lê `rightClickBehaviorRef.current` para responder a mudanças de setting sem remontar o terminal.
   - Clique direito sempre cola o clipboard na sessão, usando `xterm.paste(text)` em vez de chamar `ssh_send_input`/`telnet_send_input` diretamente.
   - `xterm.paste()` respeita o estado interno de bracketed paste do xterm: quando o editor remoto (`vim`, `nano`, etc.) ativou bracketed paste mode via `\e[?2004h`, o texto é automaticamente envolvido em `\e[200~...\e[201~` antes de chegar ao backend, impedindo que linhas coladas se misturem com o conteúdo existente.
-- Clipboard nativo: [app_clipboard.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/app_clipboard.rs) expõe `terminal_clipboard_write` e `terminal_clipboard_read`. No Linux tenta `wl-copy`/`wl-paste`, `xclip` ou `xsel`; no macOS usa `pbcopy`/`pbpaste`; no Windows usa PowerShell `Set-Clipboard`/`Get-Clipboard`.
+- Clipboard nativo: [app_clipboard.rs](src-tauri/src/app_clipboard.rs) expõe `terminal_clipboard_write` e `terminal_clipboard_read`. No Linux tenta `wl-copy`/`wl-paste`, `xclip` ou `xsel`; no macOS usa `pbcopy`/`pbpaste`; no Windows usa PowerShell `Set-Clipboard`/`Get-Clipboard`.
 - Segurança de lifecycle: operações nativas de clipboard rodam em `spawn_blocking`; escrita não espera indefinidamente por utilitários como `wl-copy`, que podem permanecer vivos para servir o clipboard.
 
 #### Split panes e SFTP embutido
 
-- Página: [TerminalPage.tsx](/home/fernando/Documentos/ssh_vault/src/pages/TerminalPage.tsx)
-- Painel SFTP: [SftpPage.tsx](/home/fernando/Documentos/ssh_vault/src/pages/SftpPage.tsx)
+- Página: [TerminalPage.tsx](src/pages/TerminalPage.tsx)
+- Painel SFTP: [SftpPage.tsx](src/pages/SftpPage.tsx)
 - A divisão de panes de terminal usa pesos locais (`paneWeights`) calculados pela página e pode ser ajustada por pointer drag no divisor.
 - A divisão terminal/SFTP usa percentual local (`sftpPanelPercent`) e mantém mínimo visual para o painel SFTP.
 - O modo `ssh.sftpOpenMode = "sameTab"` abre o SFTP ao lado do terminal; `ssh.sftpOpenMode = "newTab"` mantém o comportamento antigo de criar uma aba SFTP dedicada.
-- O estado desse comportamento é normalizado em [inputSanitizers.ts](/home/fernando/Documentos/ssh_vault/src/lib/inputSanitizers.ts), persistido em [settings.ts](/home/fernando/Documentos/ssh_vault/src/store/settings.ts) e incluído no estado portátil via [portableState.ts](/home/fernando/Documentos/ssh_vault/src/lib/portableState.ts).
+- O estado desse comportamento é normalizado em [inputSanitizers.ts](src/lib/inputSanitizers.ts), persistido em [settings.ts](src/store/settings.ts) e incluído no estado portátil via [portableState.ts](src/lib/portableState.ts).
 
 **RDP e VNC**
 
 Continuam usando `WebviewWindow` com a rota dedicada da sessão e o mecanismo de bootstrap por `quickConnectBootstrapId`.
 
-- Configuração em [Settings.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Settings.tsx)
-- Lançamento e bootstrap em [sessionLauncher.ts](/home/fernando/Documentos/ssh_vault/src/lib/sessionLauncher.ts) e [windowMode.ts](/home/fernando/Documentos/ssh_vault/src/lib/windowMode.ts)
+- Configuração em [Settings.tsx](src/pages/Settings.tsx)
+- Lançamento e bootstrap em [sessionLauncher.ts](src/lib/sessionLauncher.ts) e [windowMode.ts](src/lib/windowMode.ts)
 
 ### Sessões RDP nativas
 
-- Página: [RdpPage.tsx](/home/fernando/Documentos/ssh_vault/src/pages/RdpPage.tsx)
-- Backend: [rdp.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/rdp.rs)
+- Página: [RdpPage.tsx](src/pages/RdpPage.tsx)
+- Backend: [rdp.rs](src-tauri/src/rdp.rs)
 - Linux:
   `auto`, `xfreerdp`, `wlfreerdp`, `remmina` e `krdc`
 - Windows:
@@ -726,8 +726,8 @@ Regras práticas:
 
 ### Sessões VNC nativas
 
-- Página: [VncPage.tsx](/home/fernando/Documentos/ssh_vault/src/pages/VncPage.tsx)
-- Backend: [vnc.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/vnc.rs)
+- Página: [VncPage.tsx](src/pages/VncPage.tsx)
+- Backend: [vnc.rs](src-tauri/src/vnc.rs)
 - Linux:
   `auto`, `TigerVNC`, `Remmina`, `KRDC`, `Vinagre` e `system`
 - Windows:
@@ -766,8 +766,8 @@ Regras práticas atuais:
 
 ### Health check e fingerprints
 
-- Página: [Health.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Health.tsx)
-- Backend: [ssh.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/ssh.rs)
+- Página: [Health.tsx](src/pages/Health.tsx)
+- Backend: [ssh.rs](src-tauri/src/ssh.rs)
 - Escopo atual: somente hosts `SSH`
 - O inventário é persistido em `known_hosts.json` dentro do diretório de dados do app
 - A UI permite criar, editar e excluir entradas manualmente
@@ -776,7 +776,7 @@ Regras práticas atuais:
 
 ### Edição em massa de hosts
 
-- Página: [Dashboard.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Dashboard.tsx)
+- Página: [Dashboard.tsx](src/pages/Dashboard.tsx)
 - Escopo atual:
   - credencial
   - grupo hierárquico
@@ -784,7 +784,7 @@ Regras práticas atuais:
 
 ### Dashboard
 
-- Página: [Dashboard.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Dashboard.tsx)
+- Página: [Dashboard.tsx](src/pages/Dashboard.tsx)
 - Preferência persistida: `settings.dashboard.cardMode`
 - Modos:
   - `full`: card completo atual, com metadados e ações principais
@@ -795,20 +795,20 @@ Regras práticas atuais:
 
 ### Editor de hosts e credenciais
 
-- Editor: [HostEditor.tsx](/home/fernando/Documentos/ssh_vault/src/pages/HostEditor.tsx)
-- Formulário reutilizável: [CredentialForm.tsx](/home/fernando/Documentos/ssh_vault/src/components/CredentialForm.tsx)
-- Rotas dedicadas: [CredentialEditor.tsx](/home/fernando/Documentos/ssh_vault/src/pages/CredentialEditor.tsx) e [Credentials.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Credentials.tsx)
+- Editor: [HostEditor.tsx](src/pages/HostEditor.tsx)
+- Formulário reutilizável: [CredentialForm.tsx](src/components/CredentialForm.tsx)
+- Rotas dedicadas: [CredentialEditor.tsx](src/pages/CredentialEditor.tsx) e [Credentials.tsx](src/pages/Credentials.tsx)
 - O editor de host mantém o formulário em estado local enquanto abre o gerenciamento de credenciais em um modal sobreposto.
 - No modal, é possível listar, criar, editar, selecionar e remover credenciais sem navegar para fora da criação/edição do host.
 - Ao salvar uma credencial pelo modal, o host seleciona automaticamente a credencial quando ela é compatível com o protocolo atual; para `RDP` e `VNC`, apenas credenciais de senha são selecionáveis.
 - As rotas `/credentials/new` e `/credentials/:id` usam o mesmo `CredentialForm`, mantendo validação e persistência em um único ponto.
-- Campos `type="password"` que usam o componente compartilhado [Input.tsx](/home/fernando/Documentos/ssh_vault/src/components/ui/Input.tsx) recebem automaticamente o botão de visibilidade com ícone de olho. Isso cobre credenciais, passphrases de chaves SSH, senha de deploy, copy-id e confirmação de senha mestra.
+- Campos `type="password"` que usam o componente compartilhado [Input.tsx](src/components/ui/Input.tsx) recebem automaticamente o botão de visibilidade com ícone de olho. Isso cobre credenciais, passphrases de chaves SSH, senha de deploy, copy-id e confirmação de senha mestra.
 
 ### Grupos hierárquicos
 
-- Página: [Groups.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Groups.tsx)
-- Filtro no dashboard: [Dashboard.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Dashboard.tsx)
-- Utilitários: [groups.ts](/home/fernando/Documentos/ssh_vault/src/lib/groups.ts)
+- Página: [Groups.tsx](src/pages/Groups.tsx)
+- Filtro no dashboard: [Dashboard.tsx](src/pages/Dashboard.tsx)
+- Utilitários: [groups.ts](src/lib/groups.ts)
 - Modelo atual:
   grupos e subgrupos são representados como caminhos, por exemplo `Produção/Web/API`
 - Comportamentos suportados:
@@ -822,14 +822,14 @@ Regras práticas atuais:
 
 ### Importação de `~/.ssh/config`
 
-- UI: [SshConfigImportModal.tsx](/home/fernando/Documentos/ssh_vault/src/components/SshConfigImportModal.tsx)
-- Parser/probe: [sshConfigImport.ts](/home/fernando/Documentos/ssh_vault/src/lib/sshConfigImport.ts) e [ssh_config.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/ssh_config.rs)
+- UI: [SshConfigImportModal.tsx](src/components/SshConfigImportModal.tsx)
+- Parser/probe: [sshConfigImport.ts](src/lib/sshConfigImport.ts) e [ssh_config.rs](src-tauri/src/ssh_config.rs)
 
 ### Importação em massa por CSV
 
-- UI: [CsvImportPage.tsx](/home/fernando/Documentos/ssh_vault/src/pages/CsvImportPage.tsx)
-- Entrada principal: [NewConnectionSplitButton.tsx](/home/fernando/Documentos/ssh_vault/src/components/NewConnectionSplitButton.tsx)
-- Parser e plano de aplicação: [csvHostImport.ts](/home/fernando/Documentos/ssh_vault/src/lib/csvHostImport.ts)
+- UI: [CsvImportPage.tsx](src/pages/CsvImportPage.tsx)
+- Entrada principal: [NewConnectionSplitButton.tsx](src/components/NewConnectionSplitButton.tsx)
+- Parser e plano de aplicação: [csvHostImport.ts](src/lib/csvHostImport.ts)
 
 Fluxo atual:
 
@@ -857,9 +857,9 @@ Regras da importação CSV:
 
 ### Auto-sync
 
-- Hook: [useAutoSync.ts](/home/fernando/Documentos/ssh_vault/src/hooks/useAutoSync.ts)
-- UI: [Sync.tsx](/home/fernando/Documentos/ssh_vault/src/pages/Sync.tsx)
-- Memória de sessão da senha mestra: [masterPasswordSession.ts](/home/fernando/Documentos/ssh_vault/src/lib/masterPasswordSession.ts)
+- Hook: [useAutoSync.ts](src/hooks/useAutoSync.ts)
+- UI: [Sync.tsx](src/pages/Sync.tsx)
+- Memória de sessão da senha mestra: [masterPasswordSession.ts](src/lib/masterPasswordSession.ts)
 - Dispara push periódico com base nas settings atuais, mas somente depois de existir `lastSyncAt`
 - Se `lastSyncAt` está vazio, o hook não faz push automático. Isso protege instalações novas contra sobrescrever um remoto existente com estado local vazio.
 - Se não há senha mestra configurada, o auto-sync fica bloqueado e a UI mostra o aviso correspondente.
@@ -868,15 +868,15 @@ Regras da importação CSV:
 ### Localização
 
 - Configuração persistida: `settings.locale`
-- Catálogos: [src/locales/pt-BR/translation.json](/home/fernando/Documentos/ssh_vault/src/locales/pt-BR/translation.json) e [src/locales/en-US/translation.json](/home/fernando/Documentos/ssh_vault/src/locales/en-US/translation.json)
-- Inicialização: [settings.ts](/home/fernando/Documentos/ssh_vault/src/store/settings.ts) aplica `i18n.changeLanguage` ao carregar settings do banco ou ao cair no default.
+- Catálogos: [src/locales/pt-BR/translation.json](src/locales/pt-BR/translation.json) e [src/locales/en-US/translation.json](src/locales/en-US/translation.json)
+- Inicialização: [settings.ts](src/store/settings.ts) aplica `i18n.changeLanguage` ao carregar settings do banco ou ao cair no default.
 - Mutação: `setLocale`, `replaceSettings` e `resetSettings` também chamam `i18n.changeLanguage`, mantendo a UI sincronizada com settings importadas/restauradas.
 - Áreas auditadas e alinhadas ao catálogo: loading inicial, terminal, SFTP, diálogo de fingerprint, sync automático, providers de sync, backup, launcher de sessão, editor de host e placeholder de S3.
 - A tela `Operations` ainda mantém um dicionário PT/EN local no componente, mas escolhe o bloco correto a partir do locale atual.
 
 ## 12. Cliente RDP interno
 
-O cliente RDP interno pode ser acionado pelo app principal como alternativa ao launcher nativo. O código fica em [clients/internal-rdp-client/README.md](/home/fernando/Documentos/ssh_vault/clients/internal-rdp-client/README.md) como projeto Rust separado, permitindo evolução técnica contínua sem impacto no restante da aplicação.
+O cliente RDP interno pode ser acionado pelo app principal como alternativa ao launcher nativo. O código fica em [clients/internal-rdp-client/README.md](clients/internal-rdp-client/README.md) como projeto Rust separado, permitindo evolução técnica contínua sem impacto no restante da aplicação.
 
 Decisão atual de produto:
 
@@ -1015,7 +1015,7 @@ O viewer RDP interno empacotado em `src-tauri/resources/internal-rdp-client/view
 
 ## 14. Distribuição e CI (GitHub Actions)
 
-Workflow: [.github/workflows/build.yml](/home/fernando/Documentos/ssh_vault/.github/workflows/build.yml)
+Workflow: [.github/workflows/build.yml](.github/workflows/build.yml)
 
 ### Gatilhos
 
@@ -1046,7 +1046,7 @@ No Linux a compilação usa `NO_STRIP=1 APPIMAGE_EXTRACT_AND_RUN=1 npm run tauri
 
 O passo *Prepare standalone executable (Windows)* copia o binário cru `src-tauri/target/release/ssh-vault.exe` (nome vindo do `[package] name` em `Cargo.toml`) para `MPCM-Workspace_<versão>_x64-standalone.exe`, lendo a versão do `package.json` via PowerShell. Esse arquivo entra no upload de artefatos e, em builds de tag, na Release.
 
-Diferença em relação aos instaladores: o standalone depende do **WebView2 Runtime** já instalado no host (padrão no Windows 10/11 atualizados). Os instaladores `.msi` e `-setup.exe` usam `webviewInstallMode: offlineInstaller` no [tauri.conf.json](/home/fernando/Documentos/ssh_vault/src-tauri/tauri.conf.json), embutindo o runtime offline. Não existe `.exe` único com o WebView2 embarcado; a única forma autossuficiente seria distribuir o *fixed version runtime* numa pasta ao lado do binário.
+Diferença em relação aos instaladores: o standalone depende do **WebView2 Runtime** já instalado no host (padrão no Windows 10/11 atualizados). Os instaladores `.msi` e `-setup.exe` usam `webviewInstallMode: offlineInstaller` no [tauri.conf.json](src-tauri/tauri.conf.json), embutindo o runtime offline. Não existe `.exe` único com o WebView2 embarcado; a única forma autossuficiente seria distribuir o *fixed version runtime* numa pasta ao lado do binário.
 
 ### Release
 
@@ -1056,18 +1056,18 @@ O job `release` roda apenas para tags `v*` (`if: startsWith(github.ref, 'refs/ta
 
 ### Aviso de nova versão no app
 
-Módulo [src-tauri/src/updates.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/updates.rs) expõe o comando `check_for_updates`, que consulta `https://api.github.com/repos/FernandoRD/MPCM_Workspace/releases/latest` via `reqwest` (a checagem precisa rodar no backend porque o CSP do webview bloqueia `connect-src` externo). O comando compara `tag_name` com `CARGO_PKG_VERSION` (`is_newer`, comparação numérica `MAJOR.MINOR.PATCH`) e retorna `UpdateInfo` (camelCase) com `updateAvailable`, `releaseUrl`, etc.
+Módulo [src-tauri/src/updates.rs](src-tauri/src/updates.rs) expõe o comando `check_for_updates`, que consulta `https://api.github.com/repos/FernandoRD/MPCM_Workspace/releases/latest` via `reqwest` (a checagem precisa rodar no backend porque o CSP do webview bloqueia `connect-src` externo). O comando compara `tag_name` com `CARGO_PKG_VERSION` (`is_newer`, comparação numérica `MAJOR.MINOR.PATCH`) e retorna `UpdateInfo` (camelCase) com `updateAvailable`, `releaseUrl`, etc.
 
-No frontend, [src/components/UpdateBanner.tsx](/home/fernando/Documentos/ssh_vault/src/components/UpdateBanner.tsx) chama o comando uma vez na montagem e, havendo versão nova, mostra um cartão discreto no canto inferior direito (estado em [src/store/updateStore.ts](/home/fernando/Documentos/ssh_vault/src/store/updateStore.ts)). O banner é renderizado pelo [AppLayout](/home/fernando/Documentos/ssh_vault/src/components/Layout/AppLayout.tsx) apenas na janela principal (`!standalone`); falhas de rede são silenciosas e a dispensa vale por sessão.
+No frontend, [src/components/UpdateBanner.tsx](src/components/UpdateBanner.tsx) chama o comando uma vez na montagem e, havendo versão nova, mostra um cartão discreto no canto inferior direito (estado em [src/store/updateStore.ts](src/store/updateStore.ts)). O banner é renderizado pelo [AppLayout](src/components/Layout/AppLayout.tsx) apenas na janela principal (`!standalone`); falhas de rede são silenciosas e a dispensa vale por sessão.
 
 ## 15. Versionamento
 
 Arquivos principais:
 
-- [package.json](/home/fernando/Documentos/ssh_vault/package.json)
-- [scripts/sync-version.mjs](/home/fernando/Documentos/ssh_vault/scripts/sync-version.mjs)
-- [src-tauri/tauri.conf.json](/home/fernando/Documentos/ssh_vault/src-tauri/tauri.conf.json)
-- [src/lib/appInfo.ts](/home/fernando/Documentos/ssh_vault/src/lib/appInfo.ts)
+- [package.json](package.json)
+- [scripts/sync-version.mjs](scripts/sync-version.mjs)
+- [src-tauri/tauri.conf.json](src-tauri/tauri.conf.json)
+- [src/lib/appInfo.ts](src/lib/appInfo.ts)
 
 Estado atual:
 
@@ -1079,22 +1079,22 @@ Estado atual:
 
 Fluxo recomendado para bump de versão:
 
-1. Atualizar `version` em [package.json](/home/fernando/Documentos/ssh_vault/package.json).
+1. Atualizar `version` em [package.json](package.json).
 2. Rodar `npm run version:sync`.
 3. Validar com `npm run build`.
 
-O script [sync-version.mjs](/home/fernando/Documentos/ssh_vault/scripts/sync-version.mjs) hoje sincroniza:
+O script [sync-version.mjs](scripts/sync-version.mjs) hoje sincroniza:
 
-- [package-lock.json](/home/fernando/Documentos/ssh_vault/package-lock.json)
-- [src-tauri/Cargo.toml](/home/fernando/Documentos/ssh_vault/src-tauri/Cargo.toml)
-- [src-tauri/Cargo.lock](/home/fernando/Documentos/ssh_vault/src-tauri/Cargo.lock)
+- [package-lock.json](package-lock.json)
+- [src-tauri/Cargo.toml](src-tauri/Cargo.toml)
+- [src-tauri/Cargo.lock](src-tauri/Cargo.lock)
 
 ---
 
 Se este documento voltar a divergir do código, priorize sempre:
 
-1. [App.tsx](/home/fernando/Documentos/ssh_vault/src/App.tsx)
-2. [index.ts](/home/fernando/Documentos/ssh_vault/src/types/index.ts)
-3. [lib.rs](/home/fernando/Documentos/ssh_vault/src-tauri/src/lib.rs)
-4. [sync.ts](/home/fernando/Documentos/ssh_vault/src/lib/sync.ts)
-5. [backup.ts](/home/fernando/Documentos/ssh_vault/src/lib/backup.ts)
+1. [App.tsx](src/App.tsx)
+2. [index.ts](src/types/index.ts)
+3. [lib.rs](src-tauri/src/lib.rs)
+4. [sync.ts](src/lib/sync.ts)
+5. [backup.ts](src/lib/backup.ts)
