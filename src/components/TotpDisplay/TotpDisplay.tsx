@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTranslation } from "react-i18next";
 import { Copy, Check } from "lucide-react";
+import { logFrontendError } from "@/lib/logger";
 
 interface TotpCode {
   code: string;
@@ -31,7 +32,8 @@ export function TotpDisplay({ secretBase32, secretAlgorithm }: TotpDisplayProps)
       });
       setTotpCode(result);
       setError(false);
-    } catch {
+    } catch (error) {
+      logFrontendError("totp.generate", "Falha ao gerar código TOTP", error);
       setError(true);
     }
   }, [secretAlgorithm, secretBase32]);

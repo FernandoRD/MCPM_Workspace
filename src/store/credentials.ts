@@ -40,8 +40,12 @@ export const useCredentialsStore = create<CredentialsStore>()((set, get) => ({
               set({ credentials: legacyCredentials, initialized: true });
               return;
             }
-          } catch {
-            // ignora erros de parse
+          } catch (error) {
+            logFrontendError(
+              "credentials.migrateLegacy",
+              "Falha ao migrar credenciais do localStorage",
+              error
+            );
           }
         }
       }
