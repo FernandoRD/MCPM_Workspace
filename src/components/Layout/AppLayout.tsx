@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { CommandPalette } from "@/components/CommandPalette";
 import { Sidebar } from "@/components/Sidebar/Sidebar";
@@ -32,10 +32,19 @@ export function AppLayout() {
   const openCommandPalette = useUIStore((s) => s.openCommandPalette);
   const closeCommandPalette = useUIStore((s) => s.closeCommandPalette);
 
+  // Redireciona para a última aba ativa apenas uma vez, logo após a
+  // restauração de abas na inicialização — e somente se ela ainda estiver
+  // aguardando reconexão. Sem o latch, toda visita à tela de hosts ("/")
+  // devolveria o usuário para a sessão ativa.
+  const restoreRedirectDoneRef = useRef(false);
+
   useEffect(() => {
+    if (restoreRedirectDoneRef.current) return;
     if (standalone || location.pathname !== "/" || !activeTabId) return;
     const activeTab = tabs.find((tab) => tab.id === activeTabId);
-    if (activeTab) navigate(buildSessionRoute(activeTab.type, activeTab.id), { replace: true });
+    if (!activeTab?.requiresExplicitReconnect) return;
+    restoreRedirectDoneRef.current = true;
+    navigate(buildSessionRoute(activeTab.type, activeTab.id), { replace: true });
   }, [activeTabId, location.pathname, navigate, standalone, tabs]);
 
   useEffect(() => {

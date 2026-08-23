@@ -263,7 +263,15 @@ export function TerminalPage() {
   };
 
   const handleReconnect = () => {
-    requestReconnect(tab.id);
+    // Aba restaurada da sessão anterior: não existe sessão no backend ainda.
+    // Virar o flag re-liga o autoConnect do TerminalPane, que conecta uma vez.
+    // Chamar reconnectPane aqui dispararia um segundo connect (via
+    // reconnectNonce) em outro render, cancelando o primeiro no meio do
+    // caminho e derrubando a sessão recém-criada.
+    if (tab.requiresExplicitReconnect) {
+      requestReconnect(tab.id);
+      return;
+    }
     const reconnectablePanes = tab.panes.filter((pane) => pane.status === "disconnected" || pane.status === "error");
     const targets = reconnectablePanes.length > 0 ? reconnectablePanes : [tab.panes[0]].filter(Boolean);
     targets.forEach((pane) => void reconnectPane(pane.id));
