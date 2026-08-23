@@ -254,7 +254,11 @@ export function TerminalPane({
     }
 
     const fitAddon = fitRef.current!;
-    const dims = fitAddon.proposeDimensions() ?? { cols: 80, rows: 24 };
+    const proposedDims = fitAddon.proposeDimensions();
+    const dims =
+      proposedDims && Number.isFinite(proposedDims.cols) && Number.isFinite(proposedDims.rows)
+        ? proposedDims
+        : { cols: 80, rows: 24 };
 
     const dataDispose = xterm.onData((data) => {
       const inputCommand = protocol === "telnet" ? "telnet_send_input" : "ssh_send_input";
@@ -353,7 +357,10 @@ export function TerminalPane({
     const resizeObserver = new ResizeObserver(() => {
       fitAddon.fit();
       const d = fitAddon.proposeDimensions();
-      if (!d) return;
+      // Container oculto/zero-size gera NaN (vira null no JSON e o backend
+      // rejeita) e resize antes do connect não tem sessão para receber.
+      if (!d || !Number.isFinite(d.cols) || !Number.isFinite(d.rows)) return;
+      if (statusRef.current !== "connected") return;
       const resizeCommand = protocol === "telnet" ? "telnet_resize" : "ssh_resize";
       invoke(resizeCommand, { tabId: paneId, cols: d.cols, rows: d.rows }).catch((error) => {
         reportInvokeFailureOnce("resize", error);
