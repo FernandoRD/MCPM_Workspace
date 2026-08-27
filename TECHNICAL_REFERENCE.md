@@ -1071,7 +1071,7 @@ Arquivos principais:
 
 Estado atual:
 
-- versão de referência atual do app: `0.4.8`
+- versão de referência atual do app: `0.4.9`
 - `package.json` é a fonte principal da versão do app
 - `tauri.conf.json` lê a versão a partir de `../package.json`
 - o frontend lê a versão a partir de `package.json` via `appInfo.ts`

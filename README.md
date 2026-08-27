@@ -6,7 +6,14 @@ Stack principal: `Tauri 2` + `Rust` + `React 19` + `TypeScript` + `Zustand` + `T
 
 ## Versão atual
 
-`0.4.8`
+`0.4.9`
+
+## Novidades da 0.4.9
+
+- Abas abertas de hosts persistidos são restauradas ao reabrir o app, sempre desconectadas e exigindo reconexão explícita
+- Reconexão de sessões passou a manter a aba ativa e evita tentativas duplicadas de conexão
+- O terminal ignora redimensionamentos inválidos, nulos ou enviados antes de a sessão estar conectada
+- A pipeline agora valida TypeScript, testes frontend, formatação, Clippy e testes Rust antes dos builds de distribuição
 
 ## Novidades da 0.4.8
 
