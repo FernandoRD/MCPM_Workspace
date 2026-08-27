@@ -75,7 +75,8 @@ impl AppLogger {
     fn new(data_dir: &Path, level: LevelFilter) -> Result<Self, String> {
         let config_path = logging_config_path(data_dir);
         let default_directory = default_log_directory(data_dir);
-        let configured_directory = configured_directory_from_file(data_dir)?.unwrap_or_else(|| default_directory.clone());
+        let configured_directory =
+            configured_directory_from_file(data_dir)?.unwrap_or_else(|| default_directory.clone());
         let output = open_logger_output(&configured_directory)?;
 
         Ok(Self {
@@ -114,7 +115,8 @@ impl AppLogger {
         Ok(LogSettingsInfo {
             current_directory: output.directory.to_string_lossy().to_string(),
             default_directory: self.default_directory.to_string_lossy().to_string(),
-            using_custom_directory: normalize_path_string(&output.directory) != normalize_path_string(&self.default_directory),
+            using_custom_directory: normalize_path_string(&output.directory)
+                != normalize_path_string(&self.default_directory),
             log_file_path: output.file_path.to_string_lossy().to_string(),
             rotated_log_file_path: rotated_log_file_path(&output.directory)
                 .to_string_lossy()
@@ -161,11 +163,17 @@ impl AppLogger {
     }
 
     fn current_directory(&self) -> Option<PathBuf> {
-        self.output.lock().ok().map(|output| output.directory.clone())
+        self.output
+            .lock()
+            .ok()
+            .map(|output| output.directory.clone())
     }
 
     fn current_log_file_path(&self) -> Option<PathBuf> {
-        self.output.lock().ok().map(|output| output.file_path.clone())
+        self.output
+            .lock()
+            .ok()
+            .map(|output| output.file_path.clone())
     }
 }
 
@@ -362,7 +370,9 @@ fn write_direct(path: &Path, line: &str) {
 }
 
 fn current_main_log_file_path() -> Option<PathBuf> {
-    LOGGER.get().and_then(|logger| logger.current_log_file_path())
+    LOGGER
+        .get()
+        .and_then(|logger| logger.current_log_file_path())
 }
 
 fn panic_payload(info: &std::panic::PanicHookInfo<'_>) -> String {
@@ -384,9 +394,8 @@ fn install_panic_hook() {
             .unwrap_or_else(|| "local desconhecido".to_string());
         let payload = panic_payload(info);
         let backtrace = Backtrace::force_capture();
-        let line = format!(
-            "{timestamp} [ERROR] panic - panic em {location}: {payload}\n{backtrace}"
-        );
+        let line =
+            format!("{timestamp} [ERROR] panic - panic em {location}: {payload}\n{backtrace}");
 
         if let Some(path) = current_main_log_file_path() {
             write_direct(&path, &line);
@@ -454,14 +463,12 @@ fn list_log_files_in_directory(directory: &Path) -> Result<Vec<LogFileSummary>, 
     Ok(files)
 }
 
-fn read_log_file_from_directory(directory: &Path, file_name: &str) -> Result<LogFileContent, String> {
+fn read_log_file_from_directory(
+    directory: &Path,
+    file_name: &str,
+) -> Result<LogFileContent, String> {
     let trimmed = file_name.trim();
-    if trimmed.is_empty()
-        || Path::new(trimmed)
-            .components()
-            .count()
-            != 1
-    {
+    if trimmed.is_empty() || Path::new(trimmed).components().count() != 1 {
         return Err("Nome de arquivo de log inválido.".to_string());
     }
     let path = directory.join(trimmed);
@@ -470,11 +477,13 @@ fn read_log_file_from_directory(directory: &Path, file_name: &str) -> Result<Log
     }
 
     let metadata = fs::metadata(&path).map_err(|e| {
-        format!("Falha ao obter metadados do arquivo {}: {e}", path.display())
+        format!(
+            "Falha ao obter metadados do arquivo {}: {e}",
+            path.display()
+        )
     })?;
-    let bytes = fs::read(&path).map_err(|e| {
-        format!("Falha ao ler arquivo de log {}: {e}", path.display())
-    })?;
+    let bytes = fs::read(&path)
+        .map_err(|e| format!("Falha ao ler arquivo de log {}: {e}", path.display()))?;
 
     let (slice, truncated) = if bytes.len() > MAX_READ_BYTES {
         (&bytes[bytes.len() - MAX_READ_BYTES..], true)

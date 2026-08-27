@@ -47,3 +47,68 @@ impl RateLimiter {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn allows_calls_up_to_the_limit() {
+        let limiter = RateLimiter::new();
+        for _ in 0..3 {
+            assert!(limiter.check("cmd", 3, Duration::from_secs(60)).is_ok());
+        }
+    }
+
+    #[test]
+    fn rejects_call_beyond_the_limit() {
+        let limiter = RateLimiter::new();
+        for _ in 0..3 {
+            limiter.check("cmd", 3, Duration::from_secs(60)).unwrap();
+        }
+
+        let err = limiter
+            .check("cmd", 3, Duration::from_secs(60))
+            .expect_err("quarta chamada deveria ser rejeitada");
+
+        assert!(err.contains("Limite de chamadas excedido"));
+        assert!(err.contains("máximo 3 por 60 segundos"));
+    }
+
+    #[test]
+    fn tracks_keys_independently() {
+        let limiter = RateLimiter::new();
+        let window = Duration::from_secs(60);
+        limiter.check("ssh_connect:host-a", 1, window).unwrap();
+
+        // A chave esgotada é rejeitada, mas outra chave ainda passa
+        assert!(limiter.check("ssh_connect:host-a", 1, window).is_err());
+        assert!(limiter.check("ssh_connect:host-b", 1, window).is_ok());
+    }
+
+    #[test]
+    fn frees_slots_after_window_expires() {
+        let limiter = RateLimiter::new();
+        let window = Duration::from_millis(50);
+
+        limiter.check("cmd", 1, window).unwrap();
+        assert!(limiter.check("cmd", 1, window).is_err());
+
+        std::thread::sleep(Duration::from_millis(80));
+        assert!(limiter.check("cmd", 1, window).is_ok());
+    }
+
+    #[test]
+    fn rejected_call_does_not_consume_slot() {
+        let limiter = RateLimiter::new();
+        let window = Duration::from_millis(50);
+
+        limiter.check("cmd", 1, window).unwrap();
+        // Chamadas rejeitadas não devem ser registradas na janela
+        assert!(limiter.check("cmd", 1, window).is_err());
+        assert!(limiter.check("cmd", 1, window).is_err());
+
+        std::thread::sleep(Duration::from_millis(80));
+        assert!(limiter.check("cmd", 1, window).is_ok());
+    }
+}

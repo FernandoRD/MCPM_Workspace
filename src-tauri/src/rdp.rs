@@ -246,7 +246,11 @@ fn build_rdp_file_lines(
         "disabled" => 2,
         _ => 0,
     };
-    let authentication_level = if options.certificate_mode() == "strict" { 2 } else { 0 };
+    let authentication_level = if options.certificate_mode() == "strict" {
+        2
+    } else {
+        0
+    };
     let mut lines = vec![
         format!("screen mode id:i:{screen_mode}"),
         format!("use multimon:i:{}", if options.multimon() { 1 } else { 0 }),
@@ -280,7 +284,11 @@ fn build_rdp_file_lines(
         ),
         format!(
             "allow desktop composition:i:{}",
-            if performance.desktop_composition() { 1 } else { 0 }
+            if performance.desktop_composition() {
+                1
+            } else {
+                0
+            }
         ),
         format!(
             "prompt for credentials:i:{}",
@@ -313,12 +321,15 @@ fn spawn_with_args(command: &str, args: &[String]) -> io::Result<Child> {
         .spawn()
 }
 
-fn spawn_path_with_args(command: &Path, args: &[String], current_dir: Option<&Path>) -> io::Result<Child> {
+fn spawn_path_with_args(
+    command: &Path,
+    args: &[String],
+    current_dir: Option<&Path>,
+) -> io::Result<Child> {
     let mut process = Command::new(command);
 
-    let stderr = app_logging::viewer_log_path().unwrap_or_else(|| {
-        std::env::temp_dir().join("ssh_vault_viewer.log")
-    });
+    let stderr = app_logging::viewer_log_path()
+        .unwrap_or_else(|| std::env::temp_dir().join("ssh_vault_viewer.log"));
     let stderr_stdio = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -413,7 +424,9 @@ fn sanitize_internal_viewer_preview_args(args: &[String]) -> Vec<String> {
 }
 
 fn workspace_root() -> Option<PathBuf> {
-    Path::new(env!("CARGO_MANIFEST_DIR")).parent().map(Path::to_path_buf)
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .map(Path::to_path_buf)
 }
 
 fn internal_viewer_manifest_path() -> Option<PathBuf> {
@@ -431,8 +444,10 @@ fn internal_viewer_binary_candidates() -> Vec<PathBuf> {
     };
 
     vec![
-        root.join("clients/internal-rdp-client/target/debug").join(bin_name),
-        root.join("clients/internal-rdp-client/target/release").join(bin_name),
+        root.join("clients/internal-rdp-client/target/debug")
+            .join(bin_name),
+        root.join("clients/internal-rdp-client/target/release")
+            .join(bin_name),
     ]
 }
 
@@ -470,7 +485,7 @@ fn launch_internal_rdp_viewer(
     let settings_source = {
         let storage = state.storage.lock().map_err(|e| e.to_string())?;
         let path = storage::internal_rdp_settings_path(&storage.data_dir);
-        path.exists().then(|| path)
+        path.exists().then_some(path)
     };
 
     let mut viewer_args = vec![
@@ -499,7 +514,10 @@ fn launch_internal_rdp_viewer(
             viewer_args.push("--monitor".to_string());
             viewer_args.push(format!(
                 "{},{},{},{},{},{}",
-                m.left, m.top, m.width, m.height,
+                m.left,
+                m.top,
+                m.width,
+                m.height,
                 if m.is_primary { "true" } else { "false" },
                 scale,
             ));
@@ -509,22 +527,31 @@ fn launch_internal_rdp_viewer(
     if let Some(settings_path) = settings_source.as_ref() {
         viewer_args.splice(
             0..0,
-            ["--settings-file".to_string(), settings_path.to_string_lossy().to_string()],
+            [
+                "--settings-file".to_string(),
+                settings_path.to_string_lossy().to_string(),
+            ],
         );
     }
 
     let preview_args = sanitize_internal_viewer_preview_args(&viewer_args);
 
     if let Some(candidate) = bundled_internal_viewer_path(app) {
-        let child = spawn_path_with_args(&candidate, &viewer_args, None)
-            .map_err(|e| format!("Falha ao iniciar viewer interno empacotado em {}: {e}", candidate.display()))?;
+        let child = spawn_path_with_args(&candidate, &viewer_args, None).map_err(|e| {
+            format!(
+                "Falha ao iniciar viewer interno empacotado em {}: {e}",
+                candidate.display()
+            )
+        })?;
 
         return Ok(InternalViewerLaunchOutcome {
             child,
             launcher_name: "viewer_mvp".to_string(),
             executable: candidate.to_string_lossy().to_string(),
             arguments_preview: preview_command(&candidate.to_string_lossy(), &preview_args),
-            message: "Viewer RDP interno experimental iniciado a partir do binário empacotado com o app.".to_string(),
+            message:
+                "Viewer RDP interno experimental iniciado a partir do binário empacotado com o app."
+                    .to_string(),
             settings_source: settings_source.map(|path| path.to_string_lossy().to_string()),
         });
     }
@@ -535,14 +562,21 @@ fn launch_internal_rdp_viewer(
         }
 
         let child = spawn_path_with_args(&candidate, &viewer_args, workspace_root().as_deref())
-            .map_err(|e| format!("Falha ao iniciar viewer interno em {}: {e}", candidate.display()))?;
+            .map_err(|e| {
+                format!(
+                    "Falha ao iniciar viewer interno em {}: {e}",
+                    candidate.display()
+                )
+            })?;
 
         return Ok(InternalViewerLaunchOutcome {
             child,
             launcher_name: "viewer_mvp".to_string(),
             executable: candidate.to_string_lossy().to_string(),
             arguments_preview: preview_command(&candidate.to_string_lossy(), &preview_args),
-            message: "Viewer RDP interno experimental iniciado a partir do binário local do protótipo.".to_string(),
+            message:
+                "Viewer RDP interno experimental iniciado a partir do binário local do protótipo."
+                    .to_string(),
             settings_source: settings_source.map(|path| path.to_string_lossy().to_string()),
         });
     }
@@ -573,7 +607,8 @@ fn launch_internal_rdp_viewer(
         launcher_name: "cargo run".to_string(),
         executable: "cargo".to_string(),
         arguments_preview: preview_command("cargo", &preview_cargo_args),
-        message: "Viewer RDP interno experimental iniciado via cargo run no workspace local.".to_string(),
+        message: "Viewer RDP interno experimental iniciado via cargo run no workspace local."
+            .to_string(),
         settings_source: settings_source.map(|path| path.to_string_lossy().to_string()),
     })
 }
@@ -672,10 +707,7 @@ fn build_freerdp_args(
     options: &RdpConnectOptions,
 ) -> Vec<String> {
     let performance = options.performance();
-    let mut freerdp_args = vec![
-        format!("/v:{host}:{port}"),
-        "+auto-reconnect".to_string(),
-    ];
+    let mut freerdp_args = vec![format!("/v:{host}:{port}"), "+auto-reconnect".to_string()];
     if options.certificate_mode() == "ignore" {
         freerdp_args.push("/cert:ignore".to_string());
     }
@@ -926,6 +958,7 @@ fn launch_rdp_client(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // Contrato IPC Tauri: argumentos serializados individualmente.
 pub async fn rdp_connect(
     state: State<'_, AppState>,
     session_id: String,
@@ -956,11 +989,17 @@ pub async fn rdp_connect(
     {
         let mut manager = state.rdp.lock().await;
         if let Some(mut existing) = manager.sessions.remove(&session_id) {
-            log::info!("rdp: limpando sessão externa anterior session={}", session_id);
+            log::info!(
+                "rdp: limpando sessão externa anterior session={}",
+                session_id
+            );
             cleanup_session(&mut existing);
         }
         if let Some(mut existing) = manager.internal_viewers.remove(&session_id) {
-            log::info!("rdp: limpando viewer interno anterior session={}", session_id);
+            log::info!(
+                "rdp: limpando viewer interno anterior session={}",
+                session_id
+            );
             let _ = existing.kill();
             let _ = existing.wait();
         }
@@ -1036,6 +1075,7 @@ pub async fn rdp_connect(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // Contrato IPC Tauri: argumentos serializados individualmente.
 pub async fn rdp_launch_internal_viewer(
     app: AppHandle,
     state: State<'_, AppState>,
@@ -1046,9 +1086,11 @@ pub async fn rdp_launch_internal_viewer(
     password: Option<String>,
     options: Option<RdpConnectOptions>,
 ) -> Result<InternalRdpViewerLaunchResult, String> {
-    state
-        .rate_limiter
-        .check("rdp_launch_internal_viewer", 20, std::time::Duration::from_secs(60))?;
+    state.rate_limiter.check(
+        "rdp_launch_internal_viewer",
+        20,
+        std::time::Duration::from_secs(60),
+    )?;
     log::info!(
         "rdp: launch_internal_viewer iniciado session={} host={} port={}",
         session_id,
@@ -1081,17 +1123,21 @@ pub async fn rdp_launch_internal_viewer(
     let mut manager = state.rdp.lock().await;
     reap_finished_internal_viewers(&mut manager);
     if let Some(mut existing) = manager.sessions.remove(&session_id) {
-        log::info!("rdp: removendo sessão externa ao iniciar viewer interno session={}", session_id);
+        log::info!(
+            "rdp: removendo sessão externa ao iniciar viewer interno session={}",
+            session_id
+        );
         cleanup_session(&mut existing);
     }
     if let Some(mut existing) = manager.internal_viewers.remove(&session_id) {
-        log::info!("rdp: substituindo viewer interno existente session={}", session_id);
+        log::info!(
+            "rdp: substituindo viewer interno existente session={}",
+            session_id
+        );
         let _ = existing.kill();
         let _ = existing.wait();
     }
-    manager
-        .internal_viewers
-        .insert(session_id, launch.child);
+    manager.internal_viewers.insert(session_id, launch.child);
     log::info!(
         "rdp: viewer interno iniciado launcher={} executable={}",
         launch.launcher_name,
@@ -1108,10 +1154,7 @@ pub async fn rdp_launch_internal_viewer(
 }
 
 #[tauri::command]
-pub async fn rdp_disconnect(
-    state: State<'_, AppState>,
-    session_id: String,
-) -> Result<(), String> {
+pub async fn rdp_disconnect(state: State<'_, AppState>, session_id: String) -> Result<(), String> {
     log::info!("rdp: disconnect solicitado session={}", session_id);
     let mut manager = state.rdp.lock().await;
     if let Some(mut session) = manager.sessions.remove(&session_id) {
@@ -1135,7 +1178,7 @@ pub async fn rdp_session_exists(
     let external_done = if let Some(session) = manager.sessions.get_mut(&session_id) {
         if let Some(child) = session.child.as_mut() {
             match child.try_wait() {
-                Ok(Some(_)) => true,  // processo encerrou
+                Ok(Some(_)) => true, // processo encerrou
                 Ok(None) => return Ok(true),
                 Err(e) => {
                     let message = format!("Falha ao consultar processo RDP: {e}");
@@ -1273,9 +1316,11 @@ mod tests {
 
     #[test]
     fn freerdp_args_switch_to_fullscreen_and_sound_redirect_defaults() {
-        let mut options = RdpConnectOptions::default();
-        options.fullscreen = Some(true);
-        options.audio_mode = Some("redirect".to_string());
+        let options = RdpConnectOptions {
+            fullscreen: Some(true),
+            audio_mode: Some("redirect".to_string()),
+            ..Default::default()
+        };
 
         let args = build_freerdp_args("host.local", 3389, None, None, &options);
 

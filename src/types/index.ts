@@ -108,6 +108,8 @@ export interface SessionTab {
   panes: TerminalPaneState[];
   splitDirection: SplitDirection;
   createdAt: string;
+  /** Aba reidratada do último uso; exige uma ação explícita para conectar. */
+  requiresExplicitReconnect?: boolean;
 }
 
 export interface TerminalPaneSnapshot {

@@ -23,6 +23,7 @@ interface TerminalPaneProps {
   passphrase: string | null;
   sshCompatPreset?: string;
   reconnectNonce?: number;
+  autoConnect?: boolean;
   onStatusChange: (paneId: string, status: "connecting" | "connected" | "disconnected" | "error") => void;
   onConnected: () => void;
   onDisconnected?: (status: "disconnected" | "error") => void;
@@ -125,6 +126,7 @@ export function TerminalPane({
   passphrase,
   sshCompatPreset,
   reconnectNonce = 0,
+  autoConnect = true,
   onStatusChange,
   onConnected,
   onDisconnected,
@@ -140,6 +142,7 @@ export function TerminalPane({
   const cleanupRef = useRef<(() => void) | null>(null);
   // cancelRef: cancela um connect() ainda em andamento (antes de cleanupRef estar pronto)
   const cancelRef = useRef<(() => void) | null>(null);
+  const reportedInvokeFailuresRef = useRef(new Set<string>());
   const terminalSettings = useSettingsStore((s) => s.settings.terminal);
   const sshSettings = useSettingsStore((s) => s.settings.ssh);
   const appendTerminalOutput = useSessionsStore((s) => s.appendTerminalOutput);
@@ -148,6 +151,15 @@ export function TerminalPane({
   useEffect(() => {
     rightClickBehaviorRef.current = terminalSettings.rightClickBehavior;
   }, [terminalSettings.rightClickBehavior]);
+
+  const reportInvokeFailureOnce = useCallback((operation: string, error: unknown) => {
+    if (reportedInvokeFailuresRef.current.has(operation)) return;
+    reportedInvokeFailuresRef.current.add(operation);
+    logFrontendError(`terminal.${operation}`, `Falha no comando ${operation} do terminal`, error, {
+      paneId,
+      protocol,
+    });
+  }, [paneId, protocol]);
 
   const clearConnectionBindings = useCallback(() => {
     cancelRef.current?.();
@@ -242,11 +254,17 @@ export function TerminalPane({
     }
 
     const fitAddon = fitRef.current!;
-    const dims = fitAddon.proposeDimensions() ?? { cols: 80, rows: 24 };
+    const proposedDims = fitAddon.proposeDimensions();
+    const dims =
+      proposedDims && Number.isFinite(proposedDims.cols) && Number.isFinite(proposedDims.rows)
+        ? proposedDims
+        : { cols: 80, rows: 24 };
 
     const dataDispose = xterm.onData((data) => {
       const inputCommand = protocol === "telnet" ? "telnet_send_input" : "ssh_send_input";
-      invoke(inputCommand, { tabId: paneId, data }).catch(() => {});
+      invoke(inputCommand, { tabId: paneId, data }).catch((error) => {
+        reportInvokeFailureOnce("sendInput", error);
+      });
     });
 
     let wasConnected = false;
@@ -325,6 +343,12 @@ export function TerminalPane({
           setPendingFingerprint(fingerprint);
           return;
         }
+        logFrontendError("terminal.connect", "Falha ao conectar terminal", err, {
+          paneId,
+          protocol,
+          host,
+          port,
+        });
         xtermRef.current?.writeln(`\r\n\x1b[1;31m${t("terminal.errorPrefix", { error: err })}\x1b[0m\r\n`);
         onStatusChange(paneId, "error");
       });
@@ -333,9 +357,14 @@ export function TerminalPane({
     const resizeObserver = new ResizeObserver(() => {
       fitAddon.fit();
       const d = fitAddon.proposeDimensions();
-      if (!d) return;
+      // Container oculto/zero-size gera NaN (vira null no JSON e o backend
+      // rejeita) e resize antes do connect não tem sessão para receber.
+      if (!d || !Number.isFinite(d.cols) || !Number.isFinite(d.rows)) return;
+      if (statusRef.current !== "connected") return;
       const resizeCommand = protocol === "telnet" ? "telnet_resize" : "ssh_resize";
-      invoke(resizeCommand, { tabId: paneId, cols: d.cols, rows: d.rows }).catch(() => {});
+      invoke(resizeCommand, { tabId: paneId, cols: d.cols, rows: d.rows }).catch((error) => {
+        reportInvokeFailureOnce("resize", error);
+      });
     });
     if (termRef.current) resizeObserver.observe(termRef.current);
 
@@ -363,7 +392,12 @@ export function TerminalPane({
     }
     try {
       await invoke("ssh_trust_host", { host, port, fingerprint: pendingFingerprint });
-    } catch {
+    } catch (error) {
+      logFrontendError("terminal.trustHost", "Falha ao salvar confiança no host SSH", error, {
+        paneId,
+        host,
+        port,
+      });
       // ignora erro ao salvar — a conexão prossegue
     }
     setPendingFingerprint(null);
@@ -373,13 +407,16 @@ export function TerminalPane({
   useEffect(() => {
     const handleBeforeUnload = () => {
       const disconnectCommand = protocol === "telnet" ? "telnet_disconnect" : "ssh_disconnect";
-      void invoke(disconnectCommand, { tabId: paneId }).catch(() => {});
+      void invoke(disconnectCommand, { tabId: paneId }).catch((error) => {
+        reportInvokeFailureOnce("disconnectBeforeUnload", error);
+      });
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [paneId, protocol]);
+  }, [paneId, protocol, reportInvokeFailureOnce]);
 
   useEffect(() => {
+    if (autoConnect === false) return;
     connect();
     return () => {
       // cancelRef para abortar connect() que ainda esteja aguardando listen() resolver.
@@ -390,7 +427,7 @@ export function TerminalPane({
       fitRef.current = null;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clearConnectionBindings, connect, paneId, reconnectNonce]);
+  }, [autoConnect, clearConnectionBindings, connect, paneId, reconnectNonce]);
 
   return (
     <div

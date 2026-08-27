@@ -19,9 +19,10 @@ pub struct LoadedRdpPreferences {
 }
 
 pub fn load_rdp_preferences(path: &Path) -> anyhow::Result<LoadedRdpPreferences> {
-    let raw = fs::read_to_string(path).with_context(|| format!("read settings file {}", path.display()))?;
-    let root: Value =
-        serde_json::from_str(&raw).with_context(|| format!("parse settings JSON from {}", path.display()))?;
+    let raw = fs::read_to_string(path)
+        .with_context(|| format!("read settings file {}", path.display()))?;
+    let root: Value = serde_json::from_str(&raw)
+        .with_context(|| format!("parse settings JSON from {}", path.display()))?;
 
     let rdp_value = if root
         .get("app")
@@ -50,7 +51,11 @@ pub fn load_rdp_preferences(path: &Path) -> anyhow::Result<LoadedRdpPreferences>
 
 pub fn default_settings_file_path() -> Option<PathBuf> {
     let data_dir = dirs::data_dir()?;
-    Some(data_dir.join(APP_DATA_DIR_NAME).join(MIRRORED_SETTINGS_FILE_NAME))
+    Some(
+        data_dir
+            .join(APP_DATA_DIR_NAME)
+            .join(MIRRORED_SETTINGS_FILE_NAME),
+    )
 }
 
 pub fn load_default_rdp_preferences() -> anyhow::Result<Option<LoadedRdpPreferences>> {
@@ -170,7 +175,7 @@ pub fn parse_negative_bool_toggle(
     parse_bool_toggle(overrides, normalized, false)
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 #[serde(default)]
 struct RdpSettingsFile {
     fullscreen: Option<bool>,
@@ -178,17 +183,6 @@ struct RdpSettingsFile {
     height: Option<u16>,
     #[serde(rename = "internalClientPerformance")]
     internal_client_performance: InternalClientPerformanceFile,
-}
-
-impl Default for RdpSettingsFile {
-    fn default() -> Self {
-        Self {
-            fullscreen: None,
-            width: None,
-            height: None,
-            internal_client_performance: InternalClientPerformanceFile::default(),
-        }
-    }
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -349,12 +343,21 @@ mod tests {
                 ..SessionPerformanceConfig::default()
             },
         };
-        let mut overrides = PerformanceOverrides::default();
-        overrides.wallpaper = Some(false);
-        overrides.font_smoothing = Some(true);
+        let overrides = PerformanceOverrides {
+            wallpaper: Some(false),
+            font_smoothing: Some(true),
+            ..PerformanceOverrides::default()
+        };
 
-        let (width, height, fullscreen, performance) =
-            apply_profile_preferences(1280, 720, Some(loaded), Some(false), Some(1366), None, overrides);
+        let (width, height, fullscreen, performance) = apply_profile_preferences(
+            1280,
+            720,
+            Some(loaded),
+            Some(false),
+            Some(1366),
+            None,
+            overrides,
+        );
 
         assert_eq!(width, 1366);
         assert_eq!(height, 1080);

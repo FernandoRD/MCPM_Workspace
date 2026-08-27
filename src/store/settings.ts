@@ -162,8 +162,12 @@ export const useSettingsStore = create<SettingsStore>()((set, _get) => ({
             i18n.changeLanguage(legacySettings.locale);
             set({ settings: legacySettings, initialized: true });
             return;
-          } catch {
-            // ignora erros de parse
+          } catch (error) {
+            logFrontendError(
+              "settings.migrateLegacy",
+              "Falha ao migrar configurações do localStorage",
+              error
+            );
           }
         }
         // Sem dados: aplica defaults

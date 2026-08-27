@@ -23,7 +23,11 @@ impl ViewerBuffer {
     }
 
     /// Atualiza o buffer a partir de uma imagem que cobre exatamente este buffer (single-monitor).
-    pub fn apply_rgba_update(&mut self, rgba: &[u8], dirty_region: Option<&InclusiveRectangle>) -> bool {
+    pub fn apply_rgba_update(
+        &mut self,
+        rgba: &[u8],
+        dirty_region: Option<&InclusiveRectangle>,
+    ) -> bool {
         if !self.initialized {
             self.write_full(rgba);
         } else if let Some(region) = dirty_region {
@@ -73,9 +77,14 @@ impl ViewerBuffer {
             let clip_bottom = r_bottom.min(mon_bottom - 1);
 
             self.write_region_from_slice(
-                full_rgba, full_width,
-                mon_x, mon_y,
-                clip_left, clip_top, clip_right, clip_bottom,
+                full_rgba,
+                full_width,
+                mon_x,
+                mon_y,
+                clip_left,
+                clip_top,
+                clip_right,
+                clip_bottom,
             );
         } else {
             return false;
@@ -86,7 +95,7 @@ impl ViewerBuffer {
     }
 
     fn write_full(&mut self, rgba: &[u8]) {
-        for (index, pixel) in rgba.chunks_exact(4).enumerate() {
+        for (index, pixel) in rgba.as_chunks::<4>().0.iter().enumerate() {
             let red = u32::from(pixel[0]);
             let green = u32::from(pixel[1]);
             let blue = u32::from(pixel[2]);
@@ -108,7 +117,7 @@ impl ViewerBuffer {
             let dst_row_start = local_y * self.width;
             let src_row = &full_rgba[src_row_start..src_row_start + self.width * 4];
             let dst_row = &mut self.pixels[dst_row_start..dst_row_start + self.width];
-            for (dst, src) in dst_row.iter_mut().zip(src_row.chunks_exact(4)) {
+            for (dst, src) in dst_row.iter_mut().zip(src_row.as_chunks::<4>().0.iter()) {
                 *dst = (u32::from(src[0]) << 16) | (u32::from(src[1]) << 8) | u32::from(src[2]);
             }
         }
@@ -154,7 +163,7 @@ impl ViewerBuffer {
             let dst_start = local_y * self.width + local_x;
             let src_row = &full_rgba[src_start..src_start + row_width * 4];
             let dst_row = &mut self.pixels[dst_start..dst_start + row_width];
-            for (dst, src) in dst_row.iter_mut().zip(src_row.chunks_exact(4)) {
+            for (dst, src) in dst_row.iter_mut().zip(src_row.as_chunks::<4>().0.iter()) {
                 *dst = (u32::from(src[0]) << 16) | (u32::from(src[1]) << 8) | u32::from(src[2]);
             }
         }

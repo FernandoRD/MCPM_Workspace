@@ -107,7 +107,10 @@ fn merge_settings(global: &BlockSettings, local: &BlockSettings) -> BlockSetting
         host_name: local.host_name.clone().or_else(|| global.host_name.clone()),
         user: local.user.clone().or_else(|| global.user.clone()),
         port: local.port.or(global.port),
-        proxy_jump: local.proxy_jump.clone().or_else(|| global.proxy_jump.clone()),
+        proxy_jump: local
+            .proxy_jump
+            .clone()
+            .or_else(|| global.proxy_jump.clone()),
         identity_file: local
             .identity_file
             .clone()
@@ -120,7 +123,8 @@ fn looks_like_pattern(value: &str) -> bool {
 }
 
 fn parse_host_aliases(value: &str) -> Vec<String> {
-    value.split_whitespace()
+    value
+        .split_whitespace()
         .map(strip_wrapping_quotes)
         .filter(|alias| !alias.is_empty() && !looks_like_pattern(alias))
         .collect()
@@ -131,8 +135,7 @@ fn expand_home_tokens(raw: &str) -> String {
         .unwrap_or_else(|| PathBuf::from("~"))
         .to_string_lossy()
         .to_string();
-    raw.replace("%d", &home)
-        .replace("~/", &format!("{home}/"))
+    raw.replace("%d", &home).replace("~/", &format!("{home}/"))
 }
 
 fn read_optional_text(path: &Path) -> Option<String> {
@@ -148,7 +151,11 @@ fn normalize_jump_alias(raw: &str) -> Option<String> {
         return None;
     }
     let without_user = first.rsplit('@').next().unwrap_or(first);
-    let host = without_user.split(':').next().unwrap_or(without_user).trim();
+    let host = without_user
+        .split(':')
+        .next()
+        .unwrap_or(without_user)
+        .trim();
     if host.is_empty() {
         None
     } else {
@@ -166,7 +173,12 @@ fn host_duplicate_key(label: &str, host: &str, port: u16, username: Option<&str>
     .join("|")
 }
 
-fn credential_duplicate_key(label: &str, username: &str, auth_method: &str, key_id: Option<&str>) -> String {
+fn credential_duplicate_key(
+    label: &str,
+    username: &str,
+    auth_method: &str,
+    key_id: Option<&str>,
+) -> String {
     [
         label.trim().to_lowercase(),
         username.trim().to_lowercase(),
@@ -276,7 +288,8 @@ fn build_import_plan(
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .map(str::to_string);
-        let host_key = host_duplicate_key(&entry.alias, &entry.host, entry.port, username.as_deref());
+        let host_key =
+            host_duplicate_key(&entry.alias, &entry.host, entry.port, username.as_deref());
 
         if existing_host_keys.contains_key(&host_key) {
             skipped_count += 1;
@@ -293,8 +306,11 @@ fn build_import_plan(
             .filter(|value| !value.is_empty())
         {
             let ssh_key_label = format!("{} key", entry.alias);
-            let ssh_key_key = ssh_key_duplicate_key(&ssh_key_label, entry.public_key_content.as_deref());
-            let effective_key_id = if let Some(existing_id) = existing_ssh_key_keys.get(&ssh_key_key) {
+            let ssh_key_key =
+                ssh_key_duplicate_key(&ssh_key_label, entry.public_key_content.as_deref());
+            let effective_key_id = if let Some(existing_id) =
+                existing_ssh_key_keys.get(&ssh_key_key)
+            {
                 existing_id.clone()
             } else {
                 let ssh_key_id = Uuid::new_v4().to_string();
@@ -318,44 +334,48 @@ fn build_import_plan(
                 "privateKey",
                 Some(&effective_key_id),
             );
-            credential_id = Some(if let Some(existing_id) = existing_credential_keys.get(&credential_key) {
-                existing_id.clone()
-            } else {
-                let credential_id = Uuid::new_v4().to_string();
-                let credential = json!({
-                    "id": credential_id,
-                    "label": credential_label,
-                    "username": username.clone().unwrap_or_default(),
-                    "authMethod": "privateKey",
-                    "keyId": effective_key_id,
-                    "createdAt": now,
-                    "updatedAt": now,
-                });
-                credentials.push(credential);
-                existing_credential_keys.insert(credential_key, credential_id.clone());
-                credential_id
-            });
+            credential_id = Some(
+                if let Some(existing_id) = existing_credential_keys.get(&credential_key) {
+                    existing_id.clone()
+                } else {
+                    let credential_id = Uuid::new_v4().to_string();
+                    let credential = json!({
+                        "id": credential_id,
+                        "label": credential_label,
+                        "username": username.clone().unwrap_or_default(),
+                        "authMethod": "privateKey",
+                        "keyId": effective_key_id,
+                        "createdAt": now,
+                        "updatedAt": now,
+                    });
+                    credentials.push(credential);
+                    existing_credential_keys.insert(credential_key, credential_id.clone());
+                    credential_id
+                },
+            );
             auth_method = "privateKey".to_string();
         } else if let Some(username_value) = username.as_deref() {
             let credential_label = format!("{} credential", entry.alias);
             let credential_key =
                 credential_duplicate_key(&credential_label, username_value, "agent", None);
-            credential_id = Some(if let Some(existing_id) = existing_credential_keys.get(&credential_key) {
-                existing_id.clone()
-            } else {
-                let credential_id = Uuid::new_v4().to_string();
-                let credential = json!({
-                    "id": credential_id,
-                    "label": credential_label,
-                    "username": username_value,
-                    "authMethod": "agent",
-                    "createdAt": now,
-                    "updatedAt": now,
-                });
-                credentials.push(credential);
-                existing_credential_keys.insert(credential_key, credential_id.clone());
-                credential_id
-            });
+            credential_id = Some(
+                if let Some(existing_id) = existing_credential_keys.get(&credential_key) {
+                    existing_id.clone()
+                } else {
+                    let credential_id = Uuid::new_v4().to_string();
+                    let credential = json!({
+                        "id": credential_id,
+                        "label": credential_label,
+                        "username": username_value,
+                        "authMethod": "agent",
+                        "createdAt": now,
+                        "updatedAt": now,
+                    });
+                    credentials.push(credential);
+                    existing_credential_keys.insert(credential_key, credential_id.clone());
+                    credential_id
+                },
+            );
         }
 
         let host_id = Uuid::new_v4().to_string();
@@ -424,16 +444,15 @@ fn build_import_plan(
     }
 }
 
-fn build_entry(
-    alias: &str,
-    settings: &BlockSettings,
-    source_path: &Path,
-) -> ImportedSshConfigHost {
+fn build_entry(alias: &str, settings: &BlockSettings, source_path: &Path) -> ImportedSshConfigHost {
     let host = settings
         .host_name
         .clone()
         .unwrap_or_else(|| alias.to_string());
-    let identity_file_path = settings.identity_file.as_ref().map(|path| expand_home_tokens(path));
+    let identity_file_path = settings
+        .identity_file
+        .as_ref()
+        .map(|path| expand_home_tokens(path));
     let identity_file_content = identity_file_path
         .as_ref()
         .and_then(|path| read_optional_text(Path::new(path)));
@@ -518,10 +537,8 @@ fn parse_ssh_config_file(config_path: &Path) -> Result<Vec<ImportedSshConfigHost
                 target.port = strip_wrapping_quotes(value).parse::<u16>().ok();
             }
             "proxyjump" => target.proxy_jump = Some(strip_wrapping_quotes(value)),
-            "identityfile" => {
-                if target.identity_file.is_none() {
-                    target.identity_file = Some(strip_wrapping_quotes(value));
-                }
+            "identityfile" if target.identity_file.is_none() => {
+                target.identity_file = Some(strip_wrapping_quotes(value));
             }
             _ => {}
         }
@@ -566,7 +583,7 @@ pub fn ssh_import_config(
     }
 
     let mut entries = parse_ssh_config_file(&config_path)?;
-    entries.sort_by(|a, b| a.alias.to_lowercase().cmp(&b.alias.to_lowercase()));
+    entries.sort_by_key(|entry| entry.alias.to_lowercase());
 
     let conn = state
         .database
@@ -576,7 +593,12 @@ pub fn ssh_import_config(
     let existing_hosts = load_values(&conn, "hosts")?;
     let existing_credentials = load_values(&conn, "credentials")?;
     let existing_ssh_keys = load_values(&conn, "ssh_keys")?;
-    let plan = build_import_plan(&entries, &existing_hosts, &existing_credentials, &existing_ssh_keys);
+    let plan = build_import_plan(
+        &entries,
+        &existing_hosts,
+        &existing_credentials,
+        &existing_ssh_keys,
+    );
 
     Ok(SshConfigImportPreview {
         imported_count: plan.hosts.len(),
@@ -606,7 +628,7 @@ pub fn ssh_apply_imported_config(
     }
 
     let mut entries = parse_ssh_config_file(&config_path)?;
-    entries.sort_by(|a, b| a.alias.to_lowercase().cmp(&b.alias.to_lowercase()));
+    entries.sort_by_key(|entry| entry.alias.to_lowercase());
 
     let conn = state
         .database
@@ -616,7 +638,12 @@ pub fn ssh_apply_imported_config(
     let existing_hosts = load_values(&conn, "hosts")?;
     let existing_credentials = load_values(&conn, "credentials")?;
     let existing_ssh_keys = load_values(&conn, "ssh_keys")?;
-    let plan = build_import_plan(&entries, &existing_hosts, &existing_credentials, &existing_ssh_keys);
+    let plan = build_import_plan(
+        &entries,
+        &existing_hosts,
+        &existing_credentials,
+        &existing_ssh_keys,
+    );
 
     for ssh_key in &plan.ssh_keys {
         save_value(
@@ -668,7 +695,9 @@ pub async fn ssh_probe_host(
     timeout_ms: Option<u64>,
 ) -> Result<SshProbeResult, String> {
     let host = host.trim().to_string();
-    state.rate_limiter.check("ssh_probe_host", 20, std::time::Duration::from_secs(60))?;
+    state
+        .rate_limiter
+        .check("ssh_probe_host", 20, std::time::Duration::from_secs(60))?;
     let started = Instant::now();
     let timeout_duration = Duration::from_millis(timeout_ms.unwrap_or(4000));
 

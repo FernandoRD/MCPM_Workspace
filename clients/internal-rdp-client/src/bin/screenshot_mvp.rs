@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use anyhow::{Context, bail};
+use anyhow::{bail, Context};
 use image::{ImageBuffer, Rgba};
 use internal_rdp_client::mvp_runtime::{connect_with_password, SessionProfile};
 use internal_rdp_client::settings_bridge::{
@@ -120,17 +120,31 @@ fn parse_args() -> anyhow::Result<Action> {
 
         match flag.as_str() {
             "--host" => host = Some(next_value(&mut args, "--host")?),
-            "--port" => port = next_value(&mut args, "--port")?.parse().context("invalid --port value")?,
+            "--port" => {
+                port = next_value(&mut args, "--port")?
+                    .parse()
+                    .context("invalid --port value")?
+            }
             "--username" | "-u" => username = Some(next_value(&mut args, "--username")?),
             "--password" | "-p" => password = Some(next_value(&mut args, "--password")?),
             "--output" | "-o" => output = PathBuf::from(next_value(&mut args, "--output")?),
             "--domain" | "-d" => domain = Some(next_value(&mut args, "--domain")?),
-            "--settings-file" => settings_file = Some(PathBuf::from(next_value(&mut args, "--settings-file")?)),
+            "--settings-file" => {
+                settings_file = Some(PathBuf::from(next_value(&mut args, "--settings-file")?))
+            }
             "--width" => {
-                width_override = Some(next_value(&mut args, "--width")?.parse().context("invalid --width value")?)
+                width_override = Some(
+                    next_value(&mut args, "--width")?
+                        .parse()
+                        .context("invalid --width value")?,
+                )
             }
             "--height" => {
-                height_override = Some(next_value(&mut args, "--height")?.parse().context("invalid --height value")?)
+                height_override = Some(
+                    next_value(&mut args, "--height")?
+                        .parse()
+                        .context("invalid --height value")?,
+                )
             }
             "--color-depth" => {
                 color_depth = next_value(&mut args, "--color-depth")?
@@ -161,9 +175,11 @@ fn parse_args() -> anyhow::Result<Action> {
 }
 
 fn next_value(args: &mut impl Iterator<Item = String>, flag: &str) -> anyhow::Result<String> {
-    args.next().with_context(|| format!("missing value for {flag}"))
+    args.next()
+        .with_context(|| format!("missing value for {flag}"))
 }
 
+#[allow(clippy::too_many_arguments)] // Opções explícitas recebidas da CLI de screenshot.
 fn run(
     host: String,
     port: u16,
@@ -228,8 +244,11 @@ fn run(
     let mut changed = false;
 
     while Instant::now() < deadline {
-        let frame_changed =
-            internal_rdp_client::mvp_runtime::flush_active_stage_once(&mut active_stage, &mut framed, &mut image)?;
+        let frame_changed = internal_rdp_client::mvp_runtime::flush_active_stage_once(
+            &mut active_stage,
+            &mut framed,
+            &mut image,
+        )?;
         changed |= frame_changed;
     }
 
@@ -237,9 +256,12 @@ fn run(
         bail!("no graphics updates received before timeout");
     }
 
-    let img: ImageBuffer<Rgba<u8>, _> =
-        ImageBuffer::from_raw(u32::from(image.width()), u32::from(image.height()), image.data())
-            .context("invalid decoded image buffer")?;
+    let img: ImageBuffer<Rgba<u8>, _> = ImageBuffer::from_raw(
+        u32::from(image.width()),
+        u32::from(image.height()),
+        image.data(),
+    )
+    .context("invalid decoded image buffer")?;
 
     img.save(&output)
         .with_context(|| format!("save screenshot to {}", output.display()))?;

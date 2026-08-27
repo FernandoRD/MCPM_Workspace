@@ -62,24 +62,33 @@ struct SftpConnection {
 
 impl SftpConnection {
     fn context(&self, session_id: &str) -> String {
-        match self.jump_host.as_deref() {
-            Some(jump_host) => format!(
-                "session={session_id} target={}@{}:{} auth={} preset={} jump={jump_host}",
-                self.username,
-                self.target_host,
-                self.target_port,
-                self.auth_method,
-                self.compat_preset
-            ),
-            None => format!(
-                "session={session_id} target={}@{}:{} auth={} preset={}",
-                self.username,
-                self.target_host,
-                self.target_port,
-                self.auth_method,
-                self.compat_preset
-            ),
-        }
+        format_sftp_context(
+            session_id,
+            &self.username,
+            &self.target_host,
+            self.target_port,
+            &self.auth_method,
+            &self.compat_preset,
+            self.jump_host.as_deref(),
+        )
+    }
+}
+
+fn format_sftp_context(
+    session_id: &str,
+    username: &str,
+    target_host: &str,
+    target_port: u16,
+    auth_method: &str,
+    compat_preset: &str,
+    jump_host: Option<&str>,
+) -> String {
+    let base = format!(
+        "session={session_id} target={username}@{target_host}:{target_port} auth={auth_method} preset={compat_preset}"
+    );
+    match jump_host {
+        Some(jump_host) => format!("{base} jump={jump_host}"),
+        None => base,
     }
 }
 
@@ -120,14 +129,13 @@ async fn authenticate(
         "privateKey" => {
             log::info!("sftp: autenticando com chave privada {log_context}");
             let content = private_key_content.ok_or("Conteúdo da chave não informado")?;
-            let key =
-                russh_keys::decode_secret_key(&content, private_key_passphrase.as_deref())
-                    .map_err(|e| {
-                        log_error(
-                            format!("Falha ao decodificar chave privada ({log_context})"),
-                            e,
-                        )
-                    })?;
+            let key = russh_keys::decode_secret_key(&content, private_key_passphrase.as_deref())
+                .map_err(|e| {
+                    log_error(
+                        format!("Falha ao decodificar chave privada ({log_context})"),
+                        e,
+                    )
+                })?;
             session
                 .authenticate_publickey(username, Arc::new(key))
                 .await
@@ -203,14 +211,11 @@ async fn get_connection(
     session_id: &str,
 ) -> Result<Arc<Mutex<SftpConnection>>, String> {
     let mgr = state.sftp.lock().await;
-    mgr.sessions
-        .get(session_id)
-        .cloned()
-        .ok_or_else(|| {
-            let message = format!("Sessão SFTP não encontrada: session={session_id}");
-            log::warn!("sftp: {message}");
-            message
-        })
+    mgr.sessions.get(session_id).cloned().ok_or_else(|| {
+        let message = format!("Sessão SFTP não encontrada: session={session_id}");
+        log::warn!("sftp: {message}");
+        message
+    })
 }
 
 // ─── Delete recursivo ─────────────────────────────────────────────────────────
@@ -220,10 +225,12 @@ fn sftp_remove_recursive<'a>(
     path: &'a str,
 ) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send + 'a>> {
     Box::pin(async move {
-        let entries = sftp
-            .read_dir(path)
-            .await
-            .map_err(|e| log_error(format!("Erro ao listar '{path}' durante delete recursivo"), e))?;
+        let entries = sftp.read_dir(path).await.map_err(|e| {
+            log_error(
+                format!("Erro ao listar '{path}' durante delete recursivo"),
+                e,
+            )
+        })?;
 
         for entry in entries {
             let name = entry.file_name().to_string();
@@ -238,21 +245,28 @@ fn sftp_remove_recursive<'a>(
             if entry.metadata().is_dir() {
                 sftp_remove_recursive(sftp, &child).await?;
             } else {
-                sftp.remove_file(&child)
-                    .await
-                    .map_err(|e| log_error(format!("Erro ao remover '{child}' durante delete recursivo"), e))?;
+                sftp.remove_file(&child).await.map_err(|e| {
+                    log_error(
+                        format!("Erro ao remover '{child}' durante delete recursivo"),
+                        e,
+                    )
+                })?;
             }
         }
 
-        sftp.remove_dir(path)
-            .await
-            .map_err(|e| log_error(format!("Erro ao remover diretório '{path}' durante delete recursivo"), e))
+        sftp.remove_dir(path).await.map_err(|e| {
+            log_error(
+                format!("Erro ao remover diretório '{path}' durante delete recursivo"),
+                e,
+            )
+        })
     })
 }
 
 // ─── Comandos Tauri ───────────────────────────────────────────────────────────
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // Contrato IPC Tauri: argumentos serializados individualmente.
 pub async fn sftp_connect(
     state: State<'_, AppState>,
     session_id: String,
@@ -279,7 +293,12 @@ pub async fn sftp_connect(
     let username = trim_owned(username);
     let jump_host = trim_optional_owned(jump_host);
     let jump_username = trim_optional_owned(jump_username);
-    let data_dir = state.storage.lock().map_err(|e| e.to_string())?.data_dir.clone();
+    let data_dir = state
+        .storage
+        .lock()
+        .map_err(|e| e.to_string())?
+        .data_dir
+        .clone();
     let known_hosts_map = load_known_hosts(&data_dir);
     let known_hosts = Arc::new(std::sync::Mutex::new(known_hosts_map));
 
@@ -365,9 +384,7 @@ pub async fn sftp_connect(
             .await
             .map_err(|e| {
                 log_error(
-                    format!(
-                        "Erro ao abrir túnel do jump host para {host}:{port} ({jump_context})"
-                    ),
+                    format!("Erro ao abrir túnel do jump host para {host}:{port} ({jump_context})"),
                     e,
                 )
             })?;
@@ -417,9 +434,7 @@ pub async fn sftp_connect(
     )
     .await?;
     if !ok {
-        let message = format!(
-            "Autenticação falhou. Verifique as credenciais ({connect_context})."
-        );
+        let message = format!("Autenticação falhou. Verifique as credenciais ({connect_context}).");
         log::error!("{message}");
         return Err(message);
     }
@@ -437,19 +452,19 @@ pub async fn sftp_connect(
         .await
         .map_err(|e| log_error(format!("Erro ao abrir canal SFTP ({connect_context})"), e))?;
 
-    channel
-        .request_subsystem(true, "sftp")
-        .await
-        .map_err(|e| {
-            log_error(
-                format!("Erro ao iniciar subsistema SFTP ({connect_context})"),
-                e,
-            )
-        })?;
+    channel.request_subsystem(true, "sftp").await.map_err(|e| {
+        log_error(
+            format!("Erro ao iniciar subsistema SFTP ({connect_context})"),
+            e,
+        )
+    })?;
 
-    let sftp = SftpSession::new(channel.into_stream())
-        .await
-        .map_err(|e| log_error(format!("Erro ao iniciar sessão SFTP ({connect_context})"), e))?;
+    let sftp = SftpSession::new(channel.into_stream()).await.map_err(|e| {
+        log_error(
+            format!("Erro ao iniciar sessão SFTP ({connect_context})"),
+            e,
+        )
+    })?;
 
     let conn = Arc::new(Mutex::new(SftpConnection {
         target_host: host.clone(),
@@ -463,12 +478,7 @@ pub async fn sftp_connect(
         sftp,
     }));
 
-    state
-        .sftp
-        .lock()
-        .await
-        .sessions
-        .insert(session_id, conn);
+    state.sftp.lock().await.sessions.insert(session_id, conn);
 
     log::info!("sftp: sessão conectada com sucesso {connect_context}");
     Ok(())
@@ -486,16 +496,12 @@ pub async fn sftp_read_dir(
     let context = conn.context(&session_id);
     log::info!("sftp: list_dir iniciado {context} path='{path}'");
 
-    let entries = conn
-        .sftp
-        .read_dir(&path)
-        .await
-        .map_err(|e| {
-            log_error(
-                format!("Erro ao listar diretório ({context}) path='{path}'"),
-                e,
-            )
-        })?;
+    let entries = conn.sftp.read_dir(&path).await.map_err(|e| {
+        log_error(
+            format!("Erro ao listar diretório ({context}) path='{path}'"),
+            e,
+        )
+    })?;
 
     let mut result: Vec<SftpEntry> = entries
         .into_iter()
@@ -594,51 +600,39 @@ pub async fn sftp_download(
             0
         });
 
-    let mut remote_file = conn
-        .sftp
-        .open(&remote_path)
-        .await
-        .map_err(|e| {
-            log_error(
-                format!("Erro ao abrir arquivo remoto ({context}) remote='{remote_path}'"),
-                e,
-            )
-        })?;
+    let mut remote_file = conn.sftp.open(&remote_path).await.map_err(|e| {
+        log_error(
+            format!("Erro ao abrir arquivo remoto ({context}) remote='{remote_path}'"),
+            e,
+        )
+    })?;
 
-    let mut local_file = tokio::fs::File::create(&local_path)
-        .await
-        .map_err(|e| {
-            log_error(
-                format!("Erro ao criar arquivo local ({context}) local='{local_path}'"),
-                e,
-            )
-        })?;
+    let mut local_file = tokio::fs::File::create(&local_path).await.map_err(|e| {
+        log_error(
+            format!("Erro ao criar arquivo local ({context}) local='{local_path}'"),
+            e,
+        )
+    })?;
 
     let mut buf = vec![0u8; 65536];
     let mut bytes_done = 0u64;
 
     loop {
-        let n = remote_file
-            .read(&mut buf)
-            .await
-            .map_err(|e| {
-                log_error(
-                    format!("Erro ao ler arquivo remoto ({context}) remote='{remote_path}'"),
-                    e,
-                )
-            })?;
+        let n = remote_file.read(&mut buf).await.map_err(|e| {
+            log_error(
+                format!("Erro ao ler arquivo remoto ({context}) remote='{remote_path}'"),
+                e,
+            )
+        })?;
         if n == 0 {
             break;
         }
-        local_file
-            .write_all(&buf[..n])
-            .await
-            .map_err(|e| {
-                log_error(
-                    format!("Erro ao gravar arquivo local ({context}) local='{local_path}'"),
-                    e,
-                )
-            })?;
+        local_file.write_all(&buf[..n]).await.map_err(|e| {
+            log_error(
+                format!("Erro ao gravar arquivo local ({context}) local='{local_path}'"),
+                e,
+            )
+        })?;
 
         bytes_done += n as u64;
         let _ = app.emit(
@@ -701,14 +695,12 @@ pub async fn sftp_upload(
         remote_path
     );
 
-    let mut local_file = tokio::fs::File::open(&local_path)
-        .await
-        .map_err(|e| {
-            log_error(
-                format!("Erro ao abrir arquivo local ({context}) local='{local_path}'"),
-                e,
-            )
-        })?;
+    let mut local_file = tokio::fs::File::open(&local_path).await.map_err(|e| {
+        log_error(
+            format!("Erro ao abrir arquivo local ({context}) local='{local_path}'"),
+            e,
+        )
+    })?;
 
     // Obtém tamanho do arquivo local para barra de progresso
     let bytes_total = local_file
@@ -724,44 +716,34 @@ pub async fn sftp_upload(
             0
         });
 
-    let mut remote_file = conn
-        .sftp
-        .create(&remote_path)
-        .await
-        .map_err(|e| {
-            log_error(
-                format!("Erro ao criar arquivo remoto ({context}) remote='{remote_path}'"),
-                e,
-            )
-        })?;
+    let mut remote_file = conn.sftp.create(&remote_path).await.map_err(|e| {
+        log_error(
+            format!("Erro ao criar arquivo remoto ({context}) remote='{remote_path}'"),
+            e,
+        )
+    })?;
 
     let mut buf = vec![0u8; 65536];
     let mut bytes_done = 0u64;
 
     loop {
-        let n = local_file
-            .read(&mut buf)
-            .await
-            .map_err(|e| {
-                log_error(
-                    format!("Erro ao ler arquivo local ({context}) local='{local_path}'"),
-                    e,
-                )
-            })?;
+        let n = local_file.read(&mut buf).await.map_err(|e| {
+            log_error(
+                format!("Erro ao ler arquivo local ({context}) local='{local_path}'"),
+                e,
+            )
+        })?;
         if n == 0 {
             break;
         }
-        remote_file
-            .write_all(&buf[..n])
-            .await
-            .map_err(|e| {
-                log_error(
-                    format!(
-                        "Erro ao enviar dados para o arquivo remoto ({context}) remote='{remote_path}'"
-                    ),
-                    e,
-                )
-            })?;
+        remote_file.write_all(&buf[..n]).await.map_err(|e| {
+            log_error(
+                format!(
+                    "Erro ao enviar dados para o arquivo remoto ({context}) remote='{remote_path}'"
+                ),
+                e,
+            )
+        })?;
 
         bytes_done += n as u64;
         let _ = app.emit(
@@ -796,10 +778,12 @@ pub async fn sftp_mkdir(
     let conn = conn_arc.lock().await;
     let context = conn.context(&session_id);
     log::info!("sftp: mkdir iniciado {context} path='{path}'");
-    conn.sftp
-        .create_dir(&path)
-        .await
-        .map_err(|e| log_error(format!("Erro ao criar diretório ({context}) path='{path}'"), e))?;
+    conn.sftp.create_dir(&path).await.map_err(|e| {
+        log_error(
+            format!("Erro ao criar diretório ({context}) path='{path}'"),
+            e,
+        )
+    })?;
     log::info!("sftp: mkdir concluído {context} path='{path}'");
     Ok(())
 }
@@ -823,15 +807,12 @@ pub async fn sftp_delete(
         // Delete recursivo: remove conteúdo antes do diretório
         sftp_remove_recursive(&conn.sftp, &path).await
     } else {
-        conn.sftp
-            .remove_file(&path)
-            .await
-            .map_err(|e| {
-                log_error(
-                    format!("Erro ao remover arquivo ({context}) path='{path}'"),
-                    e,
-                )
-            })
+        conn.sftp.remove_file(&path).await.map_err(|e| {
+            log_error(
+                format!("Erro ao remover arquivo ({context}) path='{path}'"),
+                e,
+            )
+        })
     }?;
     log::info!("sftp: delete concluído {context} path='{path}'");
     Ok(())
@@ -852,15 +833,12 @@ pub async fn sftp_rename(
         old_path,
         new_path
     );
-    conn.sftp
-        .rename(&old_path, &new_path)
-        .await
-        .map_err(|e| {
-            log_error(
-                format!("Erro ao renomear ({context}) from='{old_path}' to='{new_path}'"),
-                e,
-            )
-        })?;
+    conn.sftp.rename(&old_path, &new_path).await.map_err(|e| {
+        log_error(
+            format!("Erro ao renomear ({context}) from='{old_path}' to='{new_path}'"),
+            e,
+        )
+    })?;
     log::info!(
         "sftp: rename concluído {context} from='{}' to='{}'",
         old_path,
@@ -870,10 +848,7 @@ pub async fn sftp_rename(
 }
 
 #[tauri::command]
-pub async fn sftp_disconnect(
-    state: State<'_, AppState>,
-    session_id: String,
-) -> Result<(), String> {
+pub async fn sftp_disconnect(state: State<'_, AppState>, session_id: String) -> Result<(), String> {
     let removed = state.sftp.lock().await.sessions.remove(&session_id);
     if let Some(conn_arc) = removed {
         let conn = conn_arc.lock().await;
@@ -890,6 +865,55 @@ pub async fn sftp_session_exists(
     session_id: String,
 ) -> Result<bool, String> {
     let exists = state.sftp.lock().await.sessions.contains_key(&session_id);
-    log::debug!("sftp: session_exists session={} exists={}", session_id, exists);
+    log::debug!(
+        "sftp: session_exists session={} exists={}",
+        session_id,
+        exists
+    );
     Ok(exists)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn formats_connection_context_without_jump_host() {
+        assert_eq!(
+            format_sftp_context(
+                "session-1",
+                "ubuntu",
+                "server.internal",
+                22,
+                "agent",
+                "modern",
+                None,
+            ),
+            "session=session-1 target=ubuntu@server.internal:22 auth=agent preset=modern"
+        );
+    }
+
+    #[test]
+    fn formats_connection_context_with_jump_host() {
+        assert_eq!(
+            format_sftp_context(
+                "session-2",
+                "root",
+                "10.0.0.2",
+                2222,
+                "privateKey",
+                "legacy",
+                Some("bastion.internal"),
+            ),
+            "session=session-2 target=root@10.0.0.2:2222 auth=privateKey preset=legacy jump=bastion.internal"
+        );
+    }
+
+    #[test]
+    fn error_message_preserves_context_and_cause() {
+        assert_eq!(
+            log_error("Falha no download".to_string(), "permission denied"),
+            "Falha no download: permission denied"
+        );
+    }
 }

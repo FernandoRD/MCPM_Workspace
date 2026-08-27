@@ -22,7 +22,10 @@ pub enum NegotiationFailure {
     Unknown(u32),
 }
 
-pub fn encode_connection_request(cookie_username: Option<&str>, requested_protocols: u32) -> Vec<u8> {
+pub fn encode_connection_request(
+    cookie_username: Option<&str>,
+    requested_protocols: u32,
+) -> Vec<u8> {
     let mut payload = vec![
         0, // length indicator, preenchido no final
         X224_CONNECTION_REQUEST,
@@ -64,13 +67,17 @@ pub fn decode_connection_confirm(bytes: &[u8]) -> Result<ConnectionConfirm, Prot
     }
 
     if payload.len() < 15 {
-        return Err(ProtocolError::InvalidPacket("rdp negotiation response too short"));
+        return Err(ProtocolError::InvalidPacket(
+            "rdp negotiation response too short",
+        ));
     }
 
     let negotiation_type = payload[7];
     let negotiation_length = u16::from_le_bytes([payload[9], payload[10]]) as usize;
     if negotiation_length != 8 {
-        return Err(ProtocolError::InvalidPacket("unexpected negotiation block length"));
+        return Err(ProtocolError::InvalidPacket(
+            "unexpected negotiation block length",
+        ));
     }
 
     let value = u32::from_le_bytes([payload[11], payload[12], payload[13], payload[14]]);
@@ -108,7 +115,9 @@ mod tests {
         let packet = encode_connection_request(Some("demo"), 0x0000_0003);
 
         assert_eq!(packet[0], 3);
-        assert!(packet.windows("Cookie: mstshash=demo\r\n".len()).any(|window| window == b"Cookie: mstshash=demo\r\n"));
+        assert!(packet
+            .windows("Cookie: mstshash=demo\r\n".len())
+            .any(|window| window == b"Cookie: mstshash=demo\r\n"));
         assert_eq!(&packet[packet.len() - 4..], &0x0000_0003u32.to_le_bytes());
     }
 
@@ -129,14 +138,15 @@ mod tests {
     #[test]
     fn decodes_negotiation_failure() {
         let packet = vec![
-            0x03, 0x00, 0x00, 0x13,
-            0x0e, 0xd0, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x03, 0x00, 0x08, 0x00,
-            0x05, 0x00, 0x00, 0x00,
+            0x03, 0x00, 0x00, 0x13, 0x0e, 0xd0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x08,
+            0x00, 0x05, 0x00, 0x00, 0x00,
         ];
 
         let confirm = decode_connection_confirm(&packet).unwrap();
         assert_eq!(confirm.selected_protocol, None);
-        assert_eq!(confirm.failure, Some(NegotiationFailure::HybridRequiredByServer));
+        assert_eq!(
+            confirm.failure,
+            Some(NegotiationFailure::HybridRequiredByServer)
+        );
     }
 }

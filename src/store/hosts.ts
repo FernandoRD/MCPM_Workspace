@@ -43,8 +43,8 @@ export const useHostsStore = create<HostsStore>()((set, get) => ({
               set({ hosts: legacyHosts, initialized: true });
               return;
             }
-          } catch {
-            // ignora erros de parse
+          } catch (error) {
+            logFrontendError("hosts.migrateLegacy", "Falha ao migrar hosts do localStorage", error);
           }
         }
       }

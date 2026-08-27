@@ -97,9 +97,9 @@ impl<T: Transport> RdpClientSession<T> {
 
         if let Some(failure) = confirm.failure {
             self.state = SessionState::Closed;
-            return Err(RdpClientError::Protocol(ProtocolError::NegotiationRejected(
-                failure_code(&failure),
-            )));
+            return Err(RdpClientError::Protocol(
+                ProtocolError::NegotiationRejected(failure_code(&failure)),
+            ));
         }
 
         let summary = HandshakeSummary {
@@ -146,10 +146,8 @@ mod tests {
 
     fn confirm_tls_packet() -> Vec<u8> {
         vec![
-            0x03, 0x00, 0x00, 0x13,
-            0x0e, 0xd0, 0x00, 0x00, 0x00, 0x00, 0x00,
-            0x02, 0x00, 0x08, 0x00,
-            0x01, 0x00, 0x00, 0x00,
+            0x03, 0x00, 0x00, 0x13, 0x0e, 0xd0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x08,
+            0x00, 0x01, 0x00, 0x00, 0x00,
         ]
     }
 

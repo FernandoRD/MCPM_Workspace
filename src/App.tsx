@@ -28,6 +28,8 @@ import { useCredentialsStore } from "@/store/credentials";
 import { useSshKeysStore } from "@/store/sshKeys";
 import { useConnectionLogsStore } from "@/store/connectionLogs";
 import { useAutoSync } from "@/hooks/useAutoSync";
+import { useSessionsStore } from "@/store/sessions";
+import { isStandaloneWindow } from "@/lib/windowMode";
 
 export default function App() {
   const { t } = useTranslation();
@@ -38,12 +40,18 @@ export default function App() {
   const initCredentials = useCredentialsStore((s) => s.init);
   const initSshKeys = useSshKeysStore((s) => s.init);
   const initConnectionLogs = useConnectionLogsStore((s) => s.init);
+  const restorePersistedTabs = useSessionsStore((s) => s.restorePersistedTabs);
 
   useEffect(() => {
-    Promise.all([initSettings(), initHosts(), initCredentials(), initSshKeys(), initConnectionLogs()]).finally(() =>
-      setReady(true)
-    );
-  }, []);
+    Promise.all([initSettings(), initHosts(), initCredentials(), initSshKeys(), initConnectionLogs()]).finally(() => {
+      // Janelas dedicadas recebem a sessão pela URL/bootstrap e não devem
+      // reidratar todas as abas da janela principal.
+      if (!isStandaloneWindow(window.location.search)) {
+        restorePersistedTabs(useHostsStore.getState().hosts.map((host) => host.id));
+      }
+      setReady(true);
+    });
+  }, [initConnectionLogs, initCredentials, initHosts, initSettings, initSshKeys, restorePersistedTabs]);
 
   if (!ready) {
     return (

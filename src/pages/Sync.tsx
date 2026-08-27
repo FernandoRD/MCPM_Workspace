@@ -26,6 +26,7 @@ import {
 import { pushToProvider, pullFromProvider } from "@/lib/syncProviders";
 import { APP_NAME } from "@/lib/appInfo";
 import { setSessionMasterPassword } from "@/lib/masterPasswordSession";
+import { logFrontendEvent } from "@/lib/logger";
 
 // ─── Página principal ─────────────────────────────────────────────────────────
 
@@ -98,9 +99,15 @@ export function Sync() {
             inferredDeletedHosts[remoteHost.id] = remoteFile.deletedHosts?.[remoteHost.id] ?? deletedAt;
           }
         }
-      } catch {
+      } catch (error) {
         // O remoto pode ainda não existir no primeiro push; nesse caso o upload
         // normal continua sendo a fonte de verdade.
+        void logFrontendEvent(
+          "warn",
+          "sync.prePushPull",
+          "Não foi possível ler o remoto antes do push; continuando como primeiro envio",
+          { error: String(error), provider: sync.provider }
+        );
       }
 
       const settingsForPush = {
