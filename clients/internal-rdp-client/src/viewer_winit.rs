@@ -9,7 +9,6 @@ use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, bail, Context, Result};
 use ironrdp::pdu::geometry::InclusiveRectangle;
-use ironrdp::pdu::input::fast_path::FastPathInputEvent;
 use ironrdp::session::{image::DecodedImage, ActiveStage};
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalSize;
@@ -86,7 +85,6 @@ struct SingleWindowApp {
     window: Option<Arc<Window>>,
     presenter: Option<GpuPresenter>,
     input: WinitInputState,
-    pending_input: Vec<FastPathInputEvent>,
     pending_dirty_rects: Vec<DirtyRect>,
     first_upload: bool,
     next_tick: Instant,
@@ -125,7 +123,6 @@ impl SingleWindowApp {
                 buffer_width,
                 buffer_height,
             )),
-            pending_input: Vec::new(),
             pending_dirty_rects: Vec::new(),
             first_upload: true,
             next_tick: Instant::now(),
@@ -174,13 +171,6 @@ impl SingleWindowApp {
     }
 
     fn tick(&mut self) -> Result<()> {
-        if !self.pending_input.is_empty() {
-            let events = std::mem::take(&mut self.pending_input);
-            self.worker
-                .send_input(events)
-                .context("queue RDP input for network worker")?;
-        }
-
         let mut worker_stopped = false;
         for event in self.worker.try_drain_updates() {
             match event {
@@ -299,7 +289,11 @@ impl ApplicationHandler for SingleWindowApp {
                 return;
             }
         };
-        window.set_cursor_visible(false);
+        // The internal viewer does not yet paint the RDP pointer shape itself.
+        // Hiding the system cursor therefore leaves Windows users without any
+        // visible pointer as soon as it enters the remote desktop. Keep the
+        // native cursor on Windows until remote-pointer rendering exists.
+        window.set_cursor_visible(!cfg!(target_os = "windows"));
         self.update_display_mapping(window.inner_size());
 
         match GpuPresenter::new(Arc::clone(&window)) {
@@ -356,9 +350,15 @@ impl ApplicationHandler for SingleWindowApp {
                     }
                 }
             }
-            event => self
-                .pending_input
-                .extend(self.input.handle_window_event(&event)),
+            event => {
+                let input = self.input.handle_window_event(&event);
+                if let Err(error) = self.worker.send_input(input) {
+                    self.stop_with_error(
+                        event_loop,
+                        error.context("queue RDP input for network worker"),
+                    );
+                }
+            }
         }
     }
 
@@ -366,10 +366,11 @@ impl ApplicationHandler for SingleWindowApp {
         &mut self,
         _event_loop: &ActiveEventLoop,
         _device_id: DeviceId,
-        event: DeviceEvent,
+        _event: DeviceEvent,
     ) {
-        self.pending_input
-            .extend(self.input.handle_device_event(&event));
+        // `CursorMoved` already delivers absolute coordinates for this window.
+        // Processing raw device motion as well duplicates mouse packets on
+        // Windows, which can build a queue ahead of keyboard events.
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {

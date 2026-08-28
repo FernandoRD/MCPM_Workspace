@@ -319,6 +319,10 @@ fn scan_code(key: PhysicalKey) -> Option<(u8, bool)> {
         KeyCode::Quote => (0x28, false),
         KeyCode::Backquote => (0x29, false),
         KeyCode::Backslash => (0x2B, false),
+        // ABNT/ISO keyboards report the extra key (\\ and |) separately from
+        // the ANSI backslash key. RDP scan code 0x56 preserves that distinction
+        // for the remote keyboard layout.
+        KeyCode::IntlBackslash => (0x56, false),
         KeyCode::Comma => (0x33, false),
         KeyCode::Equal => (0x0D, false),
         KeyCode::BracketLeft => (0x1A, false),
@@ -364,6 +368,13 @@ mod tests {
         );
         assert!(
             matches!(s.keyboard(PhysicalKey::Code(KeyCode::ArrowLeft), ElementState::Released)[0], FastPathInputEvent::KeyboardEvent(f, 0x4B) if f == (KeyboardFlags::EXTENDED | KeyboardFlags::RELEASE))
+        );
+    }
+    #[test]
+    fn maps_iso_backslash_key_for_abnt_layouts() {
+        let s = WinitInputState::new(DisplayMapping::new(1, 1, 1, 1));
+        assert!(
+            matches!(s.keyboard(PhysicalKey::Code(KeyCode::IntlBackslash), ElementState::Pressed)[0], FastPathInputEvent::KeyboardEvent(f, 0x56) if f.is_empty())
         );
     }
     #[test]

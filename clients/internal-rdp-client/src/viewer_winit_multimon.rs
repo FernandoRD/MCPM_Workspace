@@ -12,7 +12,6 @@ use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, bail, Context, Result};
 use ironrdp::pdu::geometry::InclusiveRectangle;
-use ironrdp::pdu::input::fast_path::FastPathInputEvent;
 use ironrdp::session::{image::DecodedImage, ActiveStage};
 use winit::application::ApplicationHandler;
 use winit::dpi::{PhysicalPosition, PhysicalSize};
@@ -55,14 +54,7 @@ pub fn run_multi_window(
     let event_loop = EventLoop::new().context("create winit event loop")?;
     let worker =
         RdpWorker::start(active_stage, framed, image).context("start RDP network worker")?;
-    let mut app = MultiMonitorApp::new(
-        host,
-        port,
-        desktop_width,
-        desktop_height,
-        monitors,
-        worker,
-    );
+    let mut app = MultiMonitorApp::new(host, port, desktop_width, desktop_height, monitors, worker);
     let run_result = event_loop
         .run_app(&mut app)
         .context("run winit multimonitor viewer");
@@ -108,8 +100,6 @@ struct MultiMonitorApp {
     worker: RdpWorker,
     shared_image: SharedDecodedImage,
     windows: HashMap<WindowId, MonitorWindow>,
-    last_input_window: Option<WindowId>,
-    pending_input: Vec<FastPathInputEvent>,
     pending_dirty_rects: Vec<DirtyRect>,
     first_upload: bool,
     next_tick: Instant,
@@ -139,8 +129,6 @@ impl MultiMonitorApp {
             worker,
             shared_image,
             windows: HashMap::new(),
-            last_input_window: None,
-            pending_input: Vec::new(),
             pending_dirty_rects: Vec::new(),
             first_upload: true,
             next_tick: Instant::now(),
@@ -208,7 +196,10 @@ impl MultiMonitorApp {
                     .create_window(attributes)
                     .with_context(|| format!("create viewer window for monitor {index}"))?,
             );
-            window.set_cursor_visible(false);
+            // The internal viewer does not paint remote pointer shapes yet.
+            // Keep a visible native fallback on Windows instead of leaving the
+            // remote desktop without a pointer.
+            window.set_cursor_visible(!cfg!(target_os = "windows"));
             let presenter = GpuPresenter::new(Arc::clone(&window))
                 .with_context(|| format!("initialize GPU presenter for monitor {index}"))?;
             let input = WinitInputState::new(
@@ -244,13 +235,6 @@ impl MultiMonitorApp {
     }
 
     fn tick(&mut self) -> Result<()> {
-        if !self.pending_input.is_empty() {
-            let events = std::mem::take(&mut self.pending_input);
-            self.worker
-                .send_input(events)
-                .context("queue RDP input for network worker")?;
-        }
-
         let mut worker_stopped = false;
         for event in self.worker.try_drain_updates() {
             match event {
@@ -258,7 +242,8 @@ impl MultiMonitorApp {
                     self.metrics.record_decode_time(
                         update.active_stage_process_duration + update.input_process_duration,
                     );
-                    self.metrics.record_network_read_time(update.pdu_read_duration);
+                    self.metrics
+                        .record_network_read_time(update.pdu_read_duration);
                     self.metrics
                         .record_rdp_processing_time(update.active_stage_process_duration);
                     self.metrics
@@ -416,14 +401,16 @@ impl ApplicationHandler for MultiMonitorApp {
                     }
                 }
             }
-            WindowEvent::CursorEntered { .. } | WindowEvent::Focused(true) => {
-                self.last_input_window = Some(window_id);
-            }
+            WindowEvent::CursorEntered { .. } | WindowEvent::Focused(true) => {}
             event => {
                 if let Some(monitor) = self.windows.get_mut(&window_id) {
-                    self.last_input_window = Some(window_id);
-                    self.pending_input
-                        .extend(monitor.input.handle_window_event(&event));
+                    let input = monitor.input.handle_window_event(&event);
+                    if let Err(error) = self.worker.send_input(input) {
+                        self.stop_with_error(
+                            event_loop,
+                            error.context("queue RDP input for network worker"),
+                        );
+                    }
                 }
             }
         }
@@ -433,15 +420,11 @@ impl ApplicationHandler for MultiMonitorApp {
         &mut self,
         _event_loop: &ActiveEventLoop,
         _device_id: DeviceId,
-        event: DeviceEvent,
+        _event: DeviceEvent,
     ) {
-        if let Some(monitor) = self
-            .last_input_window
-            .and_then(|id| self.windows.get_mut(&id))
-        {
-            self.pending_input
-                .extend(monitor.input.handle_device_event(&event));
-        }
+        // WindowEvent::CursorMoved is sufficient for absolute RDP coordinates.
+        // Raw device motion duplicates packets on Windows and can queue mouse
+        // events ahead of keyboard input.
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
