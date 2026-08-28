@@ -1,6 +1,7 @@
 use core::time::Duration;
 use std::io::Write as _;
 use std::net::{TcpStream, ToSocketAddrs as _};
+use std::time::Instant;
 
 use anyhow::{Context, bail};
 use ironrdp::connector;
@@ -126,7 +127,23 @@ impl Default for SessionProfile {
 #[derive(Debug, Clone, Default)]
 pub struct ActiveStageDrainSummary {
     pub had_activity: bool,
-    pub dirty_region: Option<InclusiveRectangle>,
+    pub dirty_regions: Vec<InclusiveRectangle>,
+    pub frames_processed: u64,
+    /// Tempo acumulado gasto lendo PDUs da conexão (inclui leituras sem dados).
+    pub pdu_read_duration: Duration,
+    /// Tempo acumulado gasto pelo decoder/processador do ActiveStage.
+    pub active_stage_process_duration: Duration,
+    /// Tempo acumulado escrevendo as respostas geradas pelo ActiveStage.
+    pub response_write_duration: Duration,
+}
+
+#[derive(Debug, Default)]
+struct ActiveStagePollSummary {
+    had_activity: bool,
+    dirty_region: Option<InclusiveRectangle>,
+    pdu_read_duration: Duration,
+    active_stage_process_duration: Duration,
+    response_write_duration: Duration,
 }
 
 pub fn connect_with_password(
@@ -216,6 +233,11 @@ fn connect(
         .context("socket address not found")?;
 
     let tcp_stream = TcpStream::connect(server_addr).context("TCP connect")?;
+    // RDP input events are tiny and latency-sensitive. Avoid waiting for Nagle's
+    // algorithm to aggregate them with a later packet.
+    tcp_stream
+        .set_nodelay(true)
+        .context("enable TCP_NODELAY")?;
     tcp_stream
         .set_read_timeout(Some(handshake_timeout))
         .context("set read timeout")?;
@@ -270,18 +292,30 @@ pub fn drain_active_stage(
     framed: &mut UpgradedFramed,
     image: &mut ironrdp::session::image::DecodedImage,
     max_frames: usize,
+    max_duration: Duration,
 ) -> anyhow::Result<ActiveStageDrainSummary> {
     let mut summary = ActiveStageDrainSummary::default();
+    let started_at = Instant::now();
 
     for _ in 0..max_frames {
+        if started_at.elapsed() >= max_duration {
+            break;
+        }
+
         let batch = poll_active_stage_once(active_stage, framed, image)?;
 
+        summary.pdu_read_duration += batch.pdu_read_duration;
+        summary.active_stage_process_duration += batch.active_stage_process_duration;
+        summary.response_write_duration += batch.response_write_duration;
         if !batch.had_activity {
             break;
         }
 
         summary.had_activity = true;
-        summary.dirty_region = merge_dirty_region(summary.dirty_region, batch.dirty_region);
+        summary.frames_processed += 1;
+        if let Some(region) = batch.dirty_region {
+            summary.dirty_regions.push(region);
+        }
     }
 
     Ok(summary)
@@ -291,12 +325,22 @@ pub fn apply_active_stage_outputs(
     framed: &mut UpgradedFramed,
     outputs: Vec<ActiveStageOutput>,
 ) -> anyhow::Result<Option<InclusiveRectangle>> {
+    Ok(apply_active_stage_outputs_timed(framed, outputs)?.0)
+}
+
+fn apply_active_stage_outputs_timed(
+    framed: &mut UpgradedFramed,
+    outputs: Vec<ActiveStageOutput>,
+) -> anyhow::Result<(Option<InclusiveRectangle>, Duration)> {
     let mut dirty_region = None;
+    let mut response_write_duration = Duration::ZERO;
 
     for output in outputs {
         match output {
             ActiveStageOutput::ResponseFrame(frame) => {
+                let write_started_at = Instant::now();
                 framed.write_all(&frame).context("write response frame")?;
+                response_write_duration += write_started_at.elapsed();
             }
             ActiveStageOutput::GraphicsUpdate(region) => {
                 dirty_region = merge_dirty_region(dirty_region, Some(region));
@@ -308,14 +352,15 @@ pub fn apply_active_stage_outputs(
         }
     }
 
-    Ok(dirty_region)
+    Ok((dirty_region, response_write_duration))
 }
 
 fn poll_active_stage_once(
     active_stage: &mut ironrdp::session::ActiveStage,
     framed: &mut UpgradedFramed,
     image: &mut ironrdp::session::image::DecodedImage,
-) -> anyhow::Result<ActiveStageDrainSummary> {
+) -> anyhow::Result<ActiveStagePollSummary> {
+    let read_started_at = Instant::now();
     let (action, payload) = match framed.read_pdu() {
         Ok((action, payload)) => (action, payload),
         // On Linux, SO_RCVTIMEO fires as WouldBlock (EAGAIN); on Windows it fires as
@@ -323,17 +368,27 @@ fn poll_active_stage_once(
         Err(error) if error.kind() == std::io::ErrorKind::WouldBlock
             || error.kind() == std::io::ErrorKind::TimedOut =>
         {
-            return Ok(ActiveStageDrainSummary::default())
+            return Ok(ActiveStagePollSummary {
+                pdu_read_duration: read_started_at.elapsed(),
+                ..ActiveStagePollSummary::default()
+            })
         }
         Err(error) => return Err(anyhow::Error::new(error).context("read frame")),
     };
 
+    let pdu_read_duration = read_started_at.elapsed();
+    let process_started_at = Instant::now();
     let outputs = active_stage.process(image, action, &payload)?;
-    let dirty_region = apply_active_stage_outputs(framed, outputs)?;
+    let active_stage_process_duration = process_started_at.elapsed();
+    let (dirty_region, response_write_duration) =
+        apply_active_stage_outputs_timed(framed, outputs)?;
 
-    Ok(ActiveStageDrainSummary {
+    Ok(ActiveStagePollSummary {
         had_activity: true,
         dirty_region,
+        pdu_read_duration,
+        active_stage_process_duration,
+        response_write_duration,
     })
 }
 

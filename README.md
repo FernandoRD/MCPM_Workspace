@@ -263,8 +263,10 @@ clients/
         screenshot_mvp.rs
         viewer_mvp.rs
       mvp_runtime.rs
-      viewer_input.rs
-      viewer_renderer.rs
+      viewer_gpu.rs
+      viewer_winit.rs
+      viewer_winit_input.rs
+      viewer_winit_multimon.rs
 ```
 
 ## Rodando o projeto

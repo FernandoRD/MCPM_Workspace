@@ -181,8 +181,10 @@ clients/
         screenshot_mvp.rs
         viewer_mvp.rs
       mvp_runtime.rs
-      viewer_input.rs
-      viewer_renderer.rs
+      viewer_gpu.rs
+      viewer_winit.rs
+      viewer_winit_input.rs
+      viewer_winit_multimon.rs
       protocol/
         tpkt.rs
         x224.rs
@@ -369,10 +371,14 @@ Rotas atuais:
   Documento-base do cliente RDP interno, que serve como base técnica do viewer usado pelo app principal.
 - [clients/internal-rdp-client/src/mvp_runtime.rs](/home/fernando/Documentos/ssh_vault/clients/internal-rdp-client/src/mvp_runtime.rs)
   Contrato atual de conexão, perfil de sessão, loop ativo e coleta de regiões alteradas.
-- [clients/internal-rdp-client/src/viewer_input.rs](/home/fernando/Documentos/ssh_vault/clients/internal-rdp-client/src/viewer_input.rs)
-  Tradutor de input local do `minifb` para eventos FastPath do RDP.
-- [clients/internal-rdp-client/src/viewer_renderer.rs](/home/fernando/Documentos/ssh_vault/clients/internal-rdp-client/src/viewer_renderer.rs)
-  Buffer local e redraw parcial do viewer.
+- [clients/internal-rdp-client/src/viewer_winit_input.rs](/home/fernando/Documentos/ssh_vault/clients/internal-rdp-client/src/viewer_winit_input.rs)
+  Tradutor de input local do `winit` para eventos FastPath do RDP.
+- [clients/internal-rdp-client/src/viewer_gpu.rs](/home/fernando/Documentos/ssh_vault/clients/internal-rdp-client/src/viewer_gpu.rs)
+  Upload incremental do framebuffer RGBA para texturas `wgpu`.
+- [clients/internal-rdp-client/src/viewer_winit.rs](/home/fernando/Documentos/ssh_vault/clients/internal-rdp-client/src/viewer_winit.rs)
+  Janela single-window e ciclo de eventos com `winit`/`wgpu`.
+- [clients/internal-rdp-client/src/viewer_winit_multimon.rs](/home/fernando/Documentos/ssh_vault/clients/internal-rdp-client/src/viewer_winit_multimon.rs)
+  Composição fullscreen multimonitor, com uma surface GPU por monitor.
 - [clients/internal-rdp-client/src/settings_bridge.rs](/home/fernando/Documentos/ssh_vault/clients/internal-rdp-client/src/settings_bridge.rs)
   Ponte entre o payload vindo do app principal e as configurações efetivamente consumidas pelo viewer interno.
 - [clients/internal-rdp-client/src/bin/viewer_mvp.rs](/home/fernando/Documentos/ssh_vault/clients/internal-rdp-client/src/bin/viewer_mvp.rs)
@@ -889,7 +895,7 @@ Estado atual desse laboratório:
 
 - conexão real com servidor RDP usando `IronRDP`
 - autenticação com usuário e senha
-- viewer local em janela nativa com `minifb`
+- viewer local em janela nativa com `winit` e renderização `wgpu`
 - screenshot remoto em `.png`
 - input básico de teclado e mouse
 - scroll vertical e horizontal
@@ -933,8 +939,8 @@ Separação interna atual do protótipo:
   tradução de input local para eventos FastPath; `normalize_mouse_position` escala coordenadas de display para buffer e aplica offset global de monitor
 - `viewer_renderer`
   buffer local e atualização parcial do frame; `ViewerBuffer::slice` extrai sub-região por monitor para o modo multimon
-- `bin/viewer_mvp`
-  composição do viewer; `run_single_window` para janela única, `run_multi_window` para fullscreen multimon
+- `viewer_gpu`, `viewer_winit` e `viewer_winit_multimon`
+  pipeline único de apresentação `winit`/`wgpu`; `run_single_window` para janela única e `run_multi_window` para fullscreen multimon
 - `bin/screenshot_mvp`
   composição do fluxo de captura
 

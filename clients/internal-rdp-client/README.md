@@ -79,6 +79,28 @@ Opções úteis para desempenho:
 - `--color-depth 16` é o default atual e reduz o volume de dados
 - `--no-lossy` desliga a compressão com perda, priorizando fidelidade em vez de fluidez
 
+O viewer também usa um loop de renderização adaptativo, orçamento de processamento por
+tick e redraw parcial. Ao encerrar, emite uma linha `[viewer][metrics]` com os contadores
+de frames apresentados, pixels convertidos e os tempos acumulados de decode, conversão
+e apresentação. Esses dados ajudam a separar custo de rede/decode do custo de renderização.
+
+O pipeline de apresentação usa `winit` + `wgpu` tanto em single-window quanto em fullscreen
+multimonitor. O framebuffer já decodificado em RGBA é enviado à textura da GPU somente nas
+regiões alteradas, eliminando conversões intermediárias; no modo multimonitor há uma surface
+e uma textura por monitor, alimentadas pelos recortes correspondentes do desktop virtual.
+
+Para uma execução otimizada e menor, use o perfil release:
+
+```bash
+cargo run --release --manifest-path clients/internal-rdp-client/Cargo.toml --bin viewer_mvp -- \
+  --host <HOST> \
+  --username <USERNAME> \
+  --password <PASSWORD>
+```
+
+O perfil release aplica Thin LTO, um codegen unit e remoção de símbolos de debug, mantendo
+um equilíbrio prudente entre desempenho, tamanho do binário e tempo de compilação.
+
 Opções visuais configuráveis da sessão:
 
 - `--show-wallpaper`
@@ -132,10 +154,10 @@ O laboratório já está dividido em quatro blocos mais claros:
 
 - `mvp_runtime.rs`
   conexão, negociação, perfil de sessão, preferências visuais e loop ativo com coleta de regiões alteradas
-- `viewer_input.rs`
-  tradução de teclado e mouse do `minifb` para eventos FastPath do RDP
-- `viewer_renderer.rs`
-  buffer local do viewer e aplicação de redraw total/parcial
+- `viewer_winit_input.rs`
+  tradução de teclado e mouse do `winit` para eventos FastPath do RDP
+- `viewer_gpu.rs`, `viewer_winit.rs` e `viewer_winit_multimon.rs`
+  apresentação GPU, janela única e composição fullscreen multimonitor com `wgpu`
 - `bin/*.rs`
   composição final dos fluxos `viewer` e `screenshot`
 
@@ -172,8 +194,10 @@ clients/internal-rdp-client/
     mvp_runtime.rs
     session.rs
     transport.rs
-    viewer_input.rs
-    viewer_renderer.rs
+    viewer_gpu.rs
+    viewer_winit.rs
+    viewer_winit_input.rs
+    viewer_winit_multimon.rs
     protocol/
       mod.rs
       tpkt.rs
@@ -184,7 +208,12 @@ clients/internal-rdp-client/
 
 ```bash
 cargo test --manifest-path clients/internal-rdp-client/Cargo.toml
+cargo build --release --manifest-path clients/internal-rdp-client/Cargo.toml --bin viewer_mvp
 ```
+
+Para validar performance em uma sessão real, registre a linha `[viewer][metrics]` ao
+encerrar o viewer e compare as métricas entre resoluções, profundidades de cor e perfis
+de sessão equivalentes.
 
 ## Como gerar um screenshot real
 

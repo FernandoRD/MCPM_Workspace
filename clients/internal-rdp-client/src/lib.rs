@@ -2,11 +2,15 @@ pub mod config;
 pub mod framebuffer;
 pub mod mvp_runtime;
 pub mod protocol;
+pub mod rdp_worker;
 pub mod session;
 pub mod settings_bridge;
 pub mod transport;
-pub mod viewer_input;
-pub mod viewer_renderer;
+pub mod viewer_gpu;
+pub mod viewer_metrics;
+pub mod viewer_winit;
+pub mod viewer_winit_input;
+pub mod viewer_winit_multimon;
 
 pub use config::{DesktopSize, RdpClientConfig, RdpEndpoint, SecurityProtocol};
 pub use framebuffer::Framebuffer;
@@ -20,4 +24,3 @@ pub use settings_bridge::{
 };
 pub use session::{HandshakeSummary, RdpClientError, RdpClientSession, SessionState};
 pub use transport::{MemoryTransport, TcpTransport, Transport, TransportError};
-pub use viewer_renderer::{merge_dirty_region, ViewerBuffer};

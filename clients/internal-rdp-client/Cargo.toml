@@ -4,6 +4,11 @@ version = "0.1.0"
 edition = "2021"
 description = "Protótipo isolado para o cliente RDP interno do MPCM Workspace"
 
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+
 [lib]
 name = "internal_rdp_client"
 path = "src/lib.rs"
@@ -14,9 +19,11 @@ dirs = "5"
 image = { version = "0.25.6", default-features = false, features = ["png"] }
 ironrdp = { version = "0.14.0", features = ["connector", "session", "graphics"] }
 ironrdp-blocking = "0.8.0"
-minifb = "0.27"
+pollster = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sspi = { version = "0.18", features = ["network_client"] }
 tokio-rustls = "0.26"
+winit = "0.30.12"
+wgpu = "24.0.0"
 x509-cert = { version = "0.2", default-features = false, features = ["std"] }
