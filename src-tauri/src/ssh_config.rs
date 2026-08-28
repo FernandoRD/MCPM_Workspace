@@ -215,6 +215,68 @@ fn save_value(
     Ok(())
 }
 
+fn apply_import_plan_transaction(
+    conn: &rusqlite::Connection,
+    plan: &ImportPlan,
+) -> Result<(), String> {
+    let transaction = conn
+        .unchecked_transaction()
+        .map_err(|error| format!("Falha ao iniciar transação da importação SSH: {error}"))?;
+
+    let apply_result = (|| -> Result<(), String> {
+        for ssh_key in &plan.ssh_keys {
+            save_value(
+                &transaction,
+                "ssh_keys",
+                ssh_key["id"].as_str().ok_or("SshKey sem id")?,
+                ssh_key["createdAt"].as_str().unwrap_or(""),
+                ssh_key["updatedAt"].as_str().unwrap_or(""),
+                ssh_key,
+            )
+            .map_err(|error| format!("Falha ao salvar chave SSH importada: {error}"))?;
+        }
+
+        for credential in &plan.credentials {
+            save_value(
+                &transaction,
+                "credentials",
+                credential["id"].as_str().ok_or("Credential sem id")?,
+                credential["createdAt"].as_str().unwrap_or(""),
+                credential["updatedAt"].as_str().unwrap_or(""),
+                credential,
+            )
+            .map_err(|error| format!("Falha ao salvar credencial importada: {error}"))?;
+        }
+
+        for host in &plan.hosts {
+            save_value(
+                &transaction,
+                "hosts",
+                host["id"].as_str().ok_or("Host sem id")?,
+                host["createdAt"].as_str().unwrap_or(""),
+                host["updatedAt"].as_str().unwrap_or(""),
+                host,
+            )
+            .map_err(|error| format!("Falha ao salvar host importado: {error}"))?;
+        }
+
+        Ok(())
+    })();
+
+    if let Err(error) = apply_result {
+        return match transaction.rollback() {
+            Ok(()) => Err(error),
+            Err(rollback_error) => Err(format!(
+                "{error}; também falhou o rollback da importação SSH: {rollback_error}"
+            )),
+        };
+    }
+
+    transaction
+        .commit()
+        .map_err(|error| format!("Falha ao confirmar importação SSH: {error}"))
+}
+
 fn build_import_plan(
     entries: &[ImportedSshConfigHost],
     existing_hosts: &[Value],
@@ -618,38 +680,7 @@ pub fn ssh_apply_imported_config(
     let existing_ssh_keys = load_values(&conn, "ssh_keys")?;
     let plan = build_import_plan(&entries, &existing_hosts, &existing_credentials, &existing_ssh_keys);
 
-    for ssh_key in &plan.ssh_keys {
-        save_value(
-            &conn,
-            "ssh_keys",
-            ssh_key["id"].as_str().ok_or("SshKey sem id")?,
-            ssh_key["createdAt"].as_str().unwrap_or(""),
-            ssh_key["updatedAt"].as_str().unwrap_or(""),
-            ssh_key,
-        )?;
-    }
-
-    for credential in &plan.credentials {
-        save_value(
-            &conn,
-            "credentials",
-            credential["id"].as_str().ok_or("Credential sem id")?,
-            credential["createdAt"].as_str().unwrap_or(""),
-            credential["updatedAt"].as_str().unwrap_or(""),
-            credential,
-        )?;
-    }
-
-    for host in &plan.hosts {
-        save_value(
-            &conn,
-            "hosts",
-            host["id"].as_str().ok_or("Host sem id")?,
-            host["createdAt"].as_str().unwrap_or(""),
-            host["updatedAt"].as_str().unwrap_or(""),
-            host,
-        )?;
-    }
+    apply_import_plan_transaction(&conn, &plan)?;
 
     Ok(SshConfigImportResult {
         imported_count: plan.hosts.len(),
@@ -688,5 +719,76 @@ pub async fn ssh_probe_host(
             latency_ms: None,
             error: Some("timeout".to_string()),
         }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn import_plan() -> ImportPlan {
+        let created_at = "2026-01-01T00:00:00Z";
+        ImportPlan {
+            hosts: vec![json!({
+                "id": "host-1",
+                "label": "Host",
+                "host": "host.example.test",
+                "port": 22,
+                "createdAt": created_at,
+                "updatedAt": created_at,
+            })],
+            credentials: vec![json!({
+                "id": "credential-1",
+                "label": "Credential",
+                "username": "user",
+                "authMethod": "privateKey",
+                "createdAt": created_at,
+                "updatedAt": created_at,
+            })],
+            ssh_keys: vec![json!({
+                "id": "key-1",
+                "label": "Key",
+                "privateKeyContent": "private-key",
+                "createdAt": created_at,
+                "updatedAt": created_at,
+            })],
+            preview_hosts: Vec::new(),
+            skipped_count: 0,
+            source_path: None,
+        }
+    }
+
+    #[test]
+    fn imported_config_rolls_back_previous_inserts_when_one_write_fails() {
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE hosts (
+                 id TEXT PRIMARY KEY, data TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+             );
+             CREATE TABLE credentials (
+                 id TEXT PRIMARY KEY, data TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+             );
+             CREATE TABLE ssh_keys (
+                 id TEXT PRIMARY KEY, data TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+             );
+             CREATE TRIGGER reject_imported_credential
+             BEFORE INSERT ON credentials
+             WHEN NEW.id = 'credential-1'
+             BEGIN
+                 SELECT RAISE(ABORT, 'forced credential failure');
+             END;",
+        )
+        .unwrap();
+
+        let error = apply_import_plan_transaction(&conn, &import_plan())
+            .expect_err("a transação deve falhar");
+
+        assert!(error.contains("forced credential failure"));
+        for table in ["ssh_keys", "credentials", "hosts"] {
+            let count: i64 = conn
+                .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(count, 0, "{table} deve permanecer vazio após rollback");
+        }
     }
 }

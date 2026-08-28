@@ -39,6 +39,12 @@ import {
   sanitizeSshKeys,
   TransferSecretsPayload,
 } from "@/lib/portableState";
+import {
+  parseEncryptedCredentialsJson,
+  parsePortableStateFile,
+  parseTransferSecretsPayload,
+} from "@/lib/portableStateSchema";
+import { PortableStateSnapshot } from "@/lib/portableStatePersistence";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -139,7 +145,7 @@ export async function buildSyncPayload(
         credentialsJson: JSON.stringify(secretsPayload),
         masterPassword,
       });
-      encryptedSecrets = JSON.parse(payloadJson) as EncryptedCredentials;
+      encryptedSecrets = parseEncryptedCredentialsJson(payloadJson, "encryptedSecrets");
     }
   }
 
@@ -161,19 +167,21 @@ export async function buildSyncPayload(
 // ─── Parse + apply payload ────────────────────────────────────────────────────
 
 export function parseSyncFile(json: string): SyncFile {
-  let data: unknown;
-  try {
-    data = JSON.parse(json);
-  } catch {
-    throw new Error("Payload inválido: não é um JSON válido");
+  const file = parsePortableStateFile(json);
+  if (!file.syncedAt) {
+    throw new Error("Payload inválido: campo 'syncedAt' é obrigatório");
   }
-
-  const obj = data as Record<string, unknown>;
-  if (obj["app"] !== "ssh-vault") {
-    throw new Error("Payload inválido: campo 'app' incorreto");
-  }
-
-  return obj as unknown as SyncFile;
+  return {
+    app: file.app,
+    version: file.version,
+    syncedAt: file.syncedAt,
+    hosts: file.hosts,
+    credentials: file.credentials,
+    sshKeys: file.sshKeys,
+    settings: file.settings,
+    ...(file.deletedHosts ? { deletedHosts: file.deletedHosts } : {}),
+    ...(file.encryptedSecrets ? { encryptedSecrets: file.encryptedSecrets } : {}),
+  };
 }
 
 /**
@@ -191,10 +199,7 @@ export async function applySyncPayload(
   currentCredentials: Credential[],
   currentSshKeys: SshKey[],
   currentSettings: AppSettings,
-  replaceHosts: (hosts: HostEntry[]) => void,
-  replaceCredentials: (credentials: Credential[]) => void,
-  replaceSshKeys: (sshKeys: SshKey[]) => void,
-  replaceSettings: (settings: AppSettings) => void
+  commitState: (snapshot: PortableStateSnapshot) => Promise<unknown>
 ): Promise<SyncResult> {
   let secretsPayload: TransferSecretsPayload = {};
   if (file.encryptedSecrets && masterPassword) {
@@ -202,7 +207,7 @@ export async function applySyncPayload(
       encryptedPayloadJson: JSON.stringify(file.encryptedSecrets),
       masterPassword,
     });
-    secretsPayload = JSON.parse(credJson) as TransferSecretsPayload;
+    secretsPayload = parseTransferSecretsPayload(credJson);
   }
 
   const remoteHosts = hydrateHosts(file.hosts ?? [], secretsPayload.hosts, currentHosts);
@@ -277,15 +282,18 @@ export async function applySyncPayload(
     finalSshKeys = Array.from(localKeysById.values());
   }
 
-  replaceHosts(finalHosts);
-  replaceCredentials(finalCredentials);
-  replaceSshKeys(finalSshKeys);
   const nextSettings = mergePortableSettings(currentSettings, file.settings, secretsPayload.settings);
-  replaceSettings({
-    ...nextSettings,
-    sync: {
-      ...nextSettings.sync,
-      deletedHosts: mergedDeletedHosts,
+  await commitState({
+    hosts: finalHosts,
+    credentials: finalCredentials,
+    sshKeys: finalSshKeys,
+    settings: {
+      ...nextSettings,
+      sync: {
+        ...nextSettings.sync,
+        deletedHosts: mergedDeletedHosts,
+        lastSyncAt: new Date().toISOString(),
+      },
     },
   });
 

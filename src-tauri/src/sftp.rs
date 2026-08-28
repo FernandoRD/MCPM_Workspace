@@ -14,10 +14,11 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::Mutex;
 
 use crate::ssh_common::{
-    build_ssh_config, load_known_hosts, save_known_hosts, trim_optional_owned, trim_owned,
-    KnownHostsHandler,
+    build_ssh_config, load_known_hosts, trim_optional_owned, trim_owned, KnownHostsHandler,
 };
 use crate::AppState;
+
+const SFTP_HOST_KEY_UNKNOWN_PREFIX: &str = "SFTP_HOST_KEY_UNKNOWN:";
 
 // ─── Eventos emitidos ao frontend ─────────────────────────────────────────────
 
@@ -42,6 +43,13 @@ pub struct SftpEntry {
     pub size: u64,
     /// Unix timestamp (segundos)
     pub modified: Option<u64>,
+}
+
+#[derive(Serialize)]
+struct SftpUnknownHostKeyPayload<'a> {
+    host: &'a str,
+    port: u16,
+    fingerprint: &'a str,
 }
 
 // ─── Conexão SFTP ─────────────────────────────────────────────────────────────
@@ -198,6 +206,36 @@ fn log_error(context: String, error: impl std::fmt::Display) -> String {
     message
 }
 
+fn unknown_host_key_error(host: &str, port: u16, fingerprint: &str) -> String {
+    let payload = SftpUnknownHostKeyPayload {
+        host,
+        port,
+        fingerprint,
+    };
+    let json =
+        serde_json::to_string(&payload).expect("payload de fingerprint SFTP deve ser serializável");
+    format!("{SFTP_HOST_KEY_UNKNOWN_PREFIX}{json}")
+}
+
+fn connection_error(
+    host: &str,
+    port: u16,
+    context: String,
+    error: impl std::fmt::Display,
+    unknown_fingerprint: &Arc<std::sync::Mutex<Option<String>>>,
+) -> String {
+    match unknown_fingerprint.lock() {
+        Ok(captured) => match captured.as_deref() {
+            Some(fingerprint) => {
+                log::warn!("sftp: host desconhecido requer confirmação ({context})");
+                unknown_host_key_error(host, port, fingerprint)
+            }
+            None => log_error(context, error),
+        },
+        Err(_) => log_error(context, error),
+    }
+}
+
 async fn get_connection(
     state: &State<'_, AppState>,
     session_id: &str,
@@ -329,16 +367,25 @@ pub async fn sftp_connect(
 
         log::info!("sftp: conectando ao jump host {jump_context}");
 
+        let unknown_jump_fingerprint = Arc::new(std::sync::Mutex::new(None));
         let mut jump_session = client::connect(
             config.clone(),
             format!("{}:{}", jhost, jport),
-            KnownHostsHandler::new(jhost, jport, known_hosts.clone()),
+            KnownHostsHandler::new_strict(
+                jhost,
+                jport,
+                known_hosts.clone(),
+                unknown_jump_fingerprint.clone(),
+            ),
         )
         .await
         .map_err(|e| {
-            log_error(
+            connection_error(
+                jhost,
+                jport,
                 format!("Erro ao conectar ao jump host '{jhost}' ({jump_context})"),
                 e,
+                &unknown_jump_fingerprint,
             )
         })?;
 
@@ -376,16 +423,25 @@ pub async fn sftp_connect(
         );
 
         // Conecta o SSH do alvo através do túnel
+        let unknown_target_fingerprint = Arc::new(std::sync::Mutex::new(None));
         let target_session = client::connect_stream(
             config.clone(),
             channel.into_stream(),
-            KnownHostsHandler::new(&host, port, known_hosts.clone()),
+            KnownHostsHandler::new_strict(
+                &host,
+                port,
+                known_hosts.clone(),
+                unknown_target_fingerprint.clone(),
+            ),
         )
         .await
         .map_err(|e| {
-            log_error(
+            connection_error(
+                &host,
+                port,
                 format!("Erro ao conectar ao host via jump ({connect_context})"),
                 e,
+                &unknown_target_fingerprint,
             )
         })?;
 
@@ -394,13 +450,27 @@ pub async fn sftp_connect(
         log::info!(
             "sftp: conectando diretamente ao host session={session_id} target={host}:{port}"
         );
+        let unknown_target_fingerprint = Arc::new(std::sync::Mutex::new(None));
         let s = client::connect(
             config.clone(),
             format!("{}:{}", host, port),
-            KnownHostsHandler::new(&host, port, known_hosts.clone()),
+            KnownHostsHandler::new_strict(
+                &host,
+                port,
+                known_hosts.clone(),
+                unknown_target_fingerprint.clone(),
+            ),
         )
         .await
-        .map_err(|e| log_error(format!("Erro ao conectar ({connect_context})"), e))?;
+        .map_err(|e| {
+            connection_error(
+                &host,
+                port,
+                format!("Erro ao conectar ({connect_context})"),
+                e,
+                &unknown_target_fingerprint,
+            )
+        })?;
         (s, None)
     };
 
@@ -424,11 +494,6 @@ pub async fn sftp_connect(
         return Err(message);
     }
     log::info!("sftp: autenticação concluída {connect_context}");
-
-    // ─── Persiste known_hosts atualizados ─────────────────────────────────────
-
-    save_known_hosts(&data_dir, &*known_hosts.lock().map_err(|e| e.to_string())?);
-    log::info!("sftp: known_hosts persistido {connect_context}");
 
     // ─── Abre sessão SFTP ──────────────────────────────────────────────────────
 
@@ -892,4 +957,22 @@ pub async fn sftp_session_exists(
     let exists = state.sftp.lock().await.sessions.contains_key(&session_id);
     log::debug!("sftp: session_exists session={} exists={}", session_id, exists);
     Ok(exists)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{unknown_host_key_error, SFTP_HOST_KEY_UNKNOWN_PREFIX};
+
+    #[test]
+    fn unknown_host_key_error_identifies_host_port_and_fingerprint() {
+        let error = unknown_host_key_error("jump\"host:internal", 2222, "SHA256:abc/def+ghi=");
+        let json = error
+            .strip_prefix(SFTP_HOST_KEY_UNKNOWN_PREFIX)
+            .expect("prefixo SFTP ausente");
+        let payload: serde_json::Value = serde_json::from_str(json).expect("payload SFTP inválido");
+
+        assert_eq!(payload["host"], "jump\"host:internal");
+        assert_eq!(payload["port"], 2222);
+        assert_eq!(payload["fingerprint"], "SHA256:abc/def+ghi=");
+    }
 }

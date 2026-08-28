@@ -158,11 +158,30 @@ pub fn format_host_key(host: &str, port: u16) -> String {
 
 // ─── Handler TOFU para known_hosts ───────────────────────────────────────────
 
-/// Handler russh que implementa TOFU (Trust on First Use) para known_hosts.
-/// Compartilhado entre sessões SSH de terminal (`ssh.rs`) e SFTP (`sftp.rs`).
+#[derive(Debug, PartialEq, Eq)]
+enum HostKeyVerification {
+    Trusted,
+    Unknown,
+    Mismatch,
+}
+
+fn classify_host_key(stored: Option<&str>, fingerprint: &str) -> HostKeyVerification {
+    match stored {
+        None => HostKeyVerification::Unknown,
+        Some(stored) if stored == fingerprint => HostKeyVerification::Trusted,
+        Some(_) => HostKeyVerification::Mismatch,
+    }
+}
+
+/// Handler russh que valida a chave apresentada contra `known_hosts`.
+///
+/// `new` mantém o comportamento legado de TOFU para fluxos que fazem uma
+/// sondagem explícita antes de conectar. `new_strict` rejeita hosts desconhecidos
+/// e captura a fingerprint para o chamador solicitar confirmação ao usuário.
 pub struct KnownHostsHandler {
     pub host_key: String,
     pub known_hosts: Arc<std::sync::Mutex<HashMap<String, String>>>,
+    unknown_fingerprint: Option<Arc<std::sync::Mutex<Option<String>>>>,
 }
 
 impl KnownHostsHandler {
@@ -172,8 +191,22 @@ impl KnownHostsHandler {
         known_hosts: Arc<std::sync::Mutex<HashMap<String, String>>>,
     ) -> Self {
         Self {
-            host_key: format!("[{}]:{}", host, port),
+            host_key: format_host_key(host, port),
             known_hosts,
+            unknown_fingerprint: None,
+        }
+    }
+
+    pub fn new_strict(
+        host: &str,
+        port: u16,
+        known_hosts: Arc<std::sync::Mutex<HashMap<String, String>>>,
+        unknown_fingerprint: Arc<std::sync::Mutex<Option<String>>>,
+    ) -> Self {
+        Self {
+            host_key: format_host_key(host, port),
+            known_hosts,
+            unknown_fingerprint: Some(unknown_fingerprint),
         }
     }
 }
@@ -191,17 +224,55 @@ impl client::Handler for KnownHostsHandler {
             .known_hosts
             .lock()
             .expect("known_hosts mutex não pode ser envenenado");
-        match kh.get(&self.host_key).cloned() {
-            None => {
-                // TOFU: primeira conexão — armazena e aceita
-                kh.insert(self.host_key.clone(), fingerprint);
-                Ok(true)
-            }
-            Some(stored) if stored == fingerprint => Ok(true),
-            Some(_) => {
+        match classify_host_key(kh.get(&self.host_key).map(String::as_str), &fingerprint) {
+            HostKeyVerification::Trusted => Ok(true),
+            HostKeyVerification::Mismatch => {
                 // Fingerprint diferente — possível MITM
                 Err(russh::Error::WrongServerSig)
             }
+            HostKeyVerification::Unknown => match &self.unknown_fingerprint {
+                Some(captured) => {
+                    *captured
+                        .lock()
+                        .expect("fingerprint desconhecida mutex não pode ser envenenado") =
+                        Some(fingerprint);
+                    Err(russh::Error::WrongServerSig)
+                }
+                None => {
+                    // Compatibilidade com fluxos que já fazem confirmação prévia.
+                    kh.insert(self.host_key.clone(), fingerprint);
+                    Ok(true)
+                }
+            },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{classify_host_key, HostKeyVerification};
+
+    #[test]
+    fn classifies_unknown_host_without_trusting_it() {
+        assert_eq!(
+            classify_host_key(None, "SHA256:new"),
+            HostKeyVerification::Unknown
+        );
+    }
+
+    #[test]
+    fn accepts_matching_fingerprint() {
+        assert_eq!(
+            classify_host_key(Some("SHA256:known"), "SHA256:known"),
+            HostKeyVerification::Trusted
+        );
+    }
+
+    #[test]
+    fn rejects_mismatching_fingerprint() {
+        assert_eq!(
+            classify_host_key(Some("SHA256:known"), "SHA256:changed"),
+            HostKeyVerification::Mismatch
+        );
     }
 }

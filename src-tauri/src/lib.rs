@@ -137,6 +137,7 @@ pub fn run() {
             database::db_clear_hosts,
             database::db_get_settings,
             database::db_save_settings,
+            database::db_apply_portable_state,
             database::db_get_credentials,
             database::db_save_credential,
             database::db_delete_credential,

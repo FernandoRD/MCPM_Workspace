@@ -58,9 +58,50 @@ interface TransferProgress {
   bytesTotal: number;
 }
 
+interface PendingHostKey {
+  host: string;
+  port: number;
+  fingerprint: string;
+}
+
 type Status = "connecting" | "connected" | "disconnected" | "error";
 type SortField = "name" | "size" | "modified";
 type SortDir = "asc" | "desc";
+
+const SFTP_HOST_KEY_UNKNOWN_PREFIX = "SFTP_HOST_KEY_UNKNOWN:";
+
+function parseUnknownHostKey(error: unknown): PendingHostKey | null {
+  if (typeof error !== "string" || !error.startsWith(SFTP_HOST_KEY_UNKNOWN_PREFIX)) {
+    return null;
+  }
+
+  try {
+    const payload: unknown = JSON.parse(error.slice(SFTP_HOST_KEY_UNKNOWN_PREFIX.length));
+    if (!payload || typeof payload !== "object") return null;
+
+    const candidate = payload as Record<string, unknown>;
+    if (
+      typeof candidate.host !== "string" ||
+      candidate.host.trim() === "" ||
+      typeof candidate.port !== "number" ||
+      !Number.isInteger(candidate.port) ||
+      candidate.port < 1 ||
+      candidate.port > 65535 ||
+      typeof candidate.fingerprint !== "string" ||
+      candidate.fingerprint.trim() === ""
+    ) {
+      return null;
+    }
+
+    return {
+      host: candidate.host,
+      port: candidate.port,
+      fingerprint: candidate.fingerprint,
+    };
+  } catch {
+    return null;
+  }
+}
 
 function formatSize(bytes: number): string {
   if (bytes === 0) return "—";
@@ -137,6 +178,7 @@ export function SftpPage({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [transferProgress, setTransferProgress] = useState<TransferProgress | null>(null);
+  const [pendingHostKey, setPendingHostKey] = useState<PendingHostKey | null>(null);
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
 
@@ -252,6 +294,13 @@ export function SftpPage({
       });
       await loadDir("/");
     } catch (err) {
+      const unknownHostKey = parseUnknownHostKey(err);
+      if (unknownHostKey) {
+        setPendingHostKey(unknownHostKey);
+        setError(null);
+        return;
+      }
+
       const message = String(err);
       setStatus("error");
       setError(message);
@@ -274,6 +323,40 @@ export function SftpPage({
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPath, host, hostAddress, loadDir, sessionId, sftpSnapshot?.currentPath, updateSftpStatus]);
+
+  const handleTrustHost = useCallback(async (accepted: boolean) => {
+    if (!pendingHostKey) return;
+
+    if (!accepted) {
+      setPendingHostKey(null);
+      setStatus("error");
+      updateSftpStatus("error");
+      return;
+    }
+
+    try {
+      await invoke("ssh_trust_host", {
+        host: pendingHostKey.host,
+        port: pendingHostKey.port,
+        fingerprint: pendingHostKey.fingerprint,
+      });
+      setPendingHostKey(null);
+      setStatus("connecting");
+      updateSftpStatus("connecting");
+      await connect();
+    } catch (err) {
+      const message = String(err);
+      setPendingHostKey(null);
+      setStatus("error");
+      setError(message);
+      updateSftpStatus("error");
+      logFrontendError("sftp.hostKey", "Falha ao confiar na fingerprint SFTP", err, {
+        sessionId,
+        host: pendingHostKey.host,
+        port: pendingHostKey.port,
+      });
+    }
+  }, [connect, pendingHostKey, sessionId, updateSftpStatus]);
 
   // Conecta ao montar; ao desmontar apenas remove a UI local.
   useEffect(() => {
@@ -508,6 +591,45 @@ export function SftpPage({
         {!embedded && (
           <Button onClick={() => navigate(withStandaloneQuery("/", bootstrap.standalone))}>{t("common.back")}</Button>
         )}
+      </div>
+    );
+  }
+
+  if (pendingHostKey) {
+    return (
+      <div className="flex h-full items-center justify-center bg-[var(--bg-primary)] p-4">
+        <div className="flex w-full max-w-md flex-col gap-4 rounded-xl border border-[var(--border)] bg-[var(--bg-secondary)] p-6 shadow-2xl">
+          <div className="flex flex-col gap-1">
+            <p className="font-semibold text-[var(--text-primary)]">{t("terminal.hostKey.unknownTitle")}</p>
+            <p className="text-sm text-[var(--text-muted)]">
+              {t("terminal.hostKey.unknownDescription", {
+                host: pendingHostKey.host,
+                port: pendingHostKey.port,
+              })}
+            </p>
+          </div>
+          <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-primary)] px-4 py-3">
+            <p className="mb-1 text-xs text-[var(--text-muted)]">{t("terminal.hostKey.fingerprintLabel")}</p>
+            <p className="select-all break-all font-mono text-xs text-[var(--text-primary)]">
+              {pendingHostKey.fingerprint}
+            </p>
+          </div>
+          <p className="text-xs text-[var(--text-muted)]">{t("terminal.hostKey.warning")}</p>
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => void handleTrustHost(false)}
+              className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-hover)]"
+            >
+              {t("terminal.hostKey.reject")}
+            </button>
+            <button
+              onClick={() => void handleTrustHost(true)}
+              className="rounded-lg bg-[var(--accent)] px-4 py-2 text-sm text-white transition-opacity hover:opacity-90"
+            >
+              {t("terminal.hostKey.trustAndConnect")}
+            </button>
+          </div>
+        </div>
       </div>
     );
   }

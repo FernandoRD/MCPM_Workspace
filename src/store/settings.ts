@@ -24,7 +24,8 @@ interface SettingsStore {
   updateSync: (sync: Partial<AppSettings["sync"]>) => void;
   updateGroups: (groups: string[]) => void;
   updateProductivity: (productivity: Partial<AppSettings["productivity"]>) => void;
-  replaceSettings: (settings: AppSettings) => void;
+  /** Publica settings já confirmados pelo backend, sem persistir novamente. */
+  applyCommittedSettings: (settings: AppSettings) => void;
   resetSettings: () => void;
 }
 
@@ -317,12 +318,11 @@ export const useSettingsStore = create<SettingsStore>()((set, _get) => ({
       return { settings };
     }),
 
-  replaceSettings: (settings) => {
+  applyCommittedSettings: (settings) => {
     const normalized = normalizeSettings(settings);
     applyTheme(normalized.themeId as ThemeId);
     i18n.changeLanguage(normalized.locale);
     set({ settings: normalized });
-    persistSettings(normalized);
   },
 
   resetSettings: () => {

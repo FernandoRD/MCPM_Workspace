@@ -13,8 +13,6 @@ interface CredentialsStore {
   updateCredential: (id: string, data: Partial<Omit<Credential, "id" | "createdAt" | "updatedAt">>) => void;
   deleteCredential: (id: string) => void;
   getCredential: (id: string) => Credential | undefined;
-  /** Substitui todas as credenciais (usado pelo sync remoto) */
-  replaceCredentials: (credentials: Credential[]) => void;
 }
 
 export const useCredentialsStore = create<CredentialsStore>()((set, get) => ({
@@ -88,17 +86,4 @@ export const useCredentialsStore = create<CredentialsStore>()((set, get) => ({
   },
 
   getCredential: (id) => get().credentials.find((c) => c.id === id),
-
-  /** Substitui todas as credenciais (usado pelo sync remoto) */
-  replaceCredentials: (credentials) => {
-    const sanitizedCredentials = sanitizeCredentials(credentials);
-    set({ credentials: sanitizedCredentials });
-    invoke("db_clear_credentials")
-      .then(() => Promise.all(sanitizedCredentials.map((credential) => invoke("db_save_credential", { credential }))))
-      .catch((error) => {
-        logFrontendError("credentials.replace", "Falha ao substituir credenciais", error, {
-          count: sanitizedCredentials.length,
-        });
-      });
-  },
 }));

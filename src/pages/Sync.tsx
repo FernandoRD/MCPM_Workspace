@@ -26,18 +26,16 @@ import {
 import { pushToProvider, pullFromProvider } from "@/lib/syncProviders";
 import { APP_NAME } from "@/lib/appInfo";
 import { setSessionMasterPassword } from "@/lib/masterPasswordSession";
+import { applyPortableStateTransaction } from "@/lib/portableStatePersistence";
 
 // ─── Página principal ─────────────────────────────────────────────────────────
 
 export function Sync() {
   const { t } = useTranslation();
   const hosts = useHostsStore((s) => s.hosts);
-  const replaceHosts = useHostsStore((s) => s.replaceHosts);
   const credentials = useCredentialsStore((s) => s.credentials);
-  const replaceCredentials = useCredentialsStore((s) => s.replaceCredentials);
   const sshKeys = useSshKeysStore((s) => s.sshKeys);
-  const replaceSshKeys = useSshKeysStore((s) => s.replaceSshKeys);
-  const { settings, updateSync, replaceSettings } = useSettingsStore();
+  const { settings, updateSync } = useSettingsStore();
   const sync = settings.sync;
   const security = settings.security;
 
@@ -145,12 +143,8 @@ export function Sync() {
         credentials,
         sshKeys,
         settings,
-        replaceHosts,
-        replaceCredentials,
-        replaceSshKeys,
-        replaceSettings
+        applyPortableStateTransaction
       );
-      updateSync({ lastSyncAt: new Date().toISOString() });
       setLastResult(result);
       notify(APP_NAME, t("notifications.syncPullSuccess"));
     } catch (e) {

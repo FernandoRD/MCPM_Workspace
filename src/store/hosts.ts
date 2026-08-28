@@ -16,8 +16,6 @@ interface HostsStore {
   setLastConnected: (id: string) => void;
   getHost: (id: string) => HostEntry | undefined;
   getGroups: () => string[];
-  /** Substitui todos os hosts (usado pelo sync remoto) */
-  replaceHosts: (hosts: HostEntry[]) => void;
 }
 
 export const useHostsStore = create<HostsStore>()((set, get) => ({
@@ -134,17 +132,5 @@ export const useHostsStore = create<HostsStore>()((set, get) => ({
       .hosts.map((h) => h.group)
       .filter((g): g is string => !!g);
     return [...new Set(groups)].sort();
-  },
-
-  replaceHosts: (hosts) => {
-    const sanitizedHosts = sanitizeHosts(hosts);
-    set({ hosts: sanitizedHosts });
-    invoke("db_clear_hosts")
-      .then(() => Promise.all(sanitizedHosts.map((host) => invoke("db_save_host", { host }))))
-      .catch((error) => {
-        logFrontendError("hosts.replace", "Falha ao substituir hosts", error, {
-          count: sanitizedHosts.length,
-        });
-      });
   },
 }));

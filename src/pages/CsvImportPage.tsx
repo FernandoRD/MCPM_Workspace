@@ -13,6 +13,8 @@ import {
   Upload,
 } from "lucide-react";
 import { useHostsStore } from "@/store/hosts";
+import { useCredentialsStore } from "@/store/credentials";
+import { useSshKeysStore } from "@/store/sshKeys";
 import { useSettingsStore } from "@/store/settings";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -26,6 +28,7 @@ import {
   parseCsvHostImport,
 } from "@/lib/csvHostImport";
 import { cn } from "@/lib/utils";
+import { applyPortableStateTransaction } from "@/lib/portableStatePersistence";
 
 interface ToastState {
   type: "success" | "error" | "info";
@@ -46,9 +49,10 @@ export function CsvImportPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const hosts = useHostsStore((state) => state.hosts);
-  const replaceHosts = useHostsStore((state) => state.replaceHosts);
-  const savedGroups = useSettingsStore((state) => state.settings.groups);
-  const updateGroups = useSettingsStore((state) => state.updateGroups);
+  const credentials = useCredentialsStore((state) => state.credentials);
+  const sshKeys = useSshKeysStore((state) => state.sshKeys);
+  const settings = useSettingsStore((state) => state.settings);
+  const savedGroups = settings.groups;
 
   const [toast, setToast] = useState<Toast>(null);
   const [loading, setLoading] = useState<"template" | "example" | "import" | "apply" | null>(null);
@@ -119,13 +123,11 @@ export function CsvImportPage() {
     }
   };
 
-  const handleApplyImport = () => {
+  const handleApplyImport = async () => {
     if (!preview || !plan) return;
 
     setLoading("apply");
     try {
-      replaceHosts(plan.nextHosts);
-
       const mergedGroups = Array.from(
         new Set([
           ...savedGroups,
@@ -135,7 +137,12 @@ export function CsvImportPage() {
         ])
       ).sort((left, right) => left.localeCompare(right));
 
-      updateGroups(mergedGroups);
+      await applyPortableStateTransaction({
+        hosts: plan.nextHosts,
+        credentials,
+        sshKeys,
+        settings: { ...settings, groups: mergedGroups },
+      });
 
       setImportResult({
         sourceName: sourceName ?? t("csvImport.preview.unknownSource"),
@@ -147,6 +154,8 @@ export function CsvImportPage() {
       setPreview(null);
       setSourceName(null);
       showToast("success", t("csvImport.messages.importApplied"));
+    } catch (error) {
+      showToast("error", String(error));
     } finally {
       setLoading(null);
     }

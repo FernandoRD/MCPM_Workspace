@@ -148,10 +148,10 @@ fn encode_openssh_ed25519(signing_key: &ed25519_dalek::SigningKey) -> String {
     // Blob completo
     let mut blob = Vec::<u8>::new();
     blob.extend_from_slice(b"openssh-key-v1\0"); // magic
-    write_ssh_string(&mut blob, b"none");          // ciphername
-    write_ssh_string(&mut blob, b"none");          // kdfname
-    write_ssh_string(&mut blob, b"");              // kdfoptions
-    write_ssh_u32(&mut blob, 1);                   // nkeys = 1
+    write_ssh_string(&mut blob, b"none"); // ciphername
+    write_ssh_string(&mut blob, b"none"); // kdfname
+    write_ssh_string(&mut blob, b""); // kdfoptions
+    write_ssh_u32(&mut blob, 1); // nkeys = 1
     write_ssh_string(&mut blob, &pub_blob);
     write_ssh_string(&mut blob, &priv_blob);
 
@@ -257,6 +257,53 @@ fn build_connection_command(
 
 // ─── Spawn no terminal do sistema ────────────────────────────────────────────
 
+/// Quotes one argument as a single POSIX shell word.
+///
+/// Every argument is quoted, including values that currently contain only
+/// "safe" characters. This avoids having to maintain an incomplete list of
+/// shell metacharacters and preserves empty arguments as well.
+#[cfg(any(target_os = "macos", test))]
+fn quote_posix_shell_arg(arg: &str) -> String {
+    format!("'{}'", arg.replace('\'', "'\\''"))
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn build_posix_shell_command(cmd: &[String]) -> String {
+    cmd.iter()
+        .map(|arg| quote_posix_shell_arg(arg))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Escapes arbitrary text for inclusion in an AppleScript string literal.
+#[cfg(any(target_os = "macos", test))]
+fn escape_applescript_string(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len());
+    for ch in value.chars() {
+        match ch {
+            '\\' => escaped.push_str("\\\\"),
+            '"' => escaped.push_str("\\\""),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            '\t' => escaped.push_str("\\t"),
+            _ => escaped.push(ch),
+        }
+    }
+    escaped
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn build_terminal_applescript(cmd: &[String]) -> String {
+    let cmd_str = build_posix_shell_command(cmd);
+    format!(
+        "tell application \"Terminal\"\n\
+             do script \"{}\"\n\
+             activate\n\
+         end tell",
+        escape_applescript_string(&cmd_str)
+    )
+}
+
 #[cfg(not(target_os = "macos"))]
 fn spawn_in_terminal(terminal: &TerminalEmulator, cmd: &[String]) -> io::Result<()> {
     let mut all_args: Vec<&str> = terminal.exec_flag.iter().map(String::as_str).collect();
@@ -274,25 +321,7 @@ fn spawn_in_terminal(terminal: &TerminalEmulator, cmd: &[String]) -> io::Result<
 
 #[cfg(target_os = "macos")]
 fn spawn_in_terminal(_terminal: &TerminalEmulator, cmd: &[String]) -> io::Result<()> {
-    let cmd_str = cmd
-        .iter()
-        .map(|arg| {
-            if arg.contains(' ') || arg.contains('"') || arg.contains('\'') {
-                format!("'{}'", arg.replace('\'', "'\\''"))
-            } else {
-                arg.clone()
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ");
-
-    let script = format!(
-        "tell application \"Terminal\"\n\
-             do script \"{}\"\n\
-             activate\n\
-         end tell",
-        cmd_str.replace('"', "\\\"")
-    );
+    let script = build_terminal_applescript(cmd);
 
     Command::new("osascript")
         .arg("-e")
@@ -373,4 +402,86 @@ pub fn ssh_launch_system_terminal(
         terminal: terminal.name,
         command_preview,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        build_connection_command, build_posix_shell_command, build_terminal_applescript,
+        quote_posix_shell_arg,
+    };
+
+    #[test]
+    fn posix_quotes_normal_and_empty_arguments() {
+        assert_eq!(quote_posix_shell_arg("ssh"), "'ssh'");
+        assert_eq!(quote_posix_shell_arg("example.com"), "'example.com'");
+        assert_eq!(quote_posix_shell_arg(""), "''");
+    }
+
+    #[test]
+    fn posix_quotes_spaces_and_single_quotes() {
+        assert_eq!(quote_posix_shell_arg("two words"), "'two words'");
+        assert_eq!(quote_posix_shell_arg("user'name"), "'user'\\''name'");
+    }
+
+    #[test]
+    fn posix_quotes_shell_metacharacters_and_newline() {
+        let arguments = [
+            ("host;whoami", "'host;whoami'"),
+            ("host|whoami", "'host|whoami'"),
+            ("$HOME", "'$HOME'"),
+            ("`whoami`", "'`whoami`'"),
+            ("line1\nline2", "'line1\nline2'"),
+        ];
+
+        for (input, expected) in arguments {
+            assert_eq!(quote_posix_shell_arg(input), expected);
+        }
+    }
+
+    #[test]
+    fn quotes_every_argument_in_complete_command() {
+        let cmd = vec![
+            "ssh".to_string(),
+            "-p".to_string(),
+            "2222".to_string(),
+            "ordinary@example.com".to_string(),
+        ];
+
+        assert_eq!(
+            build_posix_shell_command(&cmd),
+            "'ssh' '-p' '2222' 'ordinary@example.com'"
+        );
+    }
+
+    #[test]
+    fn preserves_common_username_and_ipv6_host_as_one_quoted_argument() {
+        let cmd =
+            build_connection_command("ssh", "2001:db8::1", 22, "first.last", "password", None);
+
+        assert_eq!(
+            build_posix_shell_command(&cmd),
+            "'ssh' 'first.last@2001:db8::1'"
+        );
+    }
+
+    #[test]
+    fn applescript_escapes_shell_command_as_string_literal() {
+        let cmd = vec![
+            "ssh".to_string(),
+            "user\"name@host".to_string(),
+            "path\\with\\slashes".to_string(),
+            "line1\nline2".to_string(),
+        ];
+
+        let script = build_terminal_applescript(&cmd);
+
+        assert_eq!(
+            script,
+            "tell application \"Terminal\"\n\
+             do script \"'ssh' 'user\\\"name@host' 'path\\\\with\\\\slashes' 'line1\\nline2'\"\n\
+             activate\n\
+             end tell"
+        );
+    }
 }

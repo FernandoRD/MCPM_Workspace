@@ -18,6 +18,8 @@ import {
 } from "@/lib/backup";
 import { formatDate } from "@/lib/utils";
 import { TransferSecretsPayload } from "@/lib/portableState";
+import { parseTransferSecretsPayload } from "@/lib/portableStateSchema";
+import { applyPortableStateTransaction } from "@/lib/portableStatePersistence";
 
 interface ToastState { type: "success" | "error" | "info"; message: string }
 type Toast = ToastState | null;
@@ -25,12 +27,9 @@ type Toast = ToastState | null;
 export function Backup() {
   const { t } = useTranslation();
   const hosts = useHostsStore((s) => s.hosts);
-  const replaceHosts = useHostsStore((s) => s.replaceHosts);
   const credentials = useCredentialsStore((s) => s.credentials);
-  const replaceCredentials = useCredentialsStore((s) => s.replaceCredentials);
   const sshKeys = useSshKeysStore((s) => s.sshKeys);
-  const replaceSshKeys = useSshKeysStore((s) => s.replaceSshKeys);
-  const { settings, replaceSettings } = useSettingsStore();
+  const settings = useSettingsStore((s) => s.settings);
   const sshHostCount = hosts.filter((host) => host.protocol === "ssh").length;
   const telnetHostCount = hosts.filter((host) => host.protocol === "telnet").length;
   const rdpHostCount = hosts.filter((host) => host.protocol === "rdp").length;
@@ -116,7 +115,7 @@ export function Backup() {
         encryptedPayloadJson: JSON.stringify(pendingImport.encryptedCredentials),
         masterPassword,
       });
-      const secrets = JSON.parse(credJson) as TransferSecretsPayload;
+      const secrets = parseTransferSecretsPayload(credJson);
       setImportPreview({ backup: pendingImport, secrets, hasEncryptedCredentials: true });
       setImportPasswordModal(false);
     } catch {
@@ -126,55 +125,48 @@ export function Backup() {
     }
   };
 
-  const handleConfirmImport = () => {
+  const handleConfirmImport = async () => {
     if (!importPreview) return;
-    const { backup, secrets } = importPreview;
-    const hydrated = hydrateBackupData(backup, secrets);
+    setLoading("import");
+    try {
+      const { backup, secrets } = importPreview;
+      const hydrated = hydrateBackupData(backup, secrets);
 
-    const finalHosts =
-      importMode === "replace"
+      const finalHosts = importMode === "replace"
         ? hydrated.hosts
-        : [
-            ...hosts,
-            ...hydrated.hosts.filter((host) => !hosts.some((existing) => existing.id === host.id)),
-          ];
-
-    const finalCredentials =
-      importMode === "replace"
+        : [...hosts, ...hydrated.hosts.filter((host) => !hosts.some((existing) => existing.id === host.id))];
+      const finalCredentials = importMode === "replace"
         ? hydrated.credentials
-        : [
-            ...credentials,
-            ...hydrated.credentials.filter(
-              (credential) => !credentials.some((existing) => existing.id === credential.id)
-            ),
-          ];
-
-    const finalSshKeys =
-      importMode === "replace"
+        : [...credentials, ...hydrated.credentials.filter(
+            (credential) => !credentials.some((existing) => existing.id === credential.id)
+          )];
+      const finalSshKeys = importMode === "replace"
         ? hydrated.sshKeys
-        : [
-            ...sshKeys,
-            ...hydrated.sshKeys.filter((sshKey) => !sshKeys.some((existing) => existing.id === sshKey.id)),
-          ];
+        : [...sshKeys, ...hydrated.sshKeys.filter(
+            (sshKey) => !sshKeys.some((existing) => existing.id === sshKey.id)
+          )];
 
-    replaceHosts(finalHosts);
-    replaceCredentials(finalCredentials);
-    replaceSshKeys(finalSshKeys);
+      await applyPortableStateTransaction({
+        hosts: finalHosts,
+        credentials: finalCredentials,
+        sshKeys: finalSshKeys,
+        settings: importSettings && hydrated.settings ? hydrated.settings : settings,
+      });
 
-    // Aplicar settings se solicitado
-    if (importSettings && hydrated.settings) {
-      replaceSettings(hydrated.settings);
+      const msg = secrets
+        ? t("backup.import.successWithCreds")
+        : secrets === null && importPreview.hasEncryptedCredentials
+        ? `${t("backup.import.success")} (${t("backup.import.credentialsSkipped")})`
+        : t("backup.import.success");
+
+      showToast("success", msg);
+      setImportPreview(null);
+      setPendingImport(null);
+    } catch (error) {
+      showToast("error", String(error));
+    } finally {
+      setLoading(null);
     }
-
-    const msg = secrets
-      ? t("backup.import.successWithCreds")
-      : secrets === null && importPreview.hasEncryptedCredentials
-      ? `${t("backup.import.success")} (${t("backup.import.credentialsSkipped")})`
-      : t("backup.import.success");
-
-    showToast("success", msg);
-    setImportPreview(null);
-    setPendingImport(null);
   };
 
   return (

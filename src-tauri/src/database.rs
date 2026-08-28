@@ -1,7 +1,9 @@
 use keyring::{Entry, Error as KeyringError};
 use rand::Rng;
 use rusqlite::{params, Connection};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::State;
@@ -13,6 +15,84 @@ const KEYCHAIN_DB_KEY_ACCOUNT: &str = "db-encryption-key";
 
 pub struct Database {
     conn: Mutex<Connection>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PortableHost {
+    id: String,
+    label: String,
+    host: String,
+    port: u16,
+    protocol: String,
+    auth_method: String,
+    tags: Vec<String>,
+    created_at: String,
+    updated_at: String,
+    #[serde(flatten)]
+    extra: HashMap<String, Value>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PortableCredential {
+    id: String,
+    label: String,
+    username: String,
+    auth_method: String,
+    created_at: String,
+    updated_at: String,
+    #[serde(flatten)]
+    extra: HashMap<String, Value>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PortableSshKey {
+    id: String,
+    label: String,
+    created_at: String,
+    updated_at: String,
+    #[serde(flatten)]
+    extra: HashMap<String, Value>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PortableSettings {
+    theme_id: String,
+    locale: String,
+    #[serde(flatten)]
+    extra: HashMap<String, Value>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PortableStatePayload {
+    hosts: Vec<PortableHost>,
+    credentials: Vec<PortableCredential>,
+    ssh_keys: Vec<PortableSshKey>,
+    settings: PortableSettings,
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct RdpMirrorSummary {
+    attempted: bool,
+    succeeded: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
+#[derive(Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplyPortableStateSummary {
+    database_committed: bool,
+    hosts: usize,
+    credentials: usize,
+    ssh_keys: usize,
+    settings: usize,
+    rdp_mirror: RdpMirrorSummary,
 }
 
 impl Database {
@@ -211,6 +291,233 @@ fn add_column_if_missing(
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+struct PortableStateCounts {
+    hosts: usize,
+    credentials: usize,
+    ssh_keys: usize,
+}
+
+fn validate_required(entity: &str, field: &str, value: &str, index: usize) -> Result<(), String> {
+    if value.trim().is_empty() {
+        return Err(format!(
+            "{entity}[{index}] possui campo obrigatório vazio: {field}"
+        ));
+    }
+    if value.contains('\0') {
+        return Err(format!(
+            "{entity}[{index}] possui caractere NUL inválido em {field}"
+        ));
+    }
+    Ok(())
+}
+
+fn validate_timestamp(entity: &str, field: &str, value: &str, index: usize) -> Result<(), String> {
+    validate_required(entity, field, value, index)?;
+    chrono::DateTime::parse_from_rfc3339(value).map_err(|_| {
+        format!("{entity}[{index}] possui timestamp RFC 3339 inválido em {field}: {value}")
+    })?;
+    Ok(())
+}
+
+fn validate_entity_identity(
+    entity: &str,
+    id: &str,
+    created_at: &str,
+    updated_at: &str,
+    index: usize,
+    ids: &mut HashSet<String>,
+) -> Result<(), String> {
+    validate_required(entity, "id", id, index)?;
+    validate_timestamp(entity, "createdAt", created_at, index)?;
+    validate_timestamp(entity, "updatedAt", updated_at, index)?;
+    if !ids.insert(id.to_string()) {
+        return Err(format!("{entity} contém id duplicado: {id}"));
+    }
+    Ok(())
+}
+
+fn validate_portable_state(payload: &PortableStatePayload) -> Result<(), String> {
+    let mut ids = HashSet::new();
+    for (index, host) in payload.hosts.iter().enumerate() {
+        validate_entity_identity(
+            "hosts",
+            &host.id,
+            &host.created_at,
+            &host.updated_at,
+            index,
+            &mut ids,
+        )?;
+        validate_required("hosts", "label", &host.label, index)?;
+        validate_required("hosts", "host", &host.host, index)?;
+        if host.port == 0 {
+            return Err(format!("hosts[{index}] possui porta inválida: 0"));
+        }
+        if !matches!(host.protocol.as_str(), "ssh" | "telnet" | "rdp" | "vnc") {
+            return Err(format!(
+                "hosts[{index}] possui protocolo inválido: {}",
+                host.protocol
+            ));
+        }
+        if !matches!(
+            host.auth_method.as_str(),
+            "password" | "privateKey" | "agent"
+        ) {
+            return Err(format!(
+                "hosts[{index}] possui authMethod inválido: {}",
+                host.auth_method
+            ));
+        }
+    }
+
+    ids.clear();
+    for (index, credential) in payload.credentials.iter().enumerate() {
+        validate_entity_identity(
+            "credentials",
+            &credential.id,
+            &credential.created_at,
+            &credential.updated_at,
+            index,
+            &mut ids,
+        )?;
+        validate_required("credentials", "label", &credential.label, index)?;
+        if !matches!(
+            credential.auth_method.as_str(),
+            "password" | "privateKey" | "agent"
+        ) {
+            return Err(format!(
+                "credentials[{index}] possui authMethod inválido: {}",
+                credential.auth_method
+            ));
+        }
+    }
+
+    ids.clear();
+    for (index, ssh_key) in payload.ssh_keys.iter().enumerate() {
+        validate_entity_identity(
+            "sshKeys",
+            &ssh_key.id,
+            &ssh_key.created_at,
+            &ssh_key.updated_at,
+            index,
+            &mut ids,
+        )?;
+        validate_required("sshKeys", "label", &ssh_key.label, index)?;
+    }
+
+    validate_required("settings", "themeId", &payload.settings.theme_id, 0)?;
+    validate_required("settings", "locale", &payload.settings.locale, 0)
+}
+
+fn apply_portable_state_transaction(
+    conn: &Connection,
+    payload: &PortableStatePayload,
+) -> Result<PortableStateCounts, String> {
+    validate_portable_state(payload)?;
+
+    let hosts = payload
+        .hosts
+        .iter()
+        .map(serde_json::to_string)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("Falha ao serializar hosts: {error}"))?;
+    let credentials = payload
+        .credentials
+        .iter()
+        .map(serde_json::to_string)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("Falha ao serializar credenciais: {error}"))?;
+    let ssh_keys = payload
+        .ssh_keys
+        .iter()
+        .map(serde_json::to_string)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("Falha ao serializar chaves SSH: {error}"))?;
+    let settings = serde_json::to_string(&payload.settings)
+        .map_err(|error| format!("Falha ao serializar configurações: {error}"))?;
+
+    // unchecked_transaction usa &Connection, evitando exigir acesso mutável ao
+    // Connection protegido pelo Mutex. O Mutex externo ainda garante exclusão.
+    let transaction = conn
+        .unchecked_transaction()
+        .map_err(|error| format!("Falha ao iniciar transação do estado portátil: {error}"))?;
+
+    let apply_result = (|| -> Result<(), String> {
+        transaction
+            .execute_batch(
+                "DELETE FROM hosts;
+                 DELETE FROM credentials;
+                 DELETE FROM ssh_keys;
+                 DELETE FROM settings;",
+            )
+            .map_err(|error| format!("Falha ao limpar estado anterior: {error}"))?;
+
+        for (host, data) in payload.hosts.iter().zip(hosts.iter()) {
+            transaction
+                .execute(
+                    "INSERT INTO hosts (id, data, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
+                    params![host.id, data, host.created_at, host.updated_at],
+                )
+                .map_err(|error| format!("Falha ao salvar host {}: {error}", host.id))?;
+        }
+
+        for (credential, data) in payload.credentials.iter().zip(credentials.iter()) {
+            transaction
+                .execute(
+                    "INSERT INTO credentials (id, data, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
+                    params![
+                        credential.id,
+                        data,
+                        credential.created_at,
+                        credential.updated_at
+                    ],
+                )
+                .map_err(|error| {
+                    format!("Falha ao salvar credencial {}: {error}", credential.id)
+                })?;
+        }
+
+        for (ssh_key, data) in payload.ssh_keys.iter().zip(ssh_keys.iter()) {
+            transaction
+                .execute(
+                    "INSERT INTO ssh_keys (id, data, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
+                    params![ssh_key.id, data, ssh_key.created_at, ssh_key.updated_at],
+                )
+                .map_err(|error| {
+                    format!("Falha ao salvar chave SSH {}: {error}", ssh_key.id)
+                })?;
+        }
+
+        transaction
+            .execute(
+                "INSERT INTO settings (key, value) VALUES ('app_settings', ?1)",
+                params![settings],
+            )
+            .map_err(|error| format!("Falha ao salvar configurações: {error}"))?;
+
+        Ok(())
+    })();
+
+    if let Err(error) = apply_result {
+        return match transaction.rollback() {
+            Ok(()) => Err(error),
+            Err(rollback_error) => Err(format!(
+                "{error}; também falhou o rollback da transação: {rollback_error}"
+            )),
+        };
+    }
+
+    transaction
+        .commit()
+        .map_err(|error| format!("Falha ao confirmar estado portátil: {error}"))?;
+
+    Ok(PortableStateCounts {
+        hosts: payload.hosts.len(),
+        credentials: payload.credentials.len(),
+        ssh_keys: payload.ssh_keys.len(),
+    })
+}
+
 // ── Hosts ────────────────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -258,6 +565,53 @@ pub fn db_delete_host(state: State<AppState>, id: String) -> Result<(), String> 
 }
 
 // ── Settings ─────────────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn db_apply_portable_state(
+    state: State<AppState>,
+    payload: PortableStatePayload,
+) -> Result<ApplyPortableStateSummary, String> {
+    let settings = serde_json::to_value(&payload.settings)
+        .map_err(|error| format!("Falha ao preparar configurações para espelhamento: {error}"))?;
+
+    let counts = {
+        let conn = state
+            .database
+            .conn
+            .lock()
+            .map_err(|error| error.to_string())?;
+        apply_portable_state_transaction(&conn, &payload)?
+    };
+
+    // O banco já foi confirmado neste ponto. Uma falha ao atualizar o arquivo
+    // auxiliar do cliente RDP é reportada no resumo, sem fingir que houve rollback.
+    let rdp_mirror = match mirror_internal_rdp_settings(&state, &settings) {
+        Ok(()) => RdpMirrorSummary {
+            attempted: true,
+            succeeded: true,
+            error: None,
+        },
+        Err(error) => {
+            log::error!(
+                "[mpcm-workspace] estado portátil confirmado, mas falhou o espelho RDP: {error}"
+            );
+            RdpMirrorSummary {
+                attempted: true,
+                succeeded: false,
+                error: Some(error),
+            }
+        }
+    };
+
+    Ok(ApplyPortableStateSummary {
+        database_committed: true,
+        hosts: counts.hosts,
+        credentials: counts.credentials,
+        ssh_keys: counts.ssh_keys,
+        settings: 1,
+        rdp_mirror,
+    })
+}
 
 #[tauri::command]
 pub fn db_get_settings(state: State<AppState>) -> Result<Option<Value>, String> {
@@ -507,4 +861,217 @@ pub fn db_clear_connection_logs(state: State<AppState>) -> Result<(), String> {
     let conn = state.database.conn.lock().map_err(|e| e.to_string())?;
     conn.execute("DELETE FROM connection_logs", []).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const OLD_TIMESTAMP: &str = "2025-01-01T00:00:00Z";
+    const NEW_TIMESTAMP: &str = "2026-01-01T00:00:00Z";
+
+    fn test_connection() -> Connection {
+        let conn = Connection::open_in_memory().expect("abre SQLite em memória");
+        Database::migrate(&conn).expect("cria schema de teste");
+        conn
+    }
+
+    fn seed_existing_state(conn: &Connection) {
+        let old_host = json!({
+            "id": "old-host",
+            "label": "Host antigo",
+            "host": "old.example.test",
+            "port": 22,
+            "protocol": "ssh",
+            "authMethod": "agent",
+            "tags": [],
+            "createdAt": OLD_TIMESTAMP,
+            "updatedAt": OLD_TIMESTAMP,
+        });
+        let old_credential = json!({
+            "id": "old-credential",
+            "label": "Credencial antiga",
+            "username": "old-user",
+            "authMethod": "password",
+            "createdAt": OLD_TIMESTAMP,
+            "updatedAt": OLD_TIMESTAMP,
+        });
+        let old_ssh_key = json!({
+            "id": "old-key",
+            "label": "Chave antiga",
+            "privateKeyContent": "old-private-key",
+            "createdAt": OLD_TIMESTAMP,
+            "updatedAt": OLD_TIMESTAMP,
+        });
+        let old_settings = json!({"themeId": "dark", "locale": "pt-BR", "rdp": {}});
+
+        conn.execute(
+            "INSERT INTO hosts (id, data, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
+            params![
+                "old-host",
+                old_host.to_string(),
+                OLD_TIMESTAMP,
+                OLD_TIMESTAMP
+            ],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO credentials (id, data, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
+            params![
+                "old-credential",
+                old_credential.to_string(),
+                OLD_TIMESTAMP,
+                OLD_TIMESTAMP
+            ],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO ssh_keys (id, data, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
+            params![
+                "old-key",
+                old_ssh_key.to_string(),
+                OLD_TIMESTAMP,
+                OLD_TIMESTAMP
+            ],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES ('app_settings', ?1)",
+            params![old_settings.to_string()],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO connection_logs
+             (id, host_id, host_label, host_address, session_type, connected_at, status)
+             VALUES ('log-1', 'old-host', 'Host antigo', 'old.example.test', 'terminal', ?1, 'connected')",
+            params![OLD_TIMESTAMP],
+        )
+        .unwrap();
+    }
+
+    fn portable_payload(credential_id: &str) -> PortableStatePayload {
+        PortableStatePayload {
+            hosts: vec![PortableHost {
+                id: "new-host".to_string(),
+                label: "Host novo".to_string(),
+                host: "new.example.test".to_string(),
+                port: 2222,
+                protocol: "ssh".to_string(),
+                auth_method: "password".to_string(),
+                tags: vec!["produção".to_string()],
+                created_at: NEW_TIMESTAMP.to_string(),
+                updated_at: NEW_TIMESTAMP.to_string(),
+                extra: HashMap::new(),
+            }],
+            credentials: vec![PortableCredential {
+                id: credential_id.to_string(),
+                label: "Credencial nova".to_string(),
+                username: "new-user".to_string(),
+                auth_method: "password".to_string(),
+                created_at: NEW_TIMESTAMP.to_string(),
+                updated_at: NEW_TIMESTAMP.to_string(),
+                extra: HashMap::from([("password".to_string(), json!("secret"))]),
+            }],
+            ssh_keys: vec![PortableSshKey {
+                id: "new-key".to_string(),
+                label: "Chave nova".to_string(),
+                created_at: NEW_TIMESTAMP.to_string(),
+                updated_at: NEW_TIMESTAMP.to_string(),
+                extra: HashMap::from([("privateKeyContent".to_string(), json!("new-private-key"))]),
+            }],
+            settings: PortableSettings {
+                theme_id: "light".to_string(),
+                locale: "en-US".to_string(),
+                extra: HashMap::from([(
+                    "rdp".to_string(),
+                    json!({"launchMode": "internalExperimental"}),
+                )]),
+            },
+        }
+    }
+
+    fn stored_ids(conn: &Connection, table: &str) -> Vec<String> {
+        let mut statement = conn
+            .prepare(&format!("SELECT id FROM {table} ORDER BY id"))
+            .unwrap();
+        statement
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .collect::<Result<Vec<String>, _>>()
+            .unwrap()
+    }
+
+    #[test]
+    fn portable_state_replaces_targets_atomically_and_preserves_logs() {
+        let conn = test_connection();
+        seed_existing_state(&conn);
+
+        let counts = apply_portable_state_transaction(&conn, &portable_payload("new-credential"))
+            .expect("aplica estado portátil");
+
+        assert_eq!(
+            counts,
+            PortableStateCounts {
+                hosts: 1,
+                credentials: 1,
+                ssh_keys: 1,
+            }
+        );
+        assert_eq!(stored_ids(&conn, "hosts"), vec!["new-host"]);
+        assert_eq!(stored_ids(&conn, "credentials"), vec!["new-credential"]);
+        assert_eq!(stored_ids(&conn, "ssh_keys"), vec!["new-key"]);
+
+        let settings: String = conn
+            .query_row(
+                "SELECT value FROM settings WHERE key = 'app_settings'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        let settings: Value = serde_json::from_str(&settings).unwrap();
+        assert_eq!(settings["themeId"], "light");
+        assert_eq!(settings["rdp"]["launchMode"], "internalExperimental");
+
+        let log_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM connection_logs", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(log_count, 1);
+    }
+
+    #[test]
+    fn portable_state_rolls_back_every_target_after_insert_error() {
+        let conn = test_connection();
+        seed_existing_state(&conn);
+        conn.execute_batch(
+            "CREATE TRIGGER reject_portable_credential
+             BEFORE INSERT ON credentials
+             WHEN NEW.id = 'force-failure'
+             BEGIN
+                 SELECT RAISE(ABORT, 'forced credential failure');
+             END;",
+        )
+        .unwrap();
+
+        let error = apply_portable_state_transaction(&conn, &portable_payload("force-failure"))
+            .expect_err("falha forçada deve abortar a transação");
+
+        assert!(error.contains("forced credential failure"));
+        assert_eq!(stored_ids(&conn, "hosts"), vec!["old-host"]);
+        assert_eq!(stored_ids(&conn, "credentials"), vec!["old-credential"]);
+        assert_eq!(stored_ids(&conn, "ssh_keys"), vec!["old-key"]);
+
+        let theme: String = conn
+            .query_row(
+                "SELECT json_extract(value, '$.themeId') FROM settings WHERE key = 'app_settings'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(theme, "dark");
+
+        let log_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM connection_logs", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(log_count, 1);
+    }
 }

@@ -36,6 +36,11 @@ import {
   sanitizeSshKeys,
   TransferSecretsPayload,
 } from "@/lib/portableState";
+import {
+  parseEncryptedCredentialsJson,
+  parsePortableStateFile,
+  parseTransferSecretsPayload,
+} from "@/lib/portableStateSchema";
 import i18n from "@/lib/i18n";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -86,7 +91,7 @@ export async function exportBackup(
         credentialsJson: JSON.stringify(secretsPayload),
         masterPassword,
       });
-      encryptedCredentials = JSON.parse(payloadJson) as EncryptedCredentials;
+      encryptedCredentials = parseEncryptedCredentialsJson(payloadJson, "encryptedCredentials");
     }
   }
 
@@ -145,7 +150,7 @@ export async function importBackup(
       encryptedPayloadJson: JSON.stringify(backup.encryptedCredentials),
       masterPassword,
     });
-    const secrets = JSON.parse(credJson) as TransferSecretsPayload;
+    const secrets = parseTransferSecretsPayload(credJson);
     return { backup, secrets, hasEncryptedCredentials: true };
   }
 
@@ -158,31 +163,21 @@ export async function importBackup(
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function parseBackupFile(raw: string): BackupFile {
-  let data: unknown;
-  try {
-    data = JSON.parse(raw);
-  } catch {
-    throw new Error(i18n.t("backup.errors.invalidJson"));
+export function parseBackupFile(raw: string): BackupFile {
+  const file = parsePortableStateFile(raw);
+  if (!file.exportedAt) {
+    throw new Error("Payload inválido: campo 'exportedAt' é obrigatório");
   }
-
-  if (!data || typeof data !== "object") {
-    throw new Error(i18n.t("backup.errors.unexpectedStructure"));
-  }
-
-  const obj = data as Record<string, unknown>;
-
-  if (obj["app"] !== "ssh-vault") {
-    throw new Error(i18n.t("backup.errors.notBackup"));
-  }
-  if (obj["version"] !== 1) {
-    throw new Error(i18n.t("backup.errors.unsupportedVersion", { version: String(obj["version"]) }));
-  }
-  if (!Array.isArray(obj["hosts"])) {
-    throw new Error(i18n.t("backup.errors.invalidHosts"));
-  }
-
-  return obj as unknown as BackupFile;
+  return {
+    app: file.app,
+    version: file.version,
+    exportedAt: file.exportedAt,
+    hosts: file.hosts,
+    credentials: file.credentials,
+    sshKeys: file.sshKeys,
+    settings: file.settings,
+    ...(file.encryptedCredentials ? { encryptedCredentials: file.encryptedCredentials } : {}),
+  };
 }
 
 export function hydrateBackupData(

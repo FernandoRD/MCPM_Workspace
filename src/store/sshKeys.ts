@@ -12,7 +12,6 @@ interface SshKeysStore {
   updateSshKey: (id: string, data: Partial<Omit<SshKey, "id" | "createdAt" | "updatedAt">>) => void;
   deleteSshKey: (id: string) => void;
   getSshKey: (id: string) => SshKey | undefined;
-  replaceSshKeys: (keys: SshKey[]) => void;
 }
 
 export const useSshKeysStore = create<SshKeysStore>()((set, get) => ({
@@ -62,15 +61,4 @@ export const useSshKeysStore = create<SshKeysStore>()((set, get) => ({
   },
 
   getSshKey: (id) => get().sshKeys.find((k) => k.id === id),
-
-  replaceSshKeys: (sshKeys) => {
-    set({ sshKeys });
-    invoke("db_clear_ssh_keys")
-      .then(() => Promise.all(sshKeys.map((sshKey) => invoke("db_save_ssh_key", { sshKey }))))
-      .catch((error) => {
-        logFrontendError("sshKeys.replace", "Falha ao substituir chaves SSH", error, {
-          count: sshKeys.length,
-        });
-      });
-  },
 }));
